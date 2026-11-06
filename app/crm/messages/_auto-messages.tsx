@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SMS_NOT_READY_MESSAGE } from "@/app/lib/crm-sms-availability";
 import { useAuth } from "@/app/components/auth-provider";
 import {
@@ -22,6 +22,13 @@ import {
 } from "@/app/lib/auto-message-triggers";
 import { formatPhone } from "../_components/crm-labels";
 import { benefitText, issueExpiryYmd, type CouponDef } from "@/app/lib/crm-coupons";
+// 미리보기는 발송 서버와 **같은** 쿠폰 치환 함수를 쓴다(문구가 어긋나지 않게)
+import {
+  COUPON_VARIABLES,
+  applyCouponVars,
+  stripCouponVars,
+  fmtExpiry,
+} from "@/app/lib/crm-auto-coupon-vars";
 
 interface CouponAttach {
   name: string;
@@ -626,6 +633,26 @@ function AutoMessageEditor({
 
   const bytes = smsByteLength(body);
   const kind = smsKind(body);
+
+  /**
+   * 미리보기 본문 — 실제 발송 문구에 가깝게 변수를 값으로 바꿔서 보여준다.
+   * 🚨 쿠폰 변수는 발송 서버와 같은 함수(applyCouponVars / stripCouponVars)를 써야
+   *   '쿠폰 없을 때 줄째로 지워지는' 동작까지 똑같이 보인다.
+   * 회원별 값은 대상이 정해지기 전이라 예시값(MESSAGE_VARIABLES.sample)을 쓴다.
+   */
+  const previewBody = useMemo(() => {
+    if (!body.trim()) return "";
+    const withCoupon = previewCoupon
+      ? applyCouponVars(body, {
+          name: previewCoupon.name,
+          benefit: benefitText(previewCoupon),
+          code: "ABCD-1234", // 실제로는 회원마다 다른 코드가 발급된다
+          expires: fmtExpiry(issueExpiryYmd(previewCoupon)),
+        })
+      : stripCouponVars(body); // 쿠폰이 없으면 실제 발송처럼 쿠폰 변수를 지운다
+    return MESSAGE_VARIABLES.reduce((acc, v) => acc.replaceAll(v.token, sampleOf(v.token)), withCoupon);
+  }, [body, previewCoupon, sampleOf]);
+  const hasVars = MESSAGE_VARIABLES.some((v) => body.includes(v.token));
   // 본문에 쓴 #...# 중 지원하지 않는 것(오타 등) — 그대로 발송되므로 경고한다
   const unknownVars = Array.from(
     new Set(
@@ -686,9 +713,10 @@ function AutoMessageEditor({
   const preview = (
     <MessagePreview
       name={name}
-      body={body}
-      bytes={bytes}
-      kind={kind}
+      body={previewBody}
+      hasVars={hasVars}
+      bytes={smsByteLength(previewBody)}
+      kind={smsKind(previewBody)}
       methods={methods}
       attachments={attachments}
       coupon={previewCoupon}
@@ -1187,7 +1215,7 @@ function AutoMessageEditor({
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                         <span className="text-[11px] text-[#8C8270]">본문에 넣기</span>
-                        {COUPON_VARS.map((v) => (
+                        {COUPON_VARIABLES.map((v) => (
                           <button
                             key={v}
                             type="button"
@@ -1575,27 +1603,11 @@ function TestSendPanel({
 }
 
 /** 쿠폰 변수 — 서버(app/lib/crm-auto-coupon.ts)와 같은 목록 */
-const COUPON_VARS = ["#쿠폰명#", "#쿠폰혜택#", "#쿠폰코드#", "#쿠폰기한#"] as const;
-
-/** 미리보기용 쿠폰 치환 — 서버 applyCouponVars 와 같은 규칙(변수 없으면 끝에 안내 블록) */
-function previewWithCoupon(body: string, c: CouponDef): string {
-  const exp = issueExpiryYmd(c);
-  const expires = exp ? `${exp.replace(/-/g, ".")}까지` : "기한 없음";
-  const benefit = benefitText(c);
-  const hasVar = COUPON_VARS.some((k) => body.includes(k));
-  const replaced = body
-    .replaceAll("#쿠폰명#", c.name)
-    .replaceAll("#쿠폰혜택#", benefit)
-    .replaceAll("#쿠폰코드#", "ABCD-1234")
-    .replaceAll("#쿠폰기한#", expires);
-  if (hasVar) return replaced;
-  return `${replaced.trimEnd()}\n\n🎫 쿠폰이 발급됐어요\n${c.name} (${benefit})\n쿠폰코드 ABCD-1234 · ${expires}`;
-}
-
 /* ─── 메세지 미리보기 (문자 발송 형태) ─────────────── */
 function MessagePreview({
   name,
   body,
+  hasVars,
   bytes,
   kind,
   methods,
@@ -1609,7 +1621,10 @@ function MessagePreview({
   recipient,
 }: {
   name: string;
+  /** 변수를 예시/실제 값으로 치환한 본문 (원본 템플릿이 아니다) */
   body: string;
+  /** 본문에 치환 변수가 하나라도 있는지 — 예시값 안내 문구 표시용 */
+  hasVars: boolean;
   bytes: number;
   kind: string;
   methods: string[];
@@ -1639,11 +1654,16 @@ function MessagePreview({
         <div className="px-3.5 py-3">
           <div className="rounded-xl bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2.5 text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap break-words min-h-[64px]">
             {body.trim() ? (
-              coupon ? previewWithCoupon(body, coupon) : body
+              body
             ) : (
               <span className="text-[#A89B80]">메세지 내용이 여기에 표시됩니다.</span>
             )}
           </div>
+          {hasVars && (
+            <div className="mt-1.5 text-[10.5px] text-[#A89B80]">
+              👤 회원 이름·마일리지 등은 예시값이에요. 실제로는 받는 회원의 값으로 바뀝니다.
+            </div>
+          )}
           {coupon && (
             <div className="mt-1.5 text-[10.5px] text-[#A89B80]">
               🎫 쿠폰코드는 예시예요. 실제로는 회원마다 다른 코드가 발급돼요.
@@ -1666,7 +1686,7 @@ function MessagePreview({
         </div>
         <div className="px-3.5 py-2 border-t border-[#E8E0D0] dark:border-zinc-800 flex items-center justify-between text-[10.5px] text-[#8C8270]">
           <span>{basisText}</span>
-          <span>{bytes} Byte · {kind}</span>
+          <span>예상 {bytes} Byte · {kind}</span>
         </div>
       </div>
       <div className="mt-2.5 space-y-1 text-[11px] text-[#6B5D47] dark:text-zinc-400">

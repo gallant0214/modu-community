@@ -8,6 +8,7 @@ import {
   type CouponDef,
 } from "@/app/lib/crm-coupons";
 import { loadCoupons } from "@/app/lib/crm-coupons-db";
+import { applyCouponVars, fmtExpiry, type CouponVars } from "@/app/lib/crm-auto-coupon-vars";
 
 /**
  * 자동 메세지 '06 쿠폰 첨부'.
@@ -19,63 +20,14 @@ import { loadCoupons } from "@/app/lib/crm-coupons-db";
  * 실패 후 재시도돼도 같은 쿠폰을 다시 쓴다. '1인 1장' 쿠폰은 아직 쓸 수 있는 걸 들고 있으면 그걸 재사용.
  */
 
-/** 본문에 넣을 수 있는 쿠폰 변수 */
-export const COUPON_VARIABLES = ["#쿠폰명#", "#쿠폰혜택#", "#쿠폰코드#", "#쿠폰기한#"] as const;
-
-export interface CouponVars {
-  name: string;
-  benefit: string;
-  code: string;
-  expires: string; // "2026.10.19까지" 또는 "기한 없음"
-}
-
-function fmtExpiry(ymd: string | null): string {
-  return ymd ? `${ymd.replace(/-/g, ".")}까지` : "기한 없음";
-}
-
-/** 쿠폰 변수 치환. 본문에 쿠폰 변수가 하나도 없으면 끝에 안내 블록을 자동으로 붙인다. */
-export function applyCouponVars(message: string, v: CouponVars): string {
-  const hasVar = COUPON_VARIABLES.some((k) => message.includes(k));
-  const replaced = message
-    .replaceAll("#쿠폰명#", v.name)
-    .replaceAll("#쿠폰혜택#", v.benefit)
-    .replaceAll("#쿠폰코드#", v.code)
-    .replaceAll("#쿠폰기한#", v.expires);
-  if (hasVar) return replaced;
-  return `${replaced.trimEnd()}\n\n🎫 쿠폰이 발급됐어요\n${v.name} (${v.benefit})\n쿠폰코드 ${v.code} · ${v.expires}`;
-}
-
-/**
- * 쿠폰이 안 붙었을 때 본문에 남은 쿠폰 변수를 지운다.
- * 🚨 예전엔 쿠폰이 없으면(06 미설정·규칙 쿠폰 사용 등) `#쿠폰혜택#` 같은 글자가 그대로 발송됐다.
- *    변수를 지우고 그 변수만 있던 줄·여분 공백도 정리한다.
- */
-export function stripCouponVars(message: string): string {
-  if (!COUPON_VARIABLES.some((k) => message.includes(k))) return message;
-  const out: string[] = [];
-  for (const raw of message.split("\n")) {
-    const had = COUPON_VARIABLES.some((k) => raw.includes(k));
-    if (!had) {
-      out.push(raw);
-      continue;
-    }
-    let line = raw;
-    for (const k of COUPON_VARIABLES) line = line.split(k).join("");
-    // 빈 괄호·중복 공백·줄 끝 구분기호 정리
-    line = line
-      .replace(/\(\s*\)|\[\s*\]|\{\s*\}/g, "")
-      .replace(/[ \t]{2,}/g, " ")
-      .replace(/[ \t~·,\-|:]+$/g, "")
-      .trimEnd();
-    // 쿠폰 정보를 적으려고 만든 줄(예: "· 혜택 ()", "· 사용 기한")은 통째로 버린다
-    const meaningful = (line.match(/[가-힣A-Za-z0-9]/g) ?? []).length;
-    if (meaningful >= 6) out.push(line);
-  }
-  return out
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trimEnd();
-}
+// 순수 문자열 치환은 client 에서도 쓸 수 있게 분리해 뒀다(설정 화면 미리보기가 같은 함수를 쓴다).
+export {
+  COUPON_VARIABLES,
+  applyCouponVars,
+  stripCouponVars,
+  fmtExpiry,
+  type CouponVars,
+} from "@/app/lib/crm-auto-coupon-vars";
 
 /** 쿠폰이 지금 발급 가능한 상태인지 */
 function usable(c: CouponDef | undefined): c is CouponDef {
