@@ -9053,7 +9053,6 @@ function PassIssueModal({
   const { getIdToken } = useAuth();
   const [issueType, setIssueType] = useState<"new" | "renewal" | "trial" | "service">("new");
   const [lessonKind, setLessonKind] = useState("");
-  const [lessonKinds, setLessonKinds] = useState<{ id: number; label: string }[]>([]);
   const [passProducts, setPassProducts] = useState<PassProduct[]>([]);
   const [pickedProductId, setPickedProductId] = useState<number | null>(null);
   // 선택한 수강권 상품의 묶음 구성 (예: 회원권) — 발급 성공 후 함께 발급
@@ -9100,18 +9099,15 @@ function PassIssueModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, staffList, myMemberId]);
 
-  // 열릴 때 수업 종류 목록 + 수강권 상품(개인/그룹) 로드
+  // 열릴 때 수강권 상품(개인/그룹/클래스) 로드.
+  // 옛 '수업 종류'(crm_lesson_kinds: 개인 PT·2:1 PT) 목록은 상품관리로 대체돼 2026-11-06 발급 목록에서 뺐다
+  // (관리 화면이 없고, 고르면 상품과 연결 안 된 수강권이 돼 상품별 통계에서 빠졌다).
   useEffect(() => {
     if (!open) return;
     (async () => {
       const token = await getIdToken();
       if (!token) return;
       const headers = { authorization: `Bearer ${token}` };
-      const res = await fetch("/api/crm/lesson-kinds", { headers, cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setLessonKinds(data.kinds ?? []);
-      }
       const [pRes, gRes, cRes] = await Promise.all([
         fetch("/api/crm/products?type=personal&sellable=1", { headers, cache: "no-store" }),
         fetch("/api/crm/products?type=group&sellable=1", { headers, cache: "no-store" }),
@@ -9269,10 +9265,7 @@ function PassIssueModal({
                 const prods = passProducts
                   .filter((p) => !q || p.name.toLowerCase().includes(q))
                   .sort((a, b) => a.name.localeCompare(b.name, "ko"));
-                const kinds = lessonKinds
-                  .filter((k) => !q || k.label.toLowerCase().includes(q))
-                  .sort((a, b) => a.label.localeCompare(b.label, "ko"));
-                if (prods.length === 0 && kinds.length === 0) return null;
+                if (prods.length === 0) return null;
                 return (
                   <ul className="absolute z-20 left-0 right-0 mt-1 max-h-[360px] overflow-y-auto rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
                     {prods.map((p) => (
@@ -9299,24 +9292,6 @@ function PassIssueModal({
                             {p.total_sessions ? ` · ${p.total_sessions}회` : ""}
                             {p.session_minutes ? ` · ${p.session_minutes}분` : ""}
                           </div>
-                        </button>
-                      </li>
-                    ))}
-                    {kinds.map((k) => (
-                      <li key={`k${k.id}`}>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setLessonKind(k.label);
-                            setShowKindList(false);
-                            setPickedProductId(null);
-                            setPickedComponents([]);
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0"
-                        >
-                          <span className="text-[13px] text-[#3A342A] dark:text-zinc-200">{k.label}</span>
-                          <span className="ml-1.5 text-[10.5px] text-[#A89B80]">수업 종류</span>
                         </button>
                       </li>
                     ))}
@@ -10844,6 +10819,28 @@ function BodyMeasurementSection({
     load();
   }, [load, reloadKey]);
 
+  // 잘못 넣은 측정 기록 삭제 (서버: DELETE /measurements/[mid], members.records 권한)
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const remove = async (m: Measurement) => {
+    if (deletingId != null) return;
+    if (!window.confirm(`${m.measured_at} 측정 기록을 삭제할까요?\n되돌릴 수 없습니다.`)) return;
+    setDeletingId(m.id);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}/measurements/${m.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "삭제 실패");
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   // 최신 → 오래된 순. 차트는 오래된 → 최신 순.
   const chronological = [...list].reverse();
   const latest = list[0];
@@ -10930,6 +10927,7 @@ function BodyMeasurementSection({
                   <Th>체지방률(%)</Th>
                   <Th>BMI</Th>
                   <Th>메모</Th>
+                  <Th>{""}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -10943,6 +10941,15 @@ function BodyMeasurementSection({
                     <Td>{m.bmi ?? "—"}</Td>
                     <Td className="text-[#8C8270] max-w-[200px] truncate" title={m.memo || ""}>
                       <span className="block truncate" title={m.memo || ""}>{m.memo || "—"}</span>
+                    </Td>
+                    <Td className="text-right">
+                      <button
+                        onClick={() => remove(m)}
+                        disabled={deletingId != null}
+                        className="px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/60 text-[11.5px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                      >
+                        {deletingId === m.id ? "삭제 중…" : "삭제"}
+                      </button>
                     </Td>
                   </tr>
                 ))}
