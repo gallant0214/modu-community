@@ -79,11 +79,28 @@ export async function GET(request: Request) {
 
   // 프라이버시: 개인 일정(personal)의 상세(제목·내용)는 본인만 볼 수 있다.
   // 본인이 아닌 사람(센터장/관리자 등)에게는 "개인 일정" 블록으로만 표시하고 상세는 서버에서 제거.
-  const events = (data ?? []).map((e) => {
-    if (e.type === "personal" && e.trainer_member_id !== ctx.centerMemberId) {
-      return { ...e, title: "개인 일정", description: null, private: true };
+  // 등록자 이름 — created_by_uid → 이 센터 직원 display_name
+  const creatorUids = Array.from(
+    new Set((data ?? []).map((e) => e.created_by_uid).filter((u): u is string => !!u))
+  );
+  const creatorName = new Map<string, string>();
+  if (creatorUids.length > 0) {
+    const { data: staff } = await supabase
+      .from("crm_center_members")
+      .select("firebase_uid, display_name")
+      .eq("center_id", ctx.centerId)
+      .in("firebase_uid", creatorUids);
+    for (const s of staff ?? []) {
+      if (s.firebase_uid && s.display_name) creatorName.set(s.firebase_uid, s.display_name);
     }
-    return e;
+  }
+
+  const events = (data ?? []).map((e) => {
+    const created_by_name = e.created_by_uid ? creatorName.get(e.created_by_uid) ?? null : null;
+    if (e.type === "personal" && e.trainer_member_id !== ctx.centerMemberId) {
+      return { ...e, title: "개인 일정", description: null, private: true, created_by_name };
+    }
+    return { ...e, created_by_name };
   });
   return NextResponse.json({ events });
 }

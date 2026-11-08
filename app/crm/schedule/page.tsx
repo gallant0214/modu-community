@@ -50,6 +50,8 @@ interface ScheduleEvent {
   ends_at: string;
   /** 만든 직원의 로그인 uid — 수정·삭제는 이 사람만 가능 */
   created_by_uid?: string | null;
+  /** 등록한 직원 이름 */
+  created_by_name?: string | null;
 }
 
 /** 클래스 수업 세션 (crm_class_sessions) — 정원을 여러 회원이 공유하는 그룹 수업 */
@@ -1542,9 +1544,12 @@ function EventDialog({
           <div>
             <span className="text-[11.5px] text-[#A89B80] mr-1.5">유형</span>
             <span className="font-medium text-[#3A342A] dark:text-zinc-200">{typeLabel}</span>
-            {event.type === "personal" && trainerName && (
-              <span className="ml-1.5 text-[12px] text-[#8C8270]">· {trainerName}</span>
-            )}
+          </div>
+          <div>
+            <span className="text-[11.5px] text-[#A89B80] mr-1.5">등록자</span>
+            <span className="font-medium text-[#3A342A] dark:text-zinc-200">
+              {event.created_by_name ?? (event.type === "personal" ? trainerName : null) ?? "알 수 없음"}
+            </span>
           </div>
           <div>
             <span className="text-[11.5px] text-[#A89B80] mr-1.5">제목</span>
