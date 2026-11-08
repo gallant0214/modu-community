@@ -20,6 +20,36 @@ function getAdmin() {
   return getApps()[0];
 }
 
+// 🚨 안드로이드는 한 앱이 알림창에 띄워 둔 알림이 50개(AOSP 기본)에 차면 새 알림을 소리 없이 버린다.
+//    출석·퇴실 알림이 하루 40~80개라 알림창을 안 비우면 하루 만에 차서 '어느 순간부터 푸시가 안 오는'
+//    사고가 났다(2026-11-08 18:45 이후 미도달 — 서버 발송·토큰은 정상, 알림 탭엔 계속 쌓임).
+//    → 알림마다 android tag 를 TRAY_SLOTS 개 안에서 돌려 쓴다. 새 알림이 가장 오래된 알림 자리를
+//      대체하므로 이 앱의 알림창 알림은 TRAY_SLOTS 개를 넘지 않는다. 전체 기록은 앱 알림 탭에 있다.
+//    (collapseKey 는 쓰지 말 것 — 폰이 꺼져 있을 때 같은 키 메시지를 마지막 1개만 남기고 버린다)
+const TRAY_SLOTS = 20;
+
+async function trayTag(firebaseUid: string, createdAt: string | undefined): Promise<string | undefined> {
+  if (!createdAt) return undefined;
+  try {
+    // 같은 폰(=같은 계정)에 간 알림의 '그날(KST)' 순번. 다중 센터 소속이면 센터별 알림을 합쳐 센다.
+    // 하루 단위로 세는 건 조회를 (center_member_id, created_at) 인덱스 범위로 짧게 유지하려고.
+    const { data: ms } = await supabase.from("crm_center_members").select("id").eq("firebase_uid", firebaseUid);
+    const ids = (ms ?? []).map((m) => m.id as number);
+    if (ids.length === 0) return undefined;
+    const kstDay = new Date(new Date(createdAt).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const { count } = await supabase
+      .from("crm_staff_notifications")
+      .select("id", { count: "exact", head: true })
+      .in("center_member_id", ids)
+      .gte("created_at", new Date(`${kstDay}T00:00:00+09:00`).toISOString())
+      .lte("created_at", createdAt);
+    if (!count) return undefined;
+    return `staff-${count % TRAY_SLOTS}`;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 강사(직원)에게 알림 발송 — 알림함(crm_staff_notifications) 저장 + 강사앱 푸시.
  * 회원 앱 알림(notifyMembersByIds 등)과 동일한 구조의 강사용 버전.
@@ -59,14 +89,18 @@ export async function notifyStaffMember(params: {
     }
 
     // 1) 알림함 저장 (앱의 알림 탭에서 조회)
-    await supabase.from("crm_staff_notifications").insert({
-      center_id: centerId,
-      center_member_id: centerMemberId,
-      type,
-      title,
-      body: body ?? null,
-      data_json: (data ?? null) as never,
-    });
+    const { data: saved } = await supabase
+      .from("crm_staff_notifications")
+      .insert({
+        center_id: centerId,
+        center_member_id: centerMemberId,
+        type,
+        title,
+        body: body ?? null,
+        data_json: (data ?? null) as never,
+      })
+      .select("created_at")
+      .maybeSingle();
 
     // 2) 강사 firebase_uid 조회
     const { data: staff } = await supabase
@@ -97,6 +131,7 @@ export async function notifyStaffMember(params: {
     // Android/FCM (+ 신 iOS 빌드의 FCM 토큰)
     if (fcmTokens.length > 0) {
       const messaging = getMessaging(getAdmin());
+      const tag = await trayTag(staff.firebase_uid, (saved as { created_at?: string } | null)?.created_at);
       const deadFcm: string[] = [];
       for (let i = 0; i < fcmTokens.length; i += 500) {
         const batch = fcmTokens.slice(i, i + 500);
@@ -113,7 +148,8 @@ export async function notifyStaffMember(params: {
               //    - 1.0.14 이상: 'default' 를 지우고 매니페스트 기본 채널 = 'alerts'(firebase.json) → 고중요도로 뜸.
               //    'alerts' 로 바꾸면 구버전 설치본이 기타 채널로 떨어져 간헐 미도달 재발(2026-10-28 사고).
               //    (메모리: moducm-push-channel-token)
-              notification: { sound: "default", channelId: "default" },
+              // tag = 알림창 자리(위 TRAY_SLOTS 설명). 없으면(조회 실패) 예전처럼 새 자리로.
+              notification: { sound: "default", channelId: "default", ...(tag ? { tag } : {}) },
             },
             apns: {
               headers: { "apns-priority": "10", "apns-push-type": "alert" },
