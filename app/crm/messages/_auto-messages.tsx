@@ -45,6 +45,8 @@ interface SettingConfig {
   expiry_basis?: ExpiryBasis;
   /** 출석일수 기준 쿠폰 전송 규칙 (출석일수 쿠폰 트리거) */
   attendance_rules?: AttendanceCouponRule[];
+  /** 출석일수 쿠폰: 출석 0일 회원 제외 */
+  exclude_zero_attendance?: boolean;
 }
 interface SettingRow {
   trigger_key: string;
@@ -453,6 +455,7 @@ function AutoMessageEditor({
   const [attendRules, setAttendRules] = useState<AttendanceCouponRule[]>(
     base.config?.attendance_rules ?? []
   );
+  const [excludeZero, setExcludeZero] = useState<boolean>(base.config?.exclude_zero_attendance ?? false);
   const [products, setProducts] = useState<{ id: number; name: string }[]>([]);
   // 06 쿠폰 첨부 — 사이드바 '쿠폰' 에서 만든 쿠폰 중 선택 (발송 때 회원마다 1장씩 발급)
   const [couponId, setCouponId] = useState<number | null>(base.coupon_id ?? null);
@@ -685,7 +688,10 @@ function AutoMessageEditor({
           send_hour: sendBasis === "immediate" ? null : sendHour,
           ...(showExpiryBasis ? { expiry_basis: expiryBasis } : {}),
           ...(showAttendanceRules
-            ? { attendance_rules: attendRules.filter((r) => r.product_id && r.max_days > 0 && r.coupon_id) }
+            ? {
+                attendance_rules: attendRules.filter((r) => r.product_id && r.max_days > 0 && r.coupon_id),
+                exclude_zero_attendance: excludeZero,
+              }
             : {}),
         },
       });
@@ -701,7 +707,7 @@ function AutoMessageEditor({
       : showAttendanceRules
         ? attendRules.length === 0
           ? "쿠폰 규칙을 추가해야 대상이 정해져요 (아래 06)"
-          : `규칙 ${attendRules.length}개 · 지정 상품 만료 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"}, 출석일수가 기준 미만인 회원`
+          : `규칙 ${attendRules.length}개 · 지정 상품 만료 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"}, 출석일수가 기준 미만인 회원${excludeZero ? " (출석 0일 제외)" : ""}`
         : showExpiryBasis
         ? EXPIRY_BASIS_DESC[expiryBasis]
         : trigger.recipient;
@@ -1149,6 +1155,20 @@ function AutoMessageEditor({
                   >
                     + 규칙 추가
                   </button>
+                  <label className="flex items-start gap-2 pt-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={excludeZero}
+                      onChange={(e) => setExcludeZero(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-[#6B7B3A]"
+                    />
+                    <span className="text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200">
+                      출석 0일 회원은 보내지 않기
+                      <span className="block text-[11.5px] text-[#A89B80]">
+                        출석 체크 없이 다니는 회원이 섞여 있어요. 0일인 회원은 쿠폰 대신 직접 연락해 보세요.
+                      </span>
+                    </span>
+                  </label>
                   {coupons.length === 0 && couponsState === "ok" && (
                     <div className="text-[12px] text-[#8C8270]">
                       쓸 수 있는 쿠폰이 없어요.{" "}

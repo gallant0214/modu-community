@@ -29,6 +29,7 @@ export async function GET(request: Request) {
       send_days_dir?: "before" | "after";
       expiry_basis?: "period" | "sessions";
       attendance_rules?: { product_id: number; max_days: number; coupon_id: number }[];
+      exclude_zero_attendance?: boolean;
     } | null;
   })[]) {
     byKey.set(s.trigger_key, {
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
       send_days_dir: s.config?.send_days_dir,
       expiry_basis: s.config?.expiry_basis,
       attendance_rules: s.config?.attendance_rules,
+      exclude_zero_attendance: s.config?.exclude_zero_attendance,
     });
   }
 

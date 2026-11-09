@@ -56,6 +56,8 @@ export interface TriggerSetting {
   expiry_basis?: "period" | "sessions";
   /** 출석일수 기준 쿠폰 전송 규칙 (attendance_coupon) */
   attendance_rules?: { product_id: number; max_days: number; coupon_id: number }[];
+  /** 출석일수 쿠폰: 출석 0일 회원은 보내지 않는다(출석 체크 없이 다니는 단골이 섞여 있음) */
+  exclude_zero_attendance?: boolean;
 }
 
 /** 스캔(데이터 기반)으로 대상 산출이 가능한 트리거 */
@@ -560,6 +562,8 @@ async function matchDepleted(
  * 3) 그 상품의 규칙 중 `출석일수 < max_days` 를 만족하는 줄 가운데 **max_days 가 가장 작은 줄**
  *    (= 혜택이 큰 쪽) 하나만 적용한다. 예) 7일 출석 → 8일 미만(30%)과 14일 미만(20%) 둘 다 해당 → 30%.
  * 4) 이미 다음 이용권을 산 회원(만료일 이후까지 유효한 회원권 보유)은 제외 — 재등록 유치가 목적이다.
+ * 5) '출석 0일 제외'가 켜져 있으면 출석 0일 회원은 뺀다. 출석 체크 없이 다니는 단골이 섞여 있어서
+ *    (재등록 회원 중 0일인 사람의 절반이 쿠폰 없이 재등록) 가장 큰 할인을 주면 손해다 — 2026-11-09 분석.
  *
  * 중복 방지: dedupe_key 를 회원권 id 기준으로 둬서 한 이용권당 1회만 나간다.
  */
@@ -682,6 +686,7 @@ async function matchAttendanceCoupon(
       for (const d of days) if (d >= from && d <= countEnd) attendDays += 1;
     }
 
+    if (attendDays === 0 && setting.exclude_zero_attendance) continue;
     const hit = list.find((r) => attendDays < r.max_days);
     if (!hit) continue;
 

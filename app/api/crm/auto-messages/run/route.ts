@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       send_days_dir?: "before" | "after";
       expiry_basis?: "period" | "sessions";
       attendance_rules?: { product_id: number; max_days: number; coupon_id: number }[];
+      exclude_zero_attendance?: boolean;
     } | null;
   })[]) {
     if (!SCAN_TRIGGERS.has(s.trigger_key)) continue;
@@ -76,6 +77,7 @@ export async function POST(request: Request) {
         send_days_dir: s.config?.send_days_dir,
         expiry_basis: s.config?.expiry_basis,
         attendance_rules: s.config?.attendance_rules,
+        exclude_zero_attendance: s.config?.exclude_zero_attendance,
       });
     } catch {
       continue;

@@ -75,6 +75,7 @@ export async function GET(request: Request) {
       send_days_dir?: "before" | "after";
       expiry_basis?: "period" | "sessions";
       attendance_rules?: { product_id: number; max_days: number; coupon_id: number }[];
+      exclude_zero_attendance?: boolean;
     } | null;
   }[]) {
     if (processed >= MAX_SENDS) break;
@@ -99,6 +100,7 @@ export async function GET(request: Request) {
       send_days_dir: cfg.send_days_dir,
       expiry_basis: cfg.expiry_basis,
       attendance_rules: cfg.attendance_rules,
+      exclude_zero_attendance: cfg.exclude_zero_attendance,
     };
 
     let matches;
