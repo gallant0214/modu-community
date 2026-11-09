@@ -452,8 +452,8 @@ function AutoMessageEditor({
   const [attachments, setAttachments] = useState<string[]>(base.config?.attachments ?? []);
   // 출석일수 기준 쿠폰 규칙 — 이 트리거는 쿠폰을 '규칙별로' 고르므로 06 쿠폰 첨부를 대체한다
   const showAttendanceRules = triggerKey === ATTENDANCE_RULE_TRIGGER;
-  const [attendRules, setAttendRules] = useState<AttendanceCouponRule[]>(
-    base.config?.attendance_rules ?? []
+  const [attendRules, setAttendRules] = useState<AttendanceRuleRow[]>(() =>
+    sortRuleRows((base.config?.attendance_rules ?? []).map((r, i) => ({ ...r, key: i + 1 })))
   );
   const [excludeZero, setExcludeZero] = useState<boolean>(base.config?.exclude_zero_attendance ?? false);
   const [products, setProducts] = useState<{ id: number; name: string }[]>([]);
@@ -689,7 +689,9 @@ function AutoMessageEditor({
           ...(showExpiryBasis ? { expiry_basis: expiryBasis } : {}),
           ...(showAttendanceRules
             ? {
-                attendance_rules: attendRules.filter((r) => r.product_id && r.max_days > 0 && r.coupon_id),
+                attendance_rules: attendRules
+                  .filter((r) => r.product_id && r.max_days > 0 && r.coupon_id)
+                  .map(({ product_id, max_days, coupon_id }) => ({ product_id, max_days, coupon_id })),
                 exclude_zero_attendance: excludeZero,
               }
             : {}),
@@ -707,7 +709,7 @@ function AutoMessageEditor({
       : showAttendanceRules
         ? attendRules.length === 0
           ? "쿠폰 규칙을 추가해야 대상이 정해져요 (아래 06)"
-          : `규칙 ${attendRules.length}개 · 지정 상품 만료 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"}, 출석일수가 기준 미만인 회원${excludeZero ? " (출석 0일 제외)" : ""}`
+          : `상품 ${new Set(attendRules.map((r) => r.product_id)).size}개 · 구간 ${attendRules.length}개 · 지정 상품 만료 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"}, 출석일수가 기준 미만인 회원${excludeZero ? " (출석 0일 제외)" : ""}`
         : showExpiryBasis
         ? EXPIRY_BASIS_DESC[expiryBasis]
         : trigger.recipient;
@@ -1069,115 +1071,22 @@ function AutoMessageEditor({
               </div>
             </NumberedField>
 
-            {/* 06 쿠폰 규칙 (출석일수 기준) — 상품별 단계마다 다른 쿠폰 */}
+            {/* 06 쿠폰 규칙 (출석일수 기준) — 상품별 카드 안에 출석일수 구간마다 쿠폰 */}
             {showAttendanceRules && (
               <NumberedField
                 no="06"
                 title="쿠폰 규칙 (출석일수 기준)"
-                hint="상품마다 '출석일수 N일 미만 → 이 쿠폰' 을 단계별로 넣어요. 한 회원이 두 단계에 모두 걸리면 기준 일수가 작은 쪽(혜택이 큰 쿠폰) 하나만 나갑니다. 출석일수는 그 이용권 기간(시작일~발송일)에 센터에 온 날짜 수예요."
+                hint="상품마다 출석일수 구간별로 보낼 쿠폰을 정해요. 구간 끝 일수만 넣으면 다음 구간은 그다음 날부터 자동으로 이어져요. 출석일수는 그 이용권 기간(시작일~발송일)에 센터에 온 날짜 수예요."
               >
-                <div className="space-y-2">
-                  {attendRules.length === 0 && (
-                    <div className="text-[12.5px] text-[#8C8270]">
-                      규칙이 없으면 아무에게도 발송되지 않아요. 아래에서 추가해 주세요.
-                    </div>
-                  )}
-                  {attendRules.map((r, i) => (
-                    <div
-                      key={i}
-                      className="flex flex-wrap items-center gap-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 p-2"
-                    >
-                      <select
-                        value={r.product_id || ""}
-                        onChange={(e) =>
-                          setAttendRules((prev) =>
-                            prev.map((x, k) => (k === i ? { ...x, product_id: Number(e.target.value) || 0 } : x))
-                          )
-                        }
-                        className={`${inputCls} flex-1 min-w-[150px]`}
-                      >
-                        <option value="">상품 선택</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                        {r.product_id > 0 && !products.some((p) => p.id === r.product_id) && (
-                          <option value={r.product_id}>삭제된 상품 #{r.product_id}</option>
-                        )}
-                      </select>
-                      <span className="text-[12px] text-[#8C8270]">출석</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={365}
-                        value={r.max_days || ""}
-                        onChange={(e) =>
-                          setAttendRules((prev) =>
-                            prev.map((x, k) =>
-                              k === i ? { ...x, max_days: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : x
-                            )
-                          )
-                        }
-                        className={`${inputCls} w-[70px] text-center`}
-                      />
-                      <span className="text-[12px] text-[#8C8270]">일 미만 →</span>
-                      <select
-                        value={r.coupon_id || ""}
-                        onChange={(e) =>
-                          setAttendRules((prev) =>
-                            prev.map((x, k) => (k === i ? { ...x, coupon_id: Number(e.target.value) || 0 } : x))
-                          )
-                        }
-                        className={`${inputCls} flex-1 min-w-[150px]`}
-                      >
-                        <option value="">쿠폰 선택</option>
-                        {coupons.map((c) => (
-                          <option key={c.id} value={c.id} disabled={c.sendable === false}>
-                            {c.name} · {benefitText(c)}
-                            {c.sendable === false ? " (기한 지남)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setAttendRules((prev) => prev.filter((_, k) => k !== i))}
-                        className="px-2 py-1 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAttendRules((prev) => [...prev, { product_id: 0, max_days: 14, coupon_id: 0 }])
-                    }
-                    className="px-3 py-1.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5"
-                  >
-                    + 규칙 추가
-                  </button>
-                  <label className="flex items-start gap-2 pt-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={excludeZero}
-                      onChange={(e) => setExcludeZero(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 accent-[#6B7B3A]"
-                    />
-                    <span className="text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200">
-                      출석 0일 회원은 보내지 않기
-                      <span className="block text-[11.5px] text-[#A89B80]">
-                        출석 체크 없이 다니는 회원이 섞여 있어요. 0일인 회원은 쿠폰 대신 직접 연락해 보세요.
-                      </span>
-                    </span>
-                  </label>
-                  {coupons.length === 0 && couponsState === "ok" && (
-                    <div className="text-[12px] text-[#8C8270]">
-                      쓸 수 있는 쿠폰이 없어요.{" "}
-                      <a href="/crm/coupons" className="text-[#6B7B3A] dark:text-[#A8B87A] underline">
-                        쿠폰 만들기
-                      </a>
-                    </div>
-                  )}
-                </div>
+                <AttendanceRulesEditor
+                  rules={attendRules}
+                  setRules={setAttendRules}
+                  products={products}
+                  coupons={coupons}
+                  couponsState={couponsState}
+                  excludeZero={excludeZero}
+                  setExcludeZero={setExcludeZero}
+                />
               </NumberedField>
             )}
 
@@ -1779,6 +1688,278 @@ function NumberedField({
         children
       )}
       {hint && <p className="mt-1.5 text-[11px] text-[#A89B80] leading-relaxed">* {hint}</p>}
+    </div>
+  );
+}
+
+/** 06 규칙 편집용 줄 — `key` 는 화면에서 줄을 구분하는 값(저장하지 않는다) */
+type AttendanceRuleRow = AttendanceCouponRule & { key: number };
+
+// 구간 색 — 위(출석 적음·혜택 큼)일수록 진하게
+const RULE_TONES = [
+  "bg-[#6B7B3A] text-white",
+  "bg-[#8C9B5A] text-white",
+  "bg-[#C9D1A6] text-[#2F3A12]",
+  "bg-[#E4E8D2] text-[#3A4518]",
+];
+
+/** 상품별로 모은 뒤(처음 나온 순서) 상품 안에서 일수 순으로 정렬. 순서가 그대로면 같은 배열을 돌려준다. */
+function sortRuleRows(prev: AttendanceRuleRow[]): AttendanceRuleRow[] {
+  const order: number[] = [];
+  const by = new Map<number, AttendanceRuleRow[]>();
+  for (const r of prev) {
+    if (!by.has(r.product_id)) {
+      by.set(r.product_id, []);
+      order.push(r.product_id);
+    }
+    by.get(r.product_id)!.push(r);
+  }
+  const rank = (r: AttendanceRuleRow) => (r.max_days > 0 ? r.max_days : Number.MAX_SAFE_INTEGER);
+  const next = order.flatMap((pid) => [...by.get(pid)!].sort((a, b) => rank(a) - rank(b)));
+  return next.every((r, i) => r === prev[i]) ? prev : next;
+}
+
+/**
+ * 06 쿠폰 규칙 편집기 (출석일수 쿠폰 트리거).
+ *
+ * 저장 형식은 평평한 `[{product_id, max_days, coupon_id}]` 그대로이고, 화면에서만 상품별 카드로 묶는다.
+ * 일수는 구간 끝('이하')으로 입력받아 `max_days`(미만) = 입력값 + 1 로 저장한다 →
+ * "1 ~ 6일 → 30%" 처럼 구간표로 읽히고, 다음 구간의 시작은 앞 구간 끝 + 1 로 자동 계산된다.
+ * 발송 서버는 출석일수 < max_days 인 줄 중 max_days 가 가장 작은 줄을 고르므로 구간표와 결과가 같다.
+ */
+function AttendanceRulesEditor({
+  rules,
+  setRules,
+  products,
+  coupons,
+  couponsState,
+  excludeZero,
+  setExcludeZero,
+}: {
+  rules: AttendanceRuleRow[];
+  setRules: React.Dispatch<React.SetStateAction<AttendanceRuleRow[]>>;
+  products: { id: number; name: string }[];
+  coupons: (CouponDef & { sendable?: boolean })[];
+  couponsState: "loading" | "ok" | "denied" | "error";
+  excludeZero: boolean;
+  setExcludeZero: (v: boolean) => void;
+}) {
+  // 상품별로 묶기 — 처음 나온 순서대로
+  const groups = useMemo(() => {
+    const order: number[] = [];
+    const by = new Map<number, AttendanceRuleRow[]>();
+    for (const r of rules) {
+      if (!by.has(r.product_id)) {
+        by.set(r.product_id, []);
+        order.push(r.product_id);
+      }
+      by.get(r.product_id)!.push(r);
+    }
+    return order.map((pid) => ({ pid, rows: by.get(pid)! }));
+  }, [rules]);
+
+  const productName = (pid: number) =>
+    products.find((p) => p.id === pid)?.name ?? (products.length > 0 ? `삭제된 상품 #${pid}` : `상품 #${pid}`);
+  const unusedProducts = products.filter((p) => !groups.some((g) => g.pid === p.id));
+  const floor = excludeZero ? 1 : 0;
+
+  const newKey = (prev: AttendanceRuleRow[]) => prev.reduce((m, r) => Math.max(m, r.key), 0) + 1;
+  const patch = (key: number, p: Partial<AttendanceCouponRule>) =>
+    setRules((prev) => prev.map((r) => (r.key === key ? { ...r, ...p } : r)));
+  const addTier = (pid: number) =>
+    setRules((prev) => [...prev, { key: newKey(prev), product_id: pid, max_days: 0, coupon_id: 0 }]);
+  const removeTier = (key: number) => setRules((prev) => prev.filter((r) => r.key !== key));
+  const removeProduct = (pid: number, n: number) => {
+    if (n > 1 && !confirm(`'${productName(pid)}' 의 쿠폰 규칙 ${n}개를 모두 뺄까요?`)) return;
+    setRules((prev) => prev.filter((r) => r.product_id !== pid));
+  };
+  // 구간을 일수 순으로 정리 — 입력하는 동안엔 줄이 움직이지 않게, 일수 칸을 벗어날 때만
+  const tidy = () => setRules(sortRuleRows);
+
+  return (
+    <div className="space-y-2.5">
+      <label className="flex items-start gap-2 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={excludeZero}
+          onChange={(e) => setExcludeZero(e.target.checked)}
+          className="mt-0.5 w-4 h-4 accent-[#6B7B3A]"
+        />
+        <span className="text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200">
+          출석 0일 회원은 보내지 않기
+          <span className="block text-[11.5px] text-[#A89B80]">
+            출석 체크 없이 다니는 회원이 섞여 있어요. 0일인 회원은 쿠폰 대신 직접 연락해 보세요.
+          </span>
+        </span>
+      </label>
+
+      {groups.length === 0 && (
+        <div className="px-3 py-4 rounded-xl border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-center text-[12.5px] text-[#8C8270]">
+          규칙이 없으면 아무에게도 발송되지 않아요.
+          <br />
+          아래 <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">+ 상품 추가</strong>에서 상품부터 골라 주세요.
+        </div>
+      )}
+
+      {groups.map(({ pid, rows }) => {
+        const last = rows[rows.length - 1];
+        return (
+          <div
+            key={pid}
+            className="rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950/40 overflow-hidden"
+          >
+            {/* 상품 */}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#F5F0E5]/60 dark:bg-zinc-800/50">
+              <span className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">{productName(pid)}</span>
+              <span className="shrink-0 text-[11px] text-[#A89B80]">{rows.length}단계</span>
+              <button
+                type="button"
+                onClick={() => removeProduct(pid, rows.length)}
+                className="ml-auto shrink-0 px-2 py-0.5 rounded-md text-[11.5px] font-medium text-[#A89B80] hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+              >
+                상품 빼기
+              </button>
+            </div>
+
+            {/* 구간표 */}
+            <div className="px-3 py-2.5 space-y-1.5">
+              {excludeZero && (
+                <div className="flex items-center gap-2 text-[12px] text-[#A89B80]">
+                  <span className="inline-flex w-[104px] shrink-0 justify-center rounded-md border border-dashed border-[#E8E0D0] dark:border-zinc-700 py-1">
+                    0일
+                  </span>
+                  보내지 않음
+                </div>
+              )}
+              {rows.map((r, idx) => {
+                const prevMax = idx === 0 ? null : rows[idx - 1].max_days;
+                // 이 구간의 시작 = 앞 구간 끝 + 1 (앞 구간 일수를 아직 안 넣었으면 알 수 없음)
+                const start = idx === 0 ? floor : prevMax && prevMax > 0 ? prevMax : null;
+                const upper = r.max_days > 0 ? r.max_days - 1 : null;
+                const warn =
+                  upper !== null && start !== null && upper < start
+                    ? idx === 0
+                      ? { tone: "red", text: "출석 0일 회원을 빼서 이 구간에 해당하는 회원이 없어요" }
+                      : { tone: "red", text: "앞 구간과 겹쳐서 이 구간은 보내지 않아요 — 앞 구간보다 큰 일수를 넣어 주세요" }
+                    : upper === null || !r.coupon_id
+                      ? { tone: "amber", text: "일수와 쿠폰을 모두 정해야 적용돼요" }
+                      : null;
+                return (
+                  <div key={r.key}>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex w-[104px] shrink-0 items-center justify-center gap-1 rounded-md py-1 text-[12.5px] font-semibold tabular-nums ${
+                          RULE_TONES[Math.min(idx, RULE_TONES.length - 1)]
+                        }`}
+                      >
+                        <span>{start ?? "?"}</span>
+                        <span className="opacity-70">~</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={364}
+                          value={upper ?? ""}
+                          placeholder="?"
+                          aria-label="구간 끝 출석일수(이하)"
+                          onChange={(e) => {
+                            const n = Math.floor(Number(e.target.value));
+                            patch(r.key, {
+                              max_days:
+                                e.target.value === "" || !Number.isFinite(n) ? 0 : Math.min(364, Math.max(0, n)) + 1,
+                            });
+                          }}
+                          onBlur={tidy}
+                          className="w-10 rounded border border-black/10 bg-white dark:bg-zinc-950 px-1 py-0.5 text-center text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                        <span>일</span>
+                      </span>
+                      <span className="shrink-0 text-[#A89B80]">→</span>
+                      <select
+                        value={r.coupon_id || ""}
+                        onChange={(e) => patch(r.key, { coupon_id: Number(e.target.value) || 0 })}
+                        className="min-w-0 flex-1 px-2.5 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[12.5px] text-[#2A251D] dark:text-zinc-100"
+                      >
+                        <option value="">쿠폰 선택</option>
+                        {coupons.map((c) => (
+                          <option key={c.id} value={c.id} disabled={c.sendable === false}>
+                            {c.name} · {benefitText(c)}
+                            {c.sendable === false ? " (기한 지남)" : ""}
+                          </option>
+                        ))}
+                        {r.coupon_id > 0 && !coupons.some((c) => Number(c.id) === r.coupon_id) && (
+                          <option value={r.coupon_id}>쓸 수 없는 쿠폰 #{r.coupon_id}</option>
+                        )}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => removeTier(r.key)}
+                        aria-label="이 구간 빼기"
+                        title="이 구간 빼기"
+                        className="shrink-0 w-7 h-7 rounded-md text-[14px] text-[#A89B80] hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {warn && (
+                      <div
+                        className={`mt-0.5 pl-[112px] text-[11px] ${
+                          warn.tone === "red" ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400"
+                        }`}
+                      >
+                        {warn.text}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {last.max_days > 0 && (
+                <div className="flex items-center gap-2 text-[12px] text-[#A89B80]">
+                  <span className="inline-flex w-[104px] shrink-0 justify-center rounded-md border border-dashed border-[#E8E0D0] dark:border-zinc-700 py-1 tabular-nums">
+                    {last.max_days}일 이상
+                  </span>
+                  보내지 않음
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => addTier(pid)}
+                className="mt-0.5 px-2.5 py-1 rounded-md text-[12px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5"
+              >
+                + 구간 추가
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      <select
+        value=""
+        disabled={unusedProducts.length === 0}
+        onChange={(e) => {
+          const pid = Number(e.target.value);
+          if (pid) addTier(pid);
+        }}
+        className="px-3 py-1.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] bg-transparent text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5 cursor-pointer disabled:opacity-50 disabled:cursor-default"
+      >
+        <option value="">
+          {unusedProducts.length === 0 && products.length > 0 ? "모든 회원권 상품에 규칙이 있어요" : "+ 상품 추가"}
+        </option>
+        {unusedProducts.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+
+      {coupons.length === 0 && couponsState === "ok" && (
+        <div className="text-[12px] text-[#8C8270]">
+          쓸 수 있는 쿠폰이 없어요.{" "}
+          <a href="/crm/coupons" className="text-[#6B7B3A] dark:text-[#A8B87A] underline">
+            쿠폰 만들기
+          </a>
+        </div>
+      )}
     </div>
   );
 }
