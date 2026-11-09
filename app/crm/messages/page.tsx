@@ -224,7 +224,6 @@ export default function CrmMessagesPage() {
   const send = async () => {
     setError("");
     setOkMsg("");
-    if (!title.trim()) return setError("제목을 입력해 주세요");
     if (!body.trim()) return setError("내용을 입력해 주세요");
     if (audience === "individual" && selectedMembers.length === 0)
       return setError("받을 회원을 최소 1명 선택해 주세요");
@@ -549,12 +548,12 @@ export default function CrmMessagesPage() {
 
       {/* 메시지 작성 */}
       <Section title="3. 메시지">
-        <FieldLabel>제목</FieldLabel>
+        <FieldLabel>제목 (선택)</FieldLabel>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value.slice(0, 60))}
-          placeholder="예: 6월 휴관 안내"
+          placeholder="비워 두면 문자는 제목 없이, 앱 알림은 센터 이름으로 보내요"
           maxLength={60}
           className={crmInputClass}
         />

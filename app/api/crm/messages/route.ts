@@ -105,11 +105,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
-  const title = body.title?.trim();
+  // 제목은 선택 — 비우면 문자는 제목 없이, 앱 알림은 센터 이름을 제목으로, 발송 이력은 내용 첫 줄로 남긴다
+  const title = body.title?.trim() ?? "";
   const bodyText = body.body?.trim();
   const kind = body.audience_kind ?? "";
 
-  if (!title) return NextResponse.json({ error: "제목을 입력해 주세요" }, { status: 400 });
   if (!bodyText) return NextResponse.json({ error: "내용을 입력해 주세요" }, { status: 400 });
   if (title.length > 60) return NextResponse.json({ error: "제목은 60자 이내로 입력해 주세요" }, { status: 400 });
   if (bodyText.length > 2000) return NextResponse.json({ error: "내용은 2000자 이내로 입력해 주세요" }, { status: 400 });
@@ -168,11 +168,19 @@ export async function POST(request: Request) {
     .eq("firebase_uid", ctx.uid)
     .maybeSingle();
 
+  // 제목을 비운 경우 — 이력 표시용 제목 = 내용 첫 줄(30자), 앱 알림 제목 = 센터 이름
+  const historyTitle = title || bodyText.split("\n").find((l) => l.trim())!.trim().slice(0, 30);
+  let pushTitle = title;
+  if (!pushTitle) {
+    const { data: center } = await supabase.from("crm_centers").select("name").eq("id", ctx.centerId).maybeSingle();
+    pushTitle = (center as { name?: string } | null)?.name || historyTitle;
+  }
+
   const { data: broadcast, error: bErr } = await supabase
     .from("crm_message_broadcasts")
     .insert({
       center_id: ctx.centerId,
-      title,
+      title: historyTitle,
       body: bodyText,
       audience_kind: kind,
       audience_filter: audienceFilter as never,
@@ -231,7 +239,7 @@ export async function POST(request: Request) {
   // 회원 앱 알림(푸시 + 알림함) — 백그라운드 발송
   if (wantsPush) {
     after(async () => {
-      await notifyMembersByIds(ctx.centerId, memberIds, "message", title, bodyText, {
+      await notifyMembersByIds(ctx.centerId, memberIds, "message", pushTitle, bodyText, {
         broadcastId: String(broadcast.id),
       });
     });
@@ -260,7 +268,7 @@ export async function POST(request: Request) {
     let failed = 0;
     for (let i = 0; i < receivers.length; i += SMS_CHUNK) {
       const chunk = receivers.slice(i, i + SMS_CHUNK);
-      const r = await solapiSend({ receivers: chunk, msg: bodyText, subject: title, msgType });
+      const r = await solapiSend({ receivers: chunk, msg: bodyText, subject: title || undefined, msgType });
       sent += r.success;
       failed += r.failed + (r.ok ? 0 : chunk.length - r.success - r.failed);
       await logSmsSend({
@@ -269,7 +277,7 @@ export async function POST(request: Request) {
         receivers: chunk,
         msg: bodyText,
         msgType,
-        title,
+        title: title || undefined,
         testmode: false,
         resultCode: r.ok ? 1 : -1,
         resultMsg: r.message,
