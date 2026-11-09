@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/crm/coupons?status=active|archived|all
  * 쿠폰 목록 + 쿠폰별 발급/사용/회수/만료 집계 + 전체 요약.
+ * 삭제한 쿠폰(status 'deleted')은 all 에만 나온다 — 받은 회원 목록에서 그 쿠폰으로 거르기 위해.
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);

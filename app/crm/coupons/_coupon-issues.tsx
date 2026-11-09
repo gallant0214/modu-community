@@ -256,7 +256,7 @@ export function CouponIssuesTab({
           {coupons.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
-              {c.status === "archived" ? " (보관)" : ""}
+              {c.status === "archived" ? " (보관)" : c.status === "deleted" ? " (삭제)" : ""}
             </option>
           ))}
         </select>

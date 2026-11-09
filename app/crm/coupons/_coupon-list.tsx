@@ -12,7 +12,7 @@ import {
   type BenefitType,
   type CouponDef,
 } from "@/app/lib/crm-coupons";
-import { EmptyBox, FieldLabel, authedFetch, formatYmd, ghostBtn, primaryBtn, won } from "./_shared";
+import { EmptyBox, FieldLabel, authedFetch, dangerBtn, formatYmd, ghostBtn, primaryBtn, won } from "./_shared";
 
 export interface CouponRow extends CouponDef {
   description: string | null;
@@ -119,6 +119,15 @@ export function CouponListTab({
       body: JSON.stringify({ action }),
     });
     if (!r.ok) return alert(String(r.data.error ?? "처리 실패"));
+    load();
+  };
+
+  // 삭제 = 목록·보관함에서 사라지고 다시 발송 불가. 회원이 이미 받은 쿠폰은 기한까지 그대로 쓸 수 있다
+  const remove = async (c: CouponRow) => {
+    const held = c.stats.available > 0 ? `\n회원이 이미 받은 ${c.stats.available}장은 기한까지 그대로 쓸 수 있어요.` : "";
+    if (!confirm(`'${c.name}' 쿠폰을 삭제할까요?\n목록과 보관함에서 사라지고 다시 발송할 수 없어요.${held}`)) return;
+    const r = await authedFetch(getIdToken, `/api/crm/coupons/${c.id}`, { method: "DELETE" });
+    if (!r.ok) return alert(String(r.data.error ?? "삭제 실패"));
     load();
   };
 
@@ -242,6 +251,9 @@ export function CouponListTab({
                       className={ghostBtn}
                     >
                       {c.status === "archived" ? "보관 해제" : "보관"}
+                    </button>
+                    <button type="button" onClick={() => remove(c)} className={`${dangerBtn} ml-auto`}>
+                      삭제
                     </button>
                   </>
                 )}

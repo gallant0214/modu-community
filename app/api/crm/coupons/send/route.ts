@@ -64,7 +64,8 @@ export async function POST(request: Request) {
   const coupon = (await loadCoupons(ctx.centerId, [couponId])).get(couponId);
   if (!coupon) return NextResponse.json({ error: "쿠폰을 찾을 수 없어요" }, { status: 404 });
   if ((coupon.status ?? "active") !== "active") {
-    return NextResponse.json({ error: "보관된 쿠폰은 발송할 수 없어요" }, { status: 400 });
+    const why = coupon.status === "deleted" ? "삭제된" : "보관된";
+    return NextResponse.json({ error: `${why} 쿠폰은 발송할 수 없어요` }, { status: 400 });
   }
   if (coupon.valid_mode === "until" && coupon.valid_until && coupon.valid_until < kstTodayYmd()) {
     return NextResponse.json({ error: "사용 기한이 이미 지난 쿠폰이에요" }, { status: 400 });
