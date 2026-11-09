@@ -7527,7 +7527,6 @@ function UsageIssueModal({
   memberId,
   memberMileage,
   staffList,
-  myMemberId,
   onSuccess,
 }: {
   open: boolean;
@@ -7783,19 +7782,14 @@ function UsageIssueModal({
       setLockerZone("");
       setLockerId("");
       setLockerPassword("");
+      pwTouchedRef.current = false;
+      // 🚨 판매자는 자동으로 채우지 않는다 — 열 때마다 비우고 직접 고르게 (2026-11-09)
+      setSellerId("");
       setCart([]);
       setError("");
     }
   }, [open]);
 
-  // 판매자 기본값 = 로그인 직원(본인). 없으면 목록 첫 직원
-  useEffect(() => {
-    if (open && staffList.length > 0 && sellerId === "") {
-      const mine = myMemberId && staffList.some((s) => s.id === myMemberId) ? myMemberId : staffList[0].id;
-      setSellerId(mine);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, staffList, myMemberId]);
 
   // 타입별 상품 카탈로그 로드 (프리필용)
   //   + 유형이 바뀌면 왼쪽 폼을 초기화(이전 유형의 상품/기간/금액 잔재 제거).
@@ -8460,7 +8454,7 @@ function UsageIssueModal({
             ))}
           </select>
           <p className="mt-1 text-[11px] text-[#A89B80]">
-            기본은 로그인한 본인이에요. 실제 판매 직원이 다르면 바꿔 주세요.
+            실제로 판매한 직원을 골라 주세요.
           </p>
         </CrmField>
 
@@ -9015,7 +9009,6 @@ function PassIssueModal({
   onClose,
   memberId,
   staffList,
-  myMemberId,
   onSuccess,
 }: {
   open: boolean;
@@ -9064,15 +9057,16 @@ function PassIssueModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // 담당 강사·판매자 기본값 = 로그인 직원(본인). 본인이 강사목록에 없으면 담당강사는 미배정(첫 직원 자동입력 안 함).
+  // 🚨 담당 강사·판매자는 자동으로 채우지 않는다 — 열 때마다 비우고 직접 고르게 한다.
+  //    (공용 '스페셜바디' 계정으로 발급하면 담당 강사가 그 계정으로 자동 지정돼
+  //     강사 매출이 엉뚱한 줄로 간 사고, 2026-11-09)
   useEffect(() => {
-    if (open && staffList.length > 0) {
-      const mineInList = myMemberId && staffList.some((s) => s.id === myMemberId) ? myMemberId : null;
-      if (trainerId === "" && mineInList) setTrainerId(mineInList);
-      if (sellerId === "") setSellerId(mineInList ?? staffList[0].id);
+    if (open) {
+      setTrainerId("");
+      setCoTrainerIds([]);
+      setSellerId("");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, staffList, myMemberId]);
+  }, [open]);
 
   // 열릴 때 수강권 상품(개인/그룹/클래스) 로드.
   // 옛 '수업 종류'(crm_lesson_kinds: 개인 PT·2:1 PT) 목록은 상품관리로 대체돼 2026-11-06 발급 목록에서 뺐다
@@ -9153,7 +9147,8 @@ function PassIssueModal({
   const submit = async () => {
     setError("");
     if (!lessonKind.trim()) return setError("수업 종류를 입력해주세요");
-    // 담당 강사는 '미배정' 허용 (나중에 배정). 필수 검사 없음.
+    if (!trainerId) return setError("담당 강사를 선택해 주세요");
+    if (!sellerId) return setError("판매자를 선택해 주세요");
     if (totalSessions < 1) return setError("총 세션 수는 1 이상이어야 합니다");
     setSubmitting(true);
     try {
@@ -9163,9 +9158,9 @@ function PassIssueModal({
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
           member_id: memberId,
-          trainer_member_id: trainerId ? Number(trainerId) : null,
+          trainer_member_id: Number(trainerId),
           co_trainer_ids: coTrainerIds,
-          seller_member_id: Number(sellerId) || (trainerId ? Number(trainerId) : null) || myMemberId,
+          seller_member_id: Number(sellerId),
           issue_type: issueType,
           // 본 수강권은 원래 회차만. 서비스 회차는 서버가 '서비스 수강권'으로 0원 별도 발급.
           lesson_kind: `${lessonKind}(${totalSessions}회)`,
@@ -9278,13 +9273,13 @@ function PassIssueModal({
             수강권을 선택하면 금액·세션·기간이 자동 채워져요. 미선택 시 직접 입력하면 됩니다.
           </p>
         </CrmField>
-        <CrmField label="담당 강사">
+        <CrmField label="담당 강사" required>
           <select
             className={crmInputClass}
             value={trainerId}
             onChange={(e) => setTrainerId(e.target.value ? Number(e.target.value) : "")}
           >
-            <option value="">미배정 (나중에 배정)</option>
+            <option value="">선택해 주세요</option>
             {staffList.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.display_name}
@@ -9298,13 +9293,13 @@ function PassIssueModal({
           value={coTrainerIds}
           onChange={setCoTrainerIds}
         />
-        <CrmField label="판매자">
+        <CrmField label="판매자" required>
           <select
             className={crmInputClass}
             value={sellerId}
             onChange={(e) => setSellerId(e.target.value ? Number(e.target.value) : "")}
           >
-            <option value="">선택해주세요</option>
+            <option value="">선택해 주세요</option>
             {staffList.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.display_name}
@@ -9312,7 +9307,7 @@ function PassIssueModal({
             ))}
           </select>
           <p className="mt-1 text-[11px] text-[#A89B80]">
-            기본은 로그인한 본인이에요. 실제로 판매한 직원이 다르면 바꿔 주세요. (담당 강사와 달라도 됩니다)
+            실제로 판매한 직원을 골라 주세요. 담당 강사와 달라도 됩니다.
           </p>
         </CrmField>
         <CrmField label="발급 유형">

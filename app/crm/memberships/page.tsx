@@ -743,37 +743,25 @@ function IssueModal({
   const [memo, setMemo] = useState("");
   const [staffList, setStaffList] = useState<{ id: number; display_name: string }[]>([]);
   const [sellerId, setSellerId] = useState<number | "">("");
-  const [myMemberId, setMyMemberId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // 직원 목록 + 로그인 본인 로드 (판매자 기본값용)
+  // 직원 목록 로드.
+  // 🚨 판매자는 자동으로 채우지 않는다 — 직접 고르게 (공용 계정 자동 지정 사고, 2026-11-09)
   useEffect(() => {
     if (!open) return;
     (async () => {
       const token = await getIdToken();
       if (!token) return;
-      const h = { authorization: `Bearer ${token}` };
-      const [sRes, bRes] = await Promise.all([
-        fetch("/api/crm/staff?scope=names", { headers: h }),
-        fetch("/api/crm/bootstrap", { headers: h, cache: "no-store" }),
-      ]);
+      const sRes = await fetch("/api/crm/staff?scope=names", {
+        headers: { authorization: `Bearer ${token}` },
+      });
       if (sRes.ok) {
         const d = await sRes.json();
         setStaffList((d.staff ?? []).filter((s: { status: string }) => s.status === "active"));
       }
-      if (bRes.ok) setMyMemberId((await bRes.json()).centerMemberId ?? null);
     })();
   }, [open, getIdToken]);
-
-  // 판매자 기본값 = 로그인 본인
-  useEffect(() => {
-    if (open && staffList.length > 0 && sellerId === "") {
-      const mine = myMemberId && staffList.some((s) => s.id === myMemberId) ? myMemberId : staffList[0].id;
-      setSellerId(mine);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, staffList, myMemberId]);
 
   useEffect(() => {
     if (!open) {
@@ -890,6 +878,7 @@ function IssueModal({
     if (!picked) return setError("회원을 선택해 주세요");
     if (!planName.trim()) return setError("상품명을 입력해 주세요");
     if (duration < 1) return setError("기간은 1일 이상이어야 해요");
+    if (!sellerId) return setError("판매자를 선택해 주세요");
     setSubmitting(true);
     try {
       const token = await getIdToken();
@@ -903,7 +892,7 @@ function IssueModal({
           price_won: priceWon,
           payment_method: paymentMethod,
           payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
-          seller_member_id: sellerId || undefined,
+          seller_member_id: Number(sellerId),
           purchased_at: purchasedAt,
           start_date: startDate,
           expires_at: expiresAt,
@@ -1117,7 +1106,7 @@ function IssueModal({
           )}
         </CrmField>
 
-        <CrmField label="판매자">
+        <CrmField label="판매자" required>
           <select
             className={crmInputClass}
             value={sellerId}
@@ -1131,7 +1120,7 @@ function IssueModal({
             ))}
           </select>
           <p className="mt-1 text-[11px] text-[#A89B80]">
-            기본은 로그인한 본인이에요. 실제 판매 직원이 다르면 바꿔 주세요.
+            실제로 판매한 직원을 골라 주세요.
           </p>
         </CrmField>
 
