@@ -87,7 +87,6 @@ export async function PATCH(request: Request) {
   }
   if (body.message_body !== undefined) patch.message_body = String(body.message_body).slice(0, 4000);
   if (body.coupon_id !== undefined) patch.coupon_id = body.coupon_id === null ? null : Number(body.coupon_id);
-  if (body.config !== undefined && typeof body.config === "object") patch.config = body.config;
 
   patch.updated_at = new Date().toISOString();
 
@@ -95,11 +94,20 @@ export async function PATCH(request: Request) {
   // DB 기본값은 'immediate' 라서, 일정 기준 전용 트리거가 '당일 발송'으로 만들어지는 걸 막는다.
   const { data: before } = await supabase
     .from("crm_auto_message_settings")
-    .select("send_basis, send_days")
+    .select("send_basis, send_days, config")
     .eq("center_id", ctx.centerId)
     .eq("trigger_key", triggerKey)
     .maybeSingle();
-  const prev = before as { send_basis?: string | null; send_days?: number | null } | null;
+  const prev = before as
+    | { send_basis?: string | null; send_days?: number | null; config?: Record<string, unknown> | null }
+    | null;
+  // 🚨 config 는 기존 값에 **덮어 합친다**(최상위 키 단위). 통째로 바꾸면 배포 전에 열어 둔 화면에서
+  //    저장할 때, 그 화면이 모르는 새 설정(예: exclude_zero_attendance)이 조용히 지워진다
+  //    (2026-11-09 출석일수 쿠폰 '출석 0일 제외'가 이렇게 꺼졌다).
+  if (body.config !== undefined && body.config !== null && typeof body.config === "object" && !Array.isArray(body.config)) {
+    const prevConfig = prev?.config && typeof prev.config === "object" ? prev.config : {};
+    patch.config = { ...prevConfig, ...(body.config as Record<string, unknown>) };
+  }
   if (patch.send_basis === undefined) {
     const fixed = coerceSendBasis(triggerKey, prev?.send_basis);
     if (fixed !== prev?.send_basis) patch.send_basis = fixed;
