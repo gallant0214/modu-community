@@ -7,6 +7,7 @@ import { contractBodyHtml } from "@/app/lib/contract-body";
 /* 신규 회원 웹 가입 — QR/가입링크 → '신규 회원 가입하기' 로 진입.
    ① 회원 등록: 정보입력(+개인정보 동의) → 본인확인 셀카 → [가입 완료] = 즉시 CRM 회원 등록
    ② 선택: '회원권 결제를 하시겠습니까?' / '회원용 앱을 바로 설치하시겠습니까?'
+      — [이전] 으로 정보입력에 돌아가 고치면 같은 회원이 수정된다(새 회원 생성 X)
    ③ 회원권 결제: 헬스이용권 → 운동복 → 락커 → 시작일 → 요약 → 전자계약서(서명) → PG 결제 → 앱 설치 안내
    한 화면 한 질문 · 큰 제목 · 하단 CTA · 슬라이드 전환. */
 
@@ -329,6 +330,8 @@ export default function MemberWebSignupPage() {
           faceImage: faceDataUrl,
           faceThumb,
           privacyConsent: consent,
+          // 이미 등록했다가 '이전'으로 돌아와 고친 경우 → 같은 회원 수정
+          memberToken: memberToken || undefined,
         }),
       });
       const d = await res.json();
@@ -386,12 +389,16 @@ export default function MemberWebSignupPage() {
 
   const go = useCallback((next: Step, d: 1 | -1) => {
     setDir(d);
+    setSubmitErr("");
     setStep(next);
   }, []);
   const idx = ORDER.indexOf(step);
   const back = () => {
-    // 회원 등록이 끝난 뒤(선택 화면)엔 정보입력·셀카로 되돌아가지 않는다
-    if (step === "choice") return;
+    // 선택 화면의 '이전' = 입력한 정보 수정 → 정보입력으로 바로. 다시 저장하면 같은 회원이 수정된다(memberToken).
+    if (step === "choice") {
+      go("info", -1);
+      return;
+    }
     if (idx <= 0) {
       router.replace(`/join/${encodeURIComponent(token)}`);
       return;
@@ -443,13 +450,11 @@ export default function MemberWebSignupPage() {
     <Shell>
       {/* 상단: 뒤로 + 진행 점 (구간별) */}
       <div className="flex items-center gap-3 px-1 pt-2 pb-4 min-h-[44px]">
-        {step !== "choice" && (
-          <button onClick={back} aria-label="뒤로" className="p-1 -ml-1 text-[#3A342A]">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-        )}
+        <button onClick={back} aria-label="뒤로" className="p-1 -ml-1 text-[#3A342A]">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
         <div className="flex-1 flex items-center gap-1.5">
           {(REG_STEPS.includes(step) ? REG_STEPS : BUY_STEPS.includes(step) ? BUY_STEPS : []).map((s, i, arr) => (
             <span
@@ -812,56 +817,60 @@ export default function MemberWebSignupPage() {
         )}
       </div>
 
-      {/* 하단 CTA */}
+      {/* 하단 CTA — 첫 화면 이후엔 [이전] + 주 버튼 */}
       <div className="sticky bottom-0 bg-gradient-to-t from-[#FBF7EB] via-[#FBF7EB] to-transparent pt-4 pb-5">
-        {step === "summary" ? (
-          <button
-            onClick={next}
-            className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors hover:bg-[#5a6932]"
-          >
-            전자계약서 작성하기
-          </button>
-        ) : step === "contract" ? (
-          <>
-            {submitErr && (
-              <div className="mb-2 px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700 text-center">
-                {submitErr}
-              </div>
-            )}
+        {(step === "selfie" || step === "contract") && submitErr && (
+          <div className="mb-2 px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700 text-center">
+            {submitErr}
+          </div>
+        )}
+        <div className="flex gap-2">
+          {step !== "info" && (
+            <button
+              onClick={back}
+              disabled={submitting}
+              className={`${step === "choice" ? "flex-1" : "w-[30%] shrink-0"} py-4 rounded-2xl border border-[#E8E0D0] bg-white text-[#6B5D47] text-[16px] font-bold transition-colors hover:bg-[#F5F0E5] disabled:opacity-50`}
+            >
+              {step === "choice" ? "이전 (입력한 정보 수정)" : "이전"}
+            </button>
+          )}
+          {step === "summary" ? (
+            <button
+              onClick={next}
+              className="flex-1 py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors hover:bg-[#5a6932]"
+            >
+              전자계약서 작성하기
+            </button>
+          ) : step === "contract" ? (
             <button
               onClick={submitPayment}
               disabled={!canNext || submitting}
-              className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
+              className="flex-1 py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
               title={canNext ? "" : "필수 약관 동의와 서명을 완료해 주세요"}
             >
               {submitting ? "결제 준비 중…" : `${won(total)}원 결제하기`}
             </button>
-          </>
-        ) : step === "selfie" ? (
-          <>
-            {submitErr && (
-              <div className="mb-2 px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700 text-center">
-                {submitErr}
-              </div>
-            )}
+          ) : step === "selfie" ? (
             <button
               onClick={registerMember}
               disabled={!faceDataUrl || submitting}
-              className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
+              className="flex-1 py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
               title={faceDataUrl ? "" : "본인 확인 사진을 촬영·저장해 주세요"}
             >
-              {submitting ? "등록 중…" : "회원 가입 완료"}
+              {submitting
+                ? memberToken ? "저장 중…" : "등록 중…"
+                : memberToken ? "수정 내용 저장" : "회원 가입 완료"}
             </button>
-          </>
-        ) : step === "choice" ? null : (
-          <button
-            onClick={next}
-            disabled={!canNext}
-            className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
-          >
-            다음
-          </button>
-        )}
+          ) : step === "choice" ? null : (
+            <button
+              onClick={next}
+              disabled={!canNext}
+              className="flex-1 py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
+            >
+              다음
+            </button>
+          )}
+        </div>
       </div>
 
       {calOpen && (

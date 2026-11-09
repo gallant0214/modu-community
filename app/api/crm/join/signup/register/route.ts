@@ -2,7 +2,7 @@ import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { getClientIp, checkRateLimit } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
-import { signJoinMemberToken } from "@/app/lib/order-token";
+import { signJoinMemberToken, verifyJoinMemberToken } from "@/app/lib/order-token";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,10 @@ async function memberHasProducts(memberId: number, centerId: number): Promise<bo
  * 웹 신규 가입 1단계: 회원 정보 + 본인확인 사진을 받아 **결제와 무관하게** 바로 CRM 회원으로 등록.
  * 이후 회원이 '회원권 결제'를 고르면 /submit 이 memberToken 으로 이 회원에게 계약서·주문을 만든다.
  *
- * 같은 센터에 이름+전화번호가 같은 회원이 있으면:
+ * memberToken 이 오면(등록 후 '이전'으로 돌아가 정보를 고친 경우) 그 회원을 수정한다 — 새로 만들지 않음.
+ *   단, 이미 앱 연동·결제(상품 발급)까지 끝난 회원은 웹에서 못 고친다(센터 문의).
+ *
+ * 같은 센터에 이름+전화번호가 같은 (다른) 회원이 있으면:
  *   · 앱 연동됨 / 정식회원(member_type≠provisional) / 발급 상품 보유 → 가입 차단(기존 회원 연동 안내)
  *   · 상품 없는 provisional(이전에 웹 가입만 하고 떠난 경우) → 그 레코드를 재사용(중복 생성 방지)
  */
@@ -55,6 +58,8 @@ export async function POST(request: Request) {
     faceImage?: string;
     faceThumb?: string;
     privacyConsent?: boolean;
+    /** 이미 등록한 뒤 '이전'으로 돌아가 정보를 고친 경우 — 그 회원을 수정(새로 만들지 않음) */
+    memberToken?: string;
   };
   try {
     body = await request.json();
@@ -99,7 +104,12 @@ export async function POST(request: Request) {
   if (!face.startsWith("data:image") || face.length > 400_000)
     return NextResponse.json({ error: "본인확인 사진을 다시 촬영해 주세요" }, { status: 400 });
 
-  // 기존 등록 회원 차단 + 재사용 판별
+  // 정보 수정 대상(방금 이 화면에서 등록한 회원). 토큰이 만료·위조면 무시하고 일반 등록으로 처리
+  //  — 이름·번호를 그대로 두었다면 아래 '상품 없는 provisional 재사용' 으로 같은 회원에 붙는다.
+  const editTok = verifyJoinMemberToken(body.memberToken);
+  const editId = editTok && editTok.centerId === centerId ? editTok.memberId : null;
+
+  // 기존 등록 회원 차단 + 재사용 판별 (수정 중인 본인 레코드는 제외)
   const phoneDigits = phone.replace(/\D/g, "");
   const { data: cands } = await supabase
     .from("crm_members")
@@ -109,6 +119,7 @@ export async function POST(request: Request) {
     .ilike("phone", `%${phoneDigits.slice(-4)}%`);
   const matches = (cands ?? []).filter(
     (m) =>
+      m.id !== editId &&
       (m.phone ?? "").replace(/\D/g, "") === phoneDigits &&
       (m.name ?? "").trim().toLowerCase() === name.toLowerCase()
   );
@@ -136,7 +147,39 @@ export async function POST(request: Request) {
 
   const nowIso = new Date().toISOString();
   let memberId: number;
-  if (reuseId) {
+  if (editId) {
+    // 등록 후 '이전'으로 돌아가 고친 정보 반영 — 같은 회원 레코드를 수정
+    const { data: me } = await supabase
+      .from("crm_members")
+      .select("id, status, member_type, linked_firebase_uid")
+      .eq("id", editId)
+      .eq("center_id", centerId)
+      .maybeSingle();
+    if (!me || me.status !== "active")
+      return NextResponse.json({ error: "회원 정보를 찾을 수 없어요. 센터에 문의해 주세요." }, { status: 404 });
+    if (me.linked_firebase_uid || me.member_type !== "provisional" || (await memberHasProducts(editId, centerId)))
+      return NextResponse.json(
+        { error: "이미 가입이 완료되어 여기서는 정보를 바꿀 수 없어요. 센터에 문의해 주세요." },
+        { status: 409 }
+      );
+    memberId = editId;
+    const { error: eErr } = await supabase
+      .from("crm_members")
+      .update({
+        name,
+        phone,
+        birth,
+        gender,
+        address,
+        attendance_no: phoneDigits.slice(-4),
+        privacy_agreed_at: nowIso,
+        face_image_data: face,
+        face_image_thumb: body.faceThumb || face,
+        face_consent_at: nowIso,
+      } as never)
+      .eq("id", memberId);
+    if (eErr) return NextResponse.json({ error: "회원 정보 수정 실패", detail: errLogOnly(eErr) }, { status: 500 });
+  } else if (reuseId) {
     memberId = reuseId;
     const { error: uErr } = await supabase
       .from("crm_members")
