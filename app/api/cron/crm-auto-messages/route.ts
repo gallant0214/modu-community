@@ -3,6 +3,7 @@ import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { supabase } from "@/app/lib/supabase";
 import { smsAllowedForCenter } from "@/app/lib/crm-sms";
 import { dispatchQueued, type QueuedRow } from "@/app/lib/crm-auto-message";
+import { isDayOfImmediate } from "@/app/lib/auto-message-triggers";
 import {
   SCAN_TRIGGERS,
   computeMatches,
@@ -27,6 +28,7 @@ export const dynamic = "force-dynamic";
  * 조건에 맞는 회원에게 실제 발송한다.
  *  - 일정/횟수 기준: 지정 시각(send_hour)에만 발송
  *  - 즉시(신규·재등록): 당일 매시간 실행 중 첫 회차에 발송(중복은 dedupe 로 방지)
+ *  - 즉시(만료 당일 등 isDayOfImmediate): 기준일 당일 send_hour(기본 10시)에 발송
  *
  * 🚨 실제 발송은 반드시 공용 헬퍼 dispatchQueued() 를 쓴다.
  *   예전엔 이 파일이 발송 로직을 따로 갖고 있어 methods 를 push/sms 로만 봤고,
@@ -83,9 +85,13 @@ export async function GET(request: Request) {
 
     const cfg = s.config ?? {};
     const sendHour = typeof cfg.send_hour === "number" ? cfg.send_hour : 10;
-    const immediate = s.send_basis === "immediate";
-    // 일정/횟수 기준은 지정 시각에만. 즉시(신규·재등록)는 시각 무관(당일 첫 실행에 발송).
-    if (!immediate && sendHour !== hour) continue;
+    // 즉시(신규·재등록)는 시각 무관(등록 뒤 첫 실행에 발송).
+    // 일정/횟수 기준과 '만료 당일' 같은 날짜형 즉시는 지정 시각에만 — 안 그러면 자정에 나간다.
+    // (수강권 만료 시 + 횟수 소진은 마지막 회차 직후에 알려야 해서 매시간 확인 그대로)
+    const eventLike = s.send_basis === "immediate" && !isDayOfImmediate(s.trigger_key, cfg.expiry_basis);
+    if (!eventLike && sendHour !== hour) continue;
+    // 문구가 비어 있으면 빈 문자가 나가므로 건너뛴다(즉시형 fireAutoMessage 와 같은 규칙)
+    if (!(s.message_body ?? "").trim()) continue;
 
     const methods = Array.isArray(s.methods) ? (s.methods as string[]) : [];
     // 실제로 보낼 수 있는 채널이 하나도 없으면 적재도 하지 않는다

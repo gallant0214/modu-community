@@ -167,6 +167,29 @@ export const DISPATCHABLE_TRIGGERS = new Set<string>([
   "first_purchase",
 ]);
 
+/**
+ * '즉시' 를 고르면 **기준일 당일**에 보내는 날짜형 트리거(만료 시 등).
+ * 사건(결제·예약)이 아니라 날짜로 정해지므로 크론이 판정하고, 발송 시각(send_hour, 기본 10시)에 나간다.
+ * 🚨 예전엔 즉시 = '그날 첫 크론'이라 **자정(00시)** 에 문자가 나갔다.
+ */
+export const DAY_OF_IMMEDIATE_TRIGGERS = new Set<string>([
+  "membership_expired",
+  "pass_expired",
+  "class_expired",
+  "locker_expired",
+  "sportswear_expired",
+  "coupon_expired",
+]);
+
+/**
+ * 이 설정의 '즉시'가 기준일 당일 발송 시각에 나가는지(true) / 사건 직후 매시간 확인으로 나가는지(false).
+ * 수강권 만료 시 + '횟수 소진' 은 마지막 회차를 쓴 직후 알려야 하므로 사건형으로 본다.
+ */
+export function isDayOfImmediate(triggerKey: string, expiryBasis?: string | null): boolean {
+  if (!DAY_OF_IMMEDIATE_TRIGGERS.has(triggerKey)) return false;
+  return !(triggerKey === "pass_expired" && expiryBasis === "sessions");
+}
+
 export const ATTENDANCE_RULE_TRIGGER = "attendance_coupon";
 
 /** 규칙 1줄의 설명 문구 — 설정 화면·미리보기 공용 */

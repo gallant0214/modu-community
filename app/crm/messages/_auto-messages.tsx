@@ -13,6 +13,7 @@ import {
   smsKind,
   ATTENDANCE_RULE_TRIGGER,
   DISPATCHABLE_TRIGGERS,
+  isDayOfImmediate,
   type AttendanceCouponRule,
   EXPIRY_BASIS_TRIGGERS,
   EXPIRY_BASIS_LABEL,
@@ -108,7 +109,6 @@ const METHOD_OPTIONS: { key: string; label: string }[] = [
  * 여기 없는 즉시 트리거는 켜 두어도 발송되지 않으므로 설정 화면에서 안내한다.
  * (연결 위치: POST /api/crm/memberships → fireAutoMessage)
  */
-const IMMEDIATE_WIRED = new Set<string>(["membership_new", "membership_renew", "first_purchase"]);
 
 const METHOD_LABEL: Record<string, string> = Object.fromEntries(METHOD_OPTIONS.map((m) => [m.key, m.label]));
 
@@ -328,6 +328,12 @@ export function AutoMessagesTab({ smsAllowed = true }: { smsAllowed?: boolean })
                         🚨 준비 중인 알림 · 발송 안 됨
                       </div>
                     )}
+                    {/* 문구가 비어 있으면 발송하지 않는다 */}
+                    {on && DISPATCHABLE_TRIGGERS.has(t.key) && !(row?.message_body ?? "").trim() && (
+                      <div className="text-[11px] font-semibold text-[#C0392B] dark:text-red-300 mt-0.5">
+                        🚨 메세지 미입력 · 발송 안 됨
+                      </div>
+                    )}
                     {/* 켜져 있어도 전송 방법이 없으면 한 건도 안 나간다 — 목록에서 바로 보이게 */}
                     {on &&
                       DISPATCHABLE_TRIGGERS.has(t.key) &&
@@ -448,6 +454,8 @@ function AutoMessageEditor({
   const [expiryBasis, setExpiryBasis] = useState<ExpiryBasis>(
     base.config?.expiry_basis === "sessions" ? "sessions" : "period"
   );
+  // '즉시'가 만료 당일 발송 시각에 나가는 날짜형인지(발송 시각 선택을 보여준다)
+  const dayOfImmediate = isDayOfImmediate(triggerKey, expiryBasis);
   const [methods, setMethods] = useState<string[]>(base.methods ?? []);
   const [attachments, setAttachments] = useState<string[]>(base.config?.attachments ?? []);
   // 출석일수 기준 쿠폰 규칙 — 이 트리거는 쿠폰을 '규칙별로' 고르므로 06 쿠폰 첨부를 대체한다
@@ -684,8 +692,8 @@ function AutoMessageEditor({
           attachments,
           coupon: null, // (구) 이름·링크 직접 입력 방식은 폐기 — coupon_id 로 연동
           send_days_dir: sendDaysDir,
-          // '즉시'는 발송 시각 개념이 없어 저장하지 않는다.
-          send_hour: sendBasis === "immediate" ? null : sendHour,
+          // 사건형 '즉시'는 발송 시각 개념이 없어 저장하지 않는다(만료 당일 같은 날짜형 즉시는 저장).
+          send_hour: sendBasis === "immediate" && !dayOfImmediate ? null : sendHour,
           ...(showExpiryBasis ? { expiry_basis: expiryBasis } : {}),
           ...(showAttendanceRules
             ? {
@@ -734,6 +742,7 @@ function AutoMessageEditor({
       sendCount={sendCount}
       sendHour={sendHour}
       recipient={recipientText}
+      dayOfImmediate={dayOfImmediate}
     />
   );
 
@@ -858,22 +867,17 @@ function AutoMessageEditor({
               {/* 이 트리거가 언제 발송되는지 요약 (기준: 만료일/생일/마지막 출석일 등) */}
               <p className="mt-2 text-[12px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
                 📌{" "}
-                {sendBasis === "immediate"
+                {sendBasis === "immediate" && dayOfImmediate
+                  ? <><span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{basisNoun} 당일</span> {String(sendHour).padStart(2, "0")}시 발송</>
+                  : sendBasis === "immediate"
                   ? <>이벤트 발생 <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">즉시</span> 발송</>
                   : sendBasis === "schedule"
                     ? <><span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{basisNoun}</span> 기준 {sendDays}일 {sendDaysDir === "before" ? "전" : "후"} 발송</>
                     : <>조건 <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{sendCount}회</span> 도달 시 발송</>}
               </p>
-              {sendBasis === "immediate" && !IMMEDIATE_WIRED.has(trigger.key) && (
-                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
-                  ⚠️ 이 알림은 아직 발송을 시작하는 연결이 없어, 켜 두어도 자동으로 나가지 않아요.
-                  현재 즉시 발송되는 알림은 <strong>이용권 신규 등록 / 이용권 재등록 / 신규등록 후 첫 상품구매</strong> 입니다.
-                </p>
-              )}
-              {sendBasis !== "immediate" && (
-                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
-                  ⚠️ 날짜를 매일 확인하는 알림은 아직 자동으로 돌지 않아요. 목록 상단
-                  &lsquo;지금 실행&rsquo; 버튼을 눌러야 그날 조건에 맞는 회원에게 발송됩니다.
+              {(sendBasis !== "immediate" || dayOfImmediate) && (
+                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#8C8270] dark:text-zinc-400">
+                  매일 아래 발송 시각에 조건에 맞는 회원을 찾아 자동으로 보내요. 같은 안내는 한 회원에게 한 번만 나가요.
                 </p>
               )}
               {sendBasis === "schedule" && (
@@ -924,8 +928,8 @@ function AutoMessageEditor({
                   <span>회 (미출석 등)</span>
                 </div>
               )}
-              {/* 발송 시각 — 일정/횟수 기준만. '즉시'는 조건 충족 시 바로 나가므로 시각 선택이 없다. */}
-              {sendBasis === "immediate" ? (
+              {/* 발송 시각 — 일정/횟수 기준 + 만료 당일 같은 날짜형 즉시. 사건형 '즉시'는 바로 나가므로 시각 선택이 없다. */}
+              {sendBasis === "immediate" && !dayOfImmediate ? (
                 <div className="mt-3 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
                   조건에 맞으면 바로 발송돼요. 발송 시각을 따로 정하지 않습니다.
                 </div>
@@ -1548,6 +1552,7 @@ function MessagePreview({
   sendCount,
   sendHour,
   recipient,
+  dayOfImmediate,
 }: {
   name: string;
   /** 변수를 예시/실제 값으로 치환한 본문 (원본 템플릿이 아니다) */
@@ -1565,13 +1570,16 @@ function MessagePreview({
   sendCount: number;
   sendHour: number;
   recipient: string;
+  dayOfImmediate: boolean;
 }) {
   const basisText =
     sendBasis === "schedule"
       ? `일정 기준 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"} · ${String(sendHour).padStart(2, "0")}시 발송`
       : sendBasis === "count"
         ? `횟수 기준 ${sendCount}회 · ${String(sendHour).padStart(2, "0")}시 발송`
-        : "즉시 (조건 충족 시 바로 발송)";
+        : dayOfImmediate
+          ? `즉시 · 기준일 당일 ${String(sendHour).padStart(2, "0")}시 발송`
+          : "즉시 (조건 충족 시 바로 발송)";
   return (
     <div className="p-4">
       <div className="text-[12px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">미리 보기</div>
