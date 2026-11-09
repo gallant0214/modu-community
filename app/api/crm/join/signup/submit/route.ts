@@ -9,7 +9,7 @@ import {
 } from "@/app/lib/member-checkout";
 import { portoneConfigured } from "@/app/lib/portone-payments";
 import { tossKeysMatch } from "@/app/lib/toss-payments";
-import { signOrderToken } from "@/app/lib/order-token";
+import { signOrderToken, verifyJoinMemberToken } from "@/app/lib/order-token";
 import { payPath, payPathSlugForCenter } from "@/app/lib/pay-path";
 
 export const dynamic = "force-dynamic";
@@ -54,28 +54,13 @@ const normPhone = (v: string) => {
 };
 const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
-/** 이 회원이 이미 발급받은 상품(회원권/수강권/대여권)이 있는지 — 완료된 가입 판별 */
-async function memberHasProducts(memberId: number, centerId: number): Promise<boolean> {
-  for (const table of ["crm_memberships", "crm_passes", "crm_rentals"] as const) {
-    const { data } = await supabase
-      .from(table)
-      .select("id")
-      .eq("center_id", centerId)
-      .eq("member_id", memberId)
-      .limit(1)
-      .maybeSingle();
-    if (data) return true;
-  }
-  return false;
-}
-
 /**
  * POST /api/crm/join/signup/submit  (공개·무인증 — QR 가입 링크 토큰으로 센터 판별)
  *
- * 웹 신규 회원 가입의 마지막 제출. 결제창을 열기 전에 서버에서:
- *   1) 회원 생성(없으면) + 본인확인 얼굴 저장
- *   2) 전자계약서 서명 저장(crm_signed_contracts, status=signed)
- *   3) 주문 생성(crm_orders pending, pg=memberPgProvider()) + 주문항목
+ * 웹 신규 가입에서 '회원권 결제'를 고른 뒤의 마지막 제출. 회원은 /register 에서 이미 등록됐고
+ * (memberToken 으로 그 회원만 허용), 결제창을 열기 전에 서버에서:
+ *   1) 전자계약서 서명 저장(crm_signed_contracts, status=signed)
+ *   2) 주문 생성(crm_orders pending, pg=memberPgProvider()) + 주문항목
  * → 결제 페이지 URL(payUrl) 반환. 결제 성공 시 기존 confirm 흐름이 상품을 발급한다.
  *
  * 금액은 클라이언트 값을 믿지 않고 signup_enabled 상품 가격을 서버에서 합산한다.
@@ -95,17 +80,12 @@ export async function POST(request: Request) {
 
   let body: {
     token?: string;
-    name?: string;
-    phone?: string;
-    birth?: string;
-    gender?: "male" | "female" | string;
-    address?: string;
+    /** /register 가 발급한 회원 토큰 — 방금 등록한 그 회원에게만 계약서·주문을 만든다 */
+    memberToken?: string;
     membershipId?: number;
     apparelId?: number | null;
     lockerId?: number | null;
     startDate?: string | null;
-    faceImage?: string;
-    faceThumb?: string;
     signature?: string;
     termsAccepted?: Record<string, boolean>;
     contractTemplateId?: number;
@@ -136,22 +116,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "센터를 찾을 수 없어요" }, { status: 404 });
   }
 
-  // 2) 입력 검증
-  const name = (body.name ?? "").trim();
-  const phone = normPhone(body.phone ?? "");
-  const birth = (body.birth ?? "").trim();
-  const gender = body.gender === "male" ? "M" : body.gender === "female" ? "F" : "";
-  const address = (body.address ?? "").trim().slice(0, 120) || null;
-  if (!name) return NextResponse.json({ error: "이름을 입력해 주세요" }, { status: 400 });
-  if (phone.replace(/\D/g, "").length < 10)
-    return NextResponse.json({ error: "연락처를 확인해 주세요" }, { status: 400 });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(birth))
-    return NextResponse.json({ error: "생년월일을 확인해 주세요" }, { status: 400 });
-  if (!gender) return NextResponse.json({ error: "성별을 선택해 주세요" }, { status: 400 });
+  // 2) 회원 — /register 에서 이미 등록됨. 토큰으로 그 회원만 허용.
+  const tok = verifyJoinMemberToken(body.memberToken);
+  if (!tok || tok.centerId !== centerId)
+    return NextResponse.json(
+      { error: "가입 정보가 만료됐어요. 처음부터 다시 진행해 주세요." },
+      { status: 401 }
+    );
+  const { data: memberRow } = await supabase
+    .from("crm_members")
+    .select("id, name, phone, birth, gender, address, status")
+    .eq("id", tok.memberId)
+    .eq("center_id", centerId)
+    .maybeSingle();
+  if (!memberRow || memberRow.status !== "active")
+    return NextResponse.json({ error: "회원 정보를 찾을 수 없어요. 센터에 문의해 주세요." }, { status: 404 });
+  const memberId = memberRow.id as number;
+  const name = (memberRow.name ?? "").trim();
+  const phone = normPhone(memberRow.phone ?? "");
+  const birth = memberRow.birth ?? "";
+  const gender = memberRow.gender ?? "";
+  const address = memberRow.address ?? null;
 
-  const face = body.faceImage ?? "";
-  if (!face.startsWith("data:image") || face.length > 400_000)
-    return NextResponse.json({ error: "본인확인 사진을 다시 촬영해 주세요" }, { status: 400 });
   const sig = body.signature ?? "";
   if (!sig.startsWith("data:image"))
     return NextResponse.json({ error: "서명을 입력해 주세요" }, { status: 400 });
@@ -221,87 +207,7 @@ export async function POST(request: Request) {
   if (requiredMissing.length > 0)
     return NextResponse.json({ error: "필수 약관에 모두 동의해 주세요" }, { status: 400 });
 
-  // 5) 기존 등록 회원 차단 + 회원 생성/재사용
-  //    같은 센터에 '이름+전화번호'가 동일한 회원이 이미 있으면:
-  //      · 앱 연동됨 / 정식회원(member_type≠provisional) / 발급 상품 보유(완료된 가입) → 신규가입 차단(연동 안내)
-  //      · 결제 미완료로 남은 provisional(상품 없음) → 재사용(결제 재시도 안전)
-  const phoneDigits = phone.replace(/\D/g, "");
-  const { data: cands } = await supabase
-    .from("crm_members")
-    .select("id, name, phone, member_type, linked_firebase_uid")
-    .eq("center_id", centerId)
-    .eq("status", "active")
-    .ilike("phone", `%${phoneDigits.slice(-4)}%`);
-  const matches = (cands ?? []).filter(
-    (m) =>
-      (m.phone ?? "").replace(/\D/g, "") === phoneDigits &&
-      (m.name ?? "").trim().toLowerCase() === name.toLowerCase()
-  );
-  let blocked = matches.some((m) => m.linked_firebase_uid || m.member_type !== "provisional");
-  let reuseId: number | null = null;
-  if (!blocked) {
-    for (const m of matches) {
-      if (await memberHasProducts(m.id as number, centerId)) {
-        blocked = true;
-        break;
-      }
-      reuseId = m.id as number; // 상품 없는 provisional → 재사용 대상
-    }
-  }
-  if (blocked) {
-    return NextResponse.json(
-      {
-        ok: false,
-        reason: "already_member",
-        error: "이미 등록된 회원입니다. 회원용 앱의 '기존 회원 연동' 기능을 이용해 주세요.",
-      },
-      { status: 409 }
-    );
-  }
-
-  let memberId: number;
-  if (reuseId) {
-    memberId = reuseId;
-    await supabase
-      .from("crm_members")
-      .update({
-        name,
-        birth,
-        gender,
-        ...(address ? { address } : {}),
-        face_image_data: face,
-        face_image_thumb: body.faceThumb || face,
-        face_consent_at: new Date().toISOString(),
-      } as never)
-      .eq("id", memberId);
-  } else {
-    const { data: created, error: mErr } = await supabase
-      .from("crm_members")
-      .insert({
-        center_id: centerId,
-        member_type: "provisional", // 앱 연동 전 상태. 앱에서 센터명+전화번호로 연동 시 matched 로 전환
-        name,
-        phone,
-        birth,
-        gender,
-        address,
-        status: "active",
-        registration_type: "신규",
-        registered_at: kstToday(),
-        attendance_no: phone.replace(/\D/g, "").slice(-4),
-        privacy_agreed_at: new Date().toISOString(),
-        face_image_data: face,
-        face_image_thumb: body.faceThumb || face,
-        face_consent_at: new Date().toISOString(),
-      } as never)
-      .select("id")
-      .single();
-    if (mErr || !created)
-      return NextResponse.json({ error: "회원 생성 실패", detail: errLogOnly(mErr) }, { status: 500 });
-    memberId = (created as { id: number }).id;
-  }
-
-  // 6) 전자계약서 서명 저장
+  // 5) 전자계약서 서명 저장
   const membershipProd = ordered.find((p) => p.type === "membership");
   await supabase.from("crm_signed_contracts").insert({
     center_id: centerId,
@@ -332,7 +238,7 @@ export async function POST(request: Request) {
     signed_at: new Date().toISOString(),
   } as never);
 
-  // 7) 주문 생성 (pending, portone)
+  // 6) 주문 생성 (pending, portone)
   const orderName =
     ordered.length === 1 ? ordered[0].name : `${ordered[0].name} 외 ${ordered.length - 1}건`;
   const rand = Math.random().toString(36).slice(2, 10);
@@ -388,7 +294,7 @@ export async function POST(request: Request) {
   const payToken = signOrderToken(orderUid);
   // 결제 성공 후 가입 완료(앱 설치) 화면으로 — 출석번호(휴대폰 뒤 4자리)도 함께 전달
   const last4 = phone.replace(/\D/g, "").slice(-4);
-  const returnTo = `/join/${encodeURIComponent(token)}/signup/done?no=${last4}`;
+  const returnTo = `/join/${encodeURIComponent(token)}/signup/done?no=${last4}&paid=1`;
   return NextResponse.json({
     ok: true,
     orderUid,

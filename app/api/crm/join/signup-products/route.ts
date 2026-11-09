@@ -1,6 +1,9 @@
 import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
+import { onlineSalesEnabled, memberPgProvider } from "@/app/lib/member-checkout";
+import { portoneConfigured } from "@/app/lib/portone-payments";
+import { tossKeysMatch } from "@/app/lib/toss-payments";
 
 export const dynamic = "force-dynamic";
 
@@ -69,5 +72,8 @@ export async function GET(request: Request) {
     memberships: map("membership"), // 헬스 이용권
     apparel: map("apparel"), // 운동복
     lockers: map("locker"), // 락커
+    // 온라인 결제 가능 여부 — 꺼져 있으면 가입 화면에서 '회원권 결제' 를 미리 막는다(/submit 과 같은 판정)
+    paymentAvailable:
+      onlineSalesEnabled() && (memberPgProvider() === "toss" ? tossKeysMatch() : portoneConfigured()),
   });
 }

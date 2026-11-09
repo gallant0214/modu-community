@@ -5,7 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { contractBodyHtml } from "@/app/lib/contract-body";
 
 /* 신규 회원 웹 가입 — QR/가입링크 → '신규 회원 가입하기' 로 진입.
-   단계: 정보입력 → 헬스이용권 → 운동복 → 락커 → 요약 → 전자계약서(서명) → (다음: 셀카·결제·앱연동)
+   ① 회원 등록: 정보입력(+개인정보 동의) → 본인확인 셀카 → [가입 완료] = 즉시 CRM 회원 등록
+   ② 선택: '회원권 결제를 하시겠습니까?' / '회원용 앱을 바로 설치하시겠습니까?'
+   ③ 회원권 결제: 헬스이용권 → 운동복 → 락커 → 시작일 → 요약 → 전자계약서(서명) → PG 결제 → 앱 설치 안내
    한 화면 한 질문 · 큰 제목 · 하단 CTA · 슬라이드 전환. */
 
 interface ProductOpt {
@@ -22,6 +24,8 @@ interface SignupProducts {
   memberships: ProductOpt[];
   apparel: ProductOpt[];
   lockers: ProductOpt[];
+  /** 온라인 결제 가능 여부(구버전 응답엔 없음 → 가능으로 간주) */
+  paymentAvailable?: boolean;
 }
 interface ContractSection {
   key: string;
@@ -35,8 +39,11 @@ interface ContractTemplate {
   sections: ContractSection[];
 }
 
-type Step = "info" | "membership" | "apparel" | "locker" | "start" | "summary" | "contract" | "selfie";
-const ORDER: Step[] = ["info", "membership", "apparel", "locker", "start", "summary", "contract", "selfie"];
+type Step = "info" | "selfie" | "choice" | "membership" | "apparel" | "locker" | "start" | "summary" | "contract";
+const ORDER: Step[] = ["info", "selfie", "choice", "membership", "apparel", "locker", "start", "summary", "contract"];
+// 진행 막대는 구간별로 — ① 회원 등록 / ③ 회원권 결제 (② 선택 화면엔 표시 안 함)
+const REG_STEPS: Step[] = ["info", "selfie"];
+const BUY_STEPS: Step[] = ["membership", "apparel", "locker", "start", "summary", "contract"];
 
 /** 오늘(KST) YYYY-MM-DD */
 const kstTodayYmd = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -61,6 +68,7 @@ export default function MemberWebSignupPage() {
   const [birth, setBirth] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "">("");
   const [address, setAddress] = useState("");
+  const [consent, setConsent] = useState(false); // [필수] 개인정보 수집·이용 동의
   // 선택값
   const [membershipId, setMembershipId] = useState<number | null>(null);
   const [apparelId, setApparelId] = useState<number | null>(null); // null=선택 안 함
@@ -87,7 +95,10 @@ export default function MemberWebSignupPage() {
   const [faceDataUrl, setFaceDataUrl] = useState<string>(""); // 저장 확정된 본인확인 사진
   const [cameraErr, setCameraErr] = useState("");
 
-  // 최종 제출(회원·계약·얼굴·주문 생성 → 결제)
+  // 회원 등록(정보+셀카 → CRM) 결과 — 결제 단계는 이 토큰으로 방금 등록한 회원에게만 주문을 만든다
+  const [memberToken, setMemberToken] = useState("");
+  const [attendanceNo, setAttendanceNo] = useState("");
+  // 제출(등록 / 계약·주문 생성 → 결제) 진행 상태
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState("");
   const [alreadyMember, setAlreadyMember] = useState(false);
@@ -297,15 +308,15 @@ export default function MemberWebSignupPage() {
       img.src = dataUrl;
     });
 
-  const submitSignup = async () => {
+  // ① 회원 등록 — 정보 + 본인확인 사진을 바로 CRM 회원으로 저장
+  const registerMember = async () => {
     if (submitting) return;
     setSubmitErr("");
     if (!faceDataUrl) return setSubmitErr("본인 확인 사진을 저장해 주세요");
-    if (!signatureDataUrl) return setSubmitErr("전자계약서 서명이 필요해요");
     setSubmitting(true);
     try {
       const faceThumb = await makeThumb(faceDataUrl);
-      const res = await fetch(`/api/crm/join/signup/submit`, {
+      const res = await fetch(`/api/crm/join/signup/register`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -315,24 +326,51 @@ export default function MemberWebSignupPage() {
           birth,
           gender,
           address,
-          membershipId,
-          apparelId,
-          lockerId,
-          startDate: effectiveStart,
           faceImage: faceDataUrl,
           faceThumb,
-          signature: signatureDataUrl,
-          termsAccepted: agreed,
-          contractTemplateId: contractTpl?.id,
+          privacyConsent: consent,
         }),
       });
       const d = await res.json();
       // 이미 등록된 회원 → 가입 차단 안내 모달
       if (res.status === 409 && d?.reason === "already_member") {
         setAlreadyMember(true);
-        setSubmitting(false);
         return;
       }
+      if (!res.ok || !d.memberToken) throw new Error(d?.error || "회원 등록에 실패했어요");
+      setMemberToken(d.memberToken);
+      setAttendanceNo(d.attendanceNo || phone.replace(/\D/g, "").slice(-4));
+      go("choice", 1);
+    } catch (e) {
+      setSubmitErr(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ③ 회원권 결제 — 계약서 저장 + 주문 생성 후 PG 결제창으로
+  const submitPayment = async () => {
+    if (submitting) return;
+    setSubmitErr("");
+    if (!signatureDataUrl) return setSubmitErr("전자계약서 서명이 필요해요");
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/crm/join/signup/submit`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token,
+          memberToken,
+          membershipId,
+          apparelId,
+          lockerId,
+          startDate: effectiveStart,
+          signature: signatureDataUrl,
+          termsAccepted: agreed,
+          contractTemplateId: contractTpl?.id,
+        }),
+      });
+      const d = await res.json();
       if (!res.ok || !d.payUrl) throw new Error(d?.error || "결제를 시작하지 못했어요");
       window.location.href = d.payUrl;
     } catch (e) {
@@ -341,12 +379,19 @@ export default function MemberWebSignupPage() {
     }
   };
 
+  // ② 앱 설치 선택 — 출석번호·앱 설치·연동 안내 화면으로
+  const goAppInstall = () => {
+    router.replace(`/join/${encodeURIComponent(token)}/signup/done?no=${attendanceNo}`);
+  };
+
   const go = useCallback((next: Step, d: 1 | -1) => {
     setDir(d);
     setStep(next);
   }, []);
   const idx = ORDER.indexOf(step);
   const back = () => {
+    // 회원 등록이 끝난 뒤(선택 화면)엔 정보입력·셀카로 되돌아가지 않는다
+    if (step === "choice") return;
     if (idx <= 0) {
       router.replace(`/join/${encodeURIComponent(token)}`);
       return;
@@ -363,14 +408,16 @@ export default function MemberWebSignupPage() {
         name.trim().length > 0 &&
         phone.replace(/\D/g, "").length >= 10 &&
         isValidBirth(birth) &&
-        !!gender
+        !!gender &&
+        consent
       );
+    if (step === "selfie") return !!faceDataUrl;
     if (step === "membership") return membershipId != null;
     if (step === "start")
       return startMode === "today" || (/^\d{4}-\d{2}-\d{2}$/.test(customStart) && customStart >= kstTodayYmd());
     if (step === "contract") return !!contractTpl && requiredOk && !signatureEmpty;
     return true; // apparel/locker/summary 는 선택 안 함 허용
-  }, [step, name, phone, birth, gender, membershipId, startMode, customStart, contractTpl, requiredOk, signatureEmpty]);
+  }, [step, name, phone, birth, gender, consent, faceDataUrl, membershipId, startMode, customStart, contractTpl, requiredOk, signatureEmpty]);
 
   const selMembership = data?.memberships.find((p) => p.id === membershipId) ?? null;
   const selApparel = data?.apparel.find((p) => p.id === apparelId) ?? null;
@@ -394,18 +441,20 @@ export default function MemberWebSignupPage() {
 
   return (
     <Shell>
-      {/* 상단: 뒤로 + 진행 점 */}
-      <div className="flex items-center gap-3 px-1 pt-2 pb-4">
-        <button onClick={back} aria-label="뒤로" className="p-1 -ml-1 text-[#3A342A]">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
+      {/* 상단: 뒤로 + 진행 점 (구간별) */}
+      <div className="flex items-center gap-3 px-1 pt-2 pb-4 min-h-[44px]">
+        {step !== "choice" && (
+          <button onClick={back} aria-label="뒤로" className="p-1 -ml-1 text-[#3A342A]">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
         <div className="flex-1 flex items-center gap-1.5">
-          {ORDER.map((s, i) => (
+          {(REG_STEPS.includes(step) ? REG_STEPS : BUY_STEPS.includes(step) ? BUY_STEPS : []).map((s, i, arr) => (
             <span
               key={s}
-              className={`h-1 flex-1 rounded-full transition-colors ${i <= idx ? "bg-[#6B7B3A]" : "bg-[#E8E0D0]"}`}
+              className={`h-1 flex-1 rounded-full transition-colors ${i <= arr.indexOf(step) ? "bg-[#6B7B3A]" : "bg-[#E8E0D0]"}`}
             />
           ))}
         </div>
@@ -467,6 +516,63 @@ export default function MemberWebSignupPage() {
                 className={inputCls}
               />
             </Field>
+            {/* 개인정보 수집·이용 동의 — 회원앱 가입과 동일 */}
+            <div className="rounded-2xl border border-[#E8E0D0] bg-white p-4">
+              <div className="mb-2 text-[14px] font-bold text-[#2A251D]">[필수] 개인정보 수집·이용 동의</div>
+              <ul className="space-y-0.5 text-[12px] text-[#6B5D47] leading-relaxed">
+                <li>• 수집 항목: 이름, 연락처, 생년월일, 성별, 본인확인 사진(필수) / 주소(선택)</li>
+                <li>• 이용 목적: 회원 확인 및 수업·시설 이용 관리</li>
+                <li>• 보유·이용 기간: 회원 탈퇴 또는 센터 요청 시까지</li>
+                <li>• 동의를 거부할 수 있으나, 미동의 시 회원 가입이 제한됩니다.</li>
+              </ul>
+              <label className="mt-3 flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  onChange={() => setConsent((c) => !c)}
+                  className="w-4 h-4 accent-[#6B7B3A]"
+                />
+                <span className="text-[13px] text-[#3A342A]">위 개인정보 수집·이용에 동의합니다.</span>
+              </label>
+            </div>
+          </StepBody>
+        )}
+
+        {step === "choice" && (
+          <StepBody title="회원 가입이 완료됐어요" sub={data.centerName}>
+            <div className="rounded-2xl bg-[#6B7B3A]/8 border border-[#6B7B3A]/25 px-4 py-4 text-center">
+              <div className="text-[13px] text-[#6B5D47]">회원님의 출석번호는</div>
+              <div className="mt-1 text-[28px] font-extrabold tracking-[0.15em] text-[#6B7B3A]">{attendanceNo}</div>
+              <div className="mt-1 text-[12px] text-[#8C8270]">입니다 (휴대폰번호 뒤 4자리)</div>
+            </div>
+
+            <div className="rounded-2xl border border-[#E8E0D0] bg-white p-4">
+              <div className="text-[15px] font-bold text-[#2A251D]">회원권 결제를 하시겠습니까?</div>
+              <div className="mt-1 text-[12.5px] text-[#8C8270]">이용권 선택 → 전자계약서 작성 → 결제 순서로 진행돼요</div>
+              {data.paymentAvailable === false ? (
+                <div className="mt-3 px-3 py-2.5 rounded-xl bg-[#FBF7EB] border border-[#EFE7D5] text-[12.5px] text-[#8C8270] text-center">
+                  지금은 온라인 결제를 이용할 수 없어요. 센터에서 결제해 주세요.
+                </div>
+              ) : (
+                <button
+                  onClick={() => go("membership", 1)}
+                  className="mt-3 w-full py-3.5 rounded-xl bg-[#6B7B3A] text-white text-[15px] font-bold hover:bg-[#5a6932] transition-colors"
+                >
+                  회원권 결제하기
+                </button>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-[#E8E0D0] bg-white p-4">
+              <div className="text-[15px] font-bold text-[#2A251D]">회원용 앱을 바로 설치하시겠습니까?</div>
+              <div className="mt-1 text-[12.5px] text-[#8C8270]">앱에서 내 이용권·출석·예약을 관리할 수 있어요</div>
+              <button
+                onClick={goAppInstall}
+                className="mt-3 w-full py-3.5 rounded-xl border border-[#6B7B3A] text-[#6B7B3A] text-[15px] font-bold hover:bg-[#6B7B3A]/5 transition-colors"
+              >
+                회원용 앱 설치하기
+              </button>
+            </div>
           </StepBody>
         )}
 
@@ -548,7 +654,7 @@ export default function MemberWebSignupPage() {
               </div>
             </div>
             <div className="mt-4 rounded-xl bg-[#FBF7EB] border border-[#EFE7D5] px-4 py-3 text-[12px] text-[#8C8270] leading-relaxed">
-              다음 단계에서 전자계약서에 동의·서명하면, 이어서 본인확인 촬영과 결제가 진행됩니다.
+              다음 단계에서 전자계약서에 동의·서명하면, 이어서 결제가 진행됩니다.
             </div>
           </StepBody>
         )}
@@ -716,14 +822,21 @@ export default function MemberWebSignupPage() {
             전자계약서 작성하기
           </button>
         ) : step === "contract" ? (
-          <button
-            onClick={next}
-            disabled={!canNext}
-            className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
-            title={canNext ? "" : "필수 약관 동의와 서명을 완료해 주세요"}
-          >
-            본인확인 촬영하기
-          </button>
+          <>
+            {submitErr && (
+              <div className="mb-2 px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700 text-center">
+                {submitErr}
+              </div>
+            )}
+            <button
+              onClick={submitPayment}
+              disabled={!canNext || submitting}
+              className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
+              title={canNext ? "" : "필수 약관 동의와 서명을 완료해 주세요"}
+            >
+              {submitting ? "결제 준비 중…" : `${won(total)}원 결제하기`}
+            </button>
+          </>
         ) : step === "selfie" ? (
           <>
             {submitErr && (
@@ -732,15 +845,15 @@ export default function MemberWebSignupPage() {
               </div>
             )}
             <button
-              onClick={submitSignup}
+              onClick={registerMember}
               disabled={!faceDataUrl || submitting}
               className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
               title={faceDataUrl ? "" : "본인 확인 사진을 촬영·저장해 주세요"}
             >
-              {submitting ? "결제 준비 중…" : `${won(total)}원 결제하기`}
+              {submitting ? "등록 중…" : "회원 가입 완료"}
             </button>
           </>
-        ) : (
+        ) : step === "choice" ? null : (
           <button
             onClick={next}
             disabled={!canNext}

@@ -17,8 +17,9 @@ function detectPlatform(): Platform {
   return "other";
 }
 
-/* 신규 웹 가입 완료 화면 — 결제 성공 후 이곳으로 이동.
-   이용권은 센터 CRM 에 이미 발급됐고, 여기서 회원용 앱 설치 + 기존 회원 연동을 안내한다. */
+/* 신규 웹 가입 완료 화면 — 회원앱 설치 + 기존 회원 연동 안내.
+   · paid=1 : 회원권 결제 성공 후 (이용권은 센터 CRM 에 이미 발급됨)
+   · 그 외   : 회원 등록만 하고 '회원용 앱 설치' 를 고른 경우 */
 export default function SignupDonePage() {
   return (
     <Suspense fallback={<div className="min-h-[100dvh] bg-[#FBF7EB]" />}>
@@ -32,6 +33,7 @@ function SignupDoneInner() {
   const token = params?.token ?? "";
   const searchParams = useSearchParams();
   const attendanceNo = (searchParams.get("no") ?? "").replace(/\D/g, "").slice(-4);
+  const paid = searchParams.get("paid") === "1";
   const [platform, setPlatform] = useState<Platform>("other");
 
   useEffect(() => {
@@ -58,10 +60,12 @@ function SignupDoneInner() {
         <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-[#6B7B3A]/12 flex items-center justify-center text-[#6B7B3A] text-[32px] font-bold">
           ✓
         </div>
-        <h1 className="text-[22px] font-extrabold text-[#2A251D] text-center">가입이 완료됐어요</h1>
+        <div className="text-center text-[13px] font-semibold text-[#6B7B3A]">
+          {paid ? "결제가 완료되어 이용권이 등록됐어요" : "회원 가입이 완료됐어요"}
+        </div>
+        <h1 className="mt-1 text-[22px] font-extrabold text-[#2A251D] text-center">회원전용 앱을 설치해주세요</h1>
         <p className="mt-2 text-center text-[13px] text-[#6B5D47] leading-relaxed">
-          결제가 완료되어 이용권이 등록됐습니다.
-          <br />이제 <b>회원용 앱</b>을 설치하면 내 이용권·출석·예약을 관리할 수 있어요.
+          <b>회원용 앱</b>을 설치하면 내 이용권·출석·예약을 관리할 수 있어요.
         </p>
 
         {attendanceNo && (

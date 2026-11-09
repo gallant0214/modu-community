@@ -47,3 +47,32 @@ export function verifyOrderToken(token: string | null | undefined, orderUid: str
   if (expected.length !== sig.length) return false;
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
 }
+
+/**
+ * 웹 셀프가입 회원 토큰 — QR 웹 가입에서 '회원 등록'과 '회원권 결제'를 나눠 진행할 때,
+ * 결제 단계(무인증)가 방금 등록한 그 회원 1명만 다룰 수 있게 하는 열쇠.
+ * 상품 선택·계약서 작성 시간을 감안해 2시간 유효.
+ */
+const JOIN_MEMBER_TTL_SECONDS = 2 * 60 * 60;
+
+export function signJoinMemberToken(centerId: number, memberId: number): string {
+  const exp = Math.floor(Date.now() / 1000) + JOIN_MEMBER_TTL_SECONDS;
+  return `${centerId}.${memberId}.${exp}.${sign(`join-member.${centerId}.${memberId}.${exp}`)}`;
+}
+
+/** 유효하면 { centerId, memberId }, 아니면 null */
+export function verifyJoinMemberToken(
+  token: string | null | undefined
+): { centerId: number; memberId: number } | null {
+  if (!token) return null;
+  const [c, m, e, sig] = String(token).split(".");
+  const centerId = Number(c);
+  const memberId = Number(m);
+  const exp = Number(e);
+  if (!sig || !Number.isInteger(centerId) || !Number.isInteger(memberId) || !Number.isFinite(exp)) return null;
+  if (exp < Math.floor(Date.now() / 1000)) return null;
+  const expected = sign(`join-member.${centerId}.${memberId}.${exp}`);
+  if (expected.length !== sig.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return null;
+  return { centerId, memberId };
+}
