@@ -26,6 +26,7 @@ import { settleOrderMileage } from "@/app/lib/member-checkout";
 import { finalizeCouponUse, releaseCoupon } from "@/app/lib/crm-coupons-server";
 import { sendLocalizedPushToMember } from "@/app/lib/member-notify";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
+import { fireAutoMessage, fireFirstPurchaseMessage } from "@/app/lib/crm-auto-message";
 
 export interface OrderRow {
   id: number;
@@ -116,6 +117,8 @@ export async function completeOrder(opts: {
 
   const channelLabel = order.channel === "web" ? "홈페이지 구매" : "회원앱 구매";
   const issued: { kind: string; id: number; name: string; summary?: Record<string, unknown> }[] = [];
+  // 자동 메세지용 — 회원이 실제로 산 본품만(번들 구성품 제외)
+  const purchased: { kind: string; id: number; name: string; amountWon: number; startDate: string; expiresAt: string }[] = [];
 
   /* ── 항목별 발급 + 결제원장 ────────────────────────── */
   for (const item of items) {
@@ -181,6 +184,14 @@ export async function completeOrder(opts: {
       id: outcome.id,
       name: item.product_name,
       summary: outcome.summary as unknown as Record<string, unknown>,
+    });
+    purchased.push({
+      kind: outcome.kind,
+      id: outcome.id,
+      name: item.product_name,
+      amountWon: item.amount_won,
+      startDate: outcome.summary.startDate,
+      expiresAt: outcome.summary.expiresAt,
     });
 
     /* ── 묶음(번들) 구성품 발급 — 회원권+락커처럼 상품에 딸린 항목(보통 0원) ──
@@ -268,6 +279,36 @@ export async function completeOrder(opts: {
     });
   } catch {
     /* 무시 */
+  }
+
+  /* ── 자동 메세지 — 직원 발급과 같은 알림이 온라인 구매에서도 나가게 ──
+     🚨 예전엔 CRM 직원 발급 경로에서만 불러, 앱·홈페이지 구매 회원에겐
+        '신규등록 후 첫 상품구매 시'·'대여권 구매 시'가 나가지 않았다.
+     (이용권 신규·재등록 안내는 크론 스캔이 따로 잡는다) */
+  for (const p of purchased) {
+    if (p.kind === "membership" || p.kind === "pass") {
+      await fireFirstPurchaseMessage({
+        centerId,
+        uid: "member-app",
+        memberId,
+        product: p.name,
+        price: p.amountWon,
+        expiry: p.expiresAt,
+      });
+    } else if (p.kind === "rental") {
+      await fireAutoMessage({
+        centerId,
+        uid: "member-app",
+        triggerKey: "rental_purchased",
+        memberId,
+        memberName: opts.memberName,
+        dedupeSuffix: `r${p.id}`,
+        product: p.name,
+        expiry: p.expiresAt,
+        startDate: p.startDate,
+        price: p.amountWon,
+      });
+    }
   }
 
   return {
