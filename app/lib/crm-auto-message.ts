@@ -33,6 +33,11 @@ export interface QueuedRow {
   trigger_key?: string | null;
   /** 이 건 전용 쿠폰 — 규칙별로 쿠폰이 다른 트리거(출석일수 쿠폰). 설정값보다 우선 */
   coupon_id?: number | null;
+  /**
+   * 회원앱이 이 사건을 **자체 푸시로 이미 알렸다**(예: 직원이 잡은 수업 예약의 '예약 확정' 푸시).
+   * 앱 회원에게는 푸시를 또 보내지 않는다(같은 알림 두 번). 앱이 없는 회원·'문자'는 그대로 발송.
+   */
+  appNotified?: boolean;
 }
 
 export interface DispatchResult {
@@ -120,14 +125,18 @@ export async function dispatchQueued(opts: {
   for (const t of targets) {
     const smart = t.methods.includes("smart");
     const hasApp = pushable.has(t.member_id);
+    // 앱이 이미 같은 사건을 푸시로 알린 회원 — 자동 메세지 푸시는 건너뛴다(스마트 전송도 앱 회원은 끝)
+    const appDone = !!t.appNotified && hasApp;
     // 스마트 전송의 채널 선택은 '앱 설치 여부'로만 가른다. 알림을 끈 회원이라고
     // 문자로 돌리면 본인이 끈 안내가 유료 문자로 가므로, 푸시만 건너뛴다.
-    const usePush = (t.methods.includes("push") || (smart && hasApp)) && !pushOff.has(t.member_id);
+    const usePush = !appDone && (t.methods.includes("push") || (smart && hasApp)) && !pushOff.has(t.member_id);
     const useSms = t.methods.includes("sms") || (smart && !hasApp);
-    if (!usePush && pushOff.has(t.member_id) && (t.methods.includes("push") || (smart && hasApp))) {
+    if (!appDone && !usePush && pushOff.has(t.member_id) && (t.methods.includes("push") || (smart && hasApp))) {
       result.push.optedOut += 1;
     }
 
+    // 앱이 이미 알렸고 문자도 안 보내는 건 = 처리 끝. pending 으로 두면 '지금 실행'이 푸시를 또 보낸다.
+    if (appDone && !useSms) delivered.add(t.id);
     if (usePush) pushJobs.push({ id: t.id, memberId: t.member_id, message: t.message, triggerKey: t.trigger_key });
     if (useSms) {
       const phone = phones.get(t.member_id);
@@ -241,6 +250,13 @@ export async function fireAutoMessage(opts: {
   price?: number;
   /** 대상 상품 시작일(#시작일#) */
   startDate?: string;
+  /** 홀딩 기간(#홀딩시작일# #홀딩종료일#) — 상품 홀딩 알림 */
+  holdStart?: string;
+  holdEnd?: string;
+  /** 예약한 수업 일시(#예약일시#) — 수업 예약·취소 알림 */
+  reservedAt?: string;
+  /** 회원앱이 이 사건을 이미 푸시로 알렸으면 true — 앱 회원에겐 푸시를 또 보내지 않는다 */
+  appNotified?: boolean;
 }): Promise<void> {
   try {
     const { data: setting } = await supabase
@@ -288,6 +304,9 @@ export async function fireAutoMessage(opts: {
       appLink,
       basis: "", // 즉시형은 '전송 기준'이 없다
       startDate: opts.startDate,
+      holdStart: opts.holdStart,
+      holdEnd: opts.holdEnd,
+      reservedAt: opts.reservedAt,
       centerPhone,
       centerAddress,
       centerHours,
@@ -320,11 +339,134 @@ export async function fireAutoMessage(opts: {
       centerId: opts.centerId,
       uid: opts.uid,
       centerName: center,
-      rows: [{ id: row.id, member_id: opts.memberId, message, methods, trigger_key: opts.triggerKey }],
+      rows: [
+        {
+          id: row.id,
+          member_id: opts.memberId,
+          message,
+          methods,
+          trigger_key: opts.triggerKey,
+          appNotified: opts.appNotified,
+        },
+      ],
       smsAllowed: smsAllowedForCenter(opts.centerId),
     });
   } catch (e) {
     console.error("[auto-message] fire error", opts.triggerKey, e);
+  }
+}
+
+/** #예약일시# 표기 — "11/8(토) 14:00" (KST). #다음수업# 과 같은 모양 */
+export function fmtReservedAt(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const k = new Date(t + 9 * 3600 * 1000);
+  const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+  const hh = String(k.getUTCHours()).padStart(2, "0");
+  const mi = String(k.getUTCMinutes()).padStart(2, "0");
+  return `${k.getUTCMonth() + 1}/${k.getUTCDate()}(${DOW[k.getUTCDay()]}) ${hh}:${mi}`;
+}
+
+/** 회원 이름 — 사건 경로에 이름이 없을 때 */
+async function memberNameOf(memberId: number): Promise<string> {
+  const { data } = await supabase.from("crm_members").select("name").eq("id", memberId).maybeSingle();
+  return (data as { name?: string } | null)?.name ?? "";
+}
+
+/**
+ * '수업 예약 시' / '수업 예약 취소 시' 자동 메세지.
+ * PT 예약(crm_reservations)과 클래스 예약(crm_class_bookings) 모두 여기로 부른다.
+ * 중복 방지: 예약 1건당 1회(`class_booked:{회원}:{ref}`).
+ * 절대 예외를 던지지 않는다(fireAutoMessage 와 같음).
+ */
+export async function fireReservationMessage(opts: {
+  centerId: number;
+  uid: string;
+  kind: "booked" | "cancelled";
+  memberId: number;
+  /** 예약 고유값 — PT 는 `r{id}`, 클래스는 `cb{id}` */
+  ref: string;
+  startsAt: string | null | undefined;
+  /** 수업 이름(#상품명#) — PT=수강권 수업명, 클래스=상품명 */
+  product?: string;
+  memberName?: string;
+  appNotified?: boolean;
+}): Promise<void> {
+  try {
+    await fireAutoMessage({
+      centerId: opts.centerId,
+      uid: opts.uid,
+      triggerKey: opts.kind === "booked" ? "class_booked" : "class_cancelled",
+      memberId: opts.memberId,
+      memberName: opts.memberName ?? (await memberNameOf(opts.memberId)),
+      dedupeSuffix: opts.ref,
+      product: opts.product,
+      reservedAt: fmtReservedAt(opts.startsAt),
+      appNotified: opts.appNotified,
+    });
+  } catch (e) {
+    console.error("[auto-message] reservation error", opts.kind, e);
+  }
+}
+
+/**
+ * '상품 홀딩' 자동 메세지 — 직원이 홀딩을 등록한 직후 1회(묶음으로 여러 상품이 홀딩돼도 1건).
+ */
+export async function fireHoldMessage(opts: {
+  centerId: number;
+  uid: string;
+  memberId: number;
+  /** 홀딩된 상품 이름들 */
+  products: string[];
+  start: string;
+  end: string;
+}): Promise<void> {
+  try {
+    await fireAutoMessage({
+      centerId: opts.centerId,
+      uid: opts.uid,
+      triggerKey: "product_hold",
+      memberId: opts.memberId,
+      memberName: await memberNameOf(opts.memberId),
+      dedupeSuffix: `h${opts.start}`,
+      product: Array.from(new Set(opts.products.filter(Boolean))).join(", "),
+      holdStart: opts.start,
+      holdEnd: opts.end,
+    });
+  } catch (e) {
+    console.error("[auto-message] hold error", e);
+  }
+}
+
+/**
+ * '계약 완료 시' 자동 메세지 — 회원 계약서 서명이 끝난 직후(직원 태블릿 서명·회원 링크 서명).
+ * 직원 근로계약서(staff_member_id)나 회원 연결이 없는 계약서는 보내지 않는다(호출처에서 거름).
+ */
+export async function fireContractMessage(opts: {
+  centerId: number;
+  uid: string;
+  memberId: number;
+  contractId: number;
+  memberName?: string;
+  product?: string;
+  startDate?: string;
+  expiry?: string;
+}): Promise<void> {
+  try {
+    await fireAutoMessage({
+      centerId: opts.centerId,
+      uid: opts.uid,
+      triggerKey: "contract_completed",
+      memberId: opts.memberId,
+      memberName: opts.memberName || (await memberNameOf(opts.memberId)),
+      dedupeSuffix: `c${opts.contractId}`,
+      product: opts.product,
+      startDate: opts.startDate,
+      expiry: opts.expiry,
+    });
+  } catch (e) {
+    console.error("[auto-message] contract error", e);
   }
 }
 

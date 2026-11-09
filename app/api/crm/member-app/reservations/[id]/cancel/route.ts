@@ -4,6 +4,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 import { formatKstSlot } from "@/app/lib/member-notify";
+import { fireReservationMessage } from "@/app/lib/crm-auto-message";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         body: `${ctx.name}님이 ${formatKstSlot(res.starts_at)} 수업 예약을 취소했어요`,
         data: { kind: "reservation_cancelled", reservation_id: String(res.id) },
       }).catch(() => {});
+    });
+  }
+
+  // 자동 메세지 '수업 예약 취소 시' — 확정된 예약을 회원이 앱에서 취소(신청 철회는 예약이 아니라 제외)
+  if (res.status === "booked") {
+    after(async () => {
+      let product: string | undefined;
+      if (res.pass_id) {
+        const { data: p } = await supabase.from("crm_passes").select("lesson_kind").eq("id", res.pass_id).maybeSingle();
+        product = (p as { lesson_kind?: string | null } | null)?.lesson_kind ?? undefined;
+      }
+      await fireReservationMessage({
+        centerId: ctx.centerId,
+        uid: ctx.uid,
+        kind: "cancelled",
+        memberId: ctx.memberId,
+        memberName: ctx.name,
+        ref: `r${res.id}`,
+        startsAt: res.starts_at,
+        product,
+      });
     });
   }
 

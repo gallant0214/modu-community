@@ -173,6 +173,12 @@ export const DISPATCHABLE_TRIGGERS = new Set<string>([
   "membership_new",
   "membership_renew",
   "first_purchase",
+  "contract_completed", // 계약서 서명(직원 태블릿·회원 링크)
+  "rental_purchased", // 대여권 판매(직원 발급·앱/홈페이지 결제)
+  "product_hold", // 직원 홀딩 등록(일괄 홀딩 제외)
+  "class_booked", // PT 예약 확정·클래스 예약
+  "class_cancelled", // 확정 예약 취소(직원·회원앱·센터 수업 취소)
+  // 시설 예약(facility_*)은 시설 예약 기능 자체가 없어 보낼 수 없다
 ]);
 
 /**
@@ -327,6 +333,12 @@ export const MESSAGE_VARIABLES: {
     desc: "홀딩 마지막 날짜 (다음 날부터 다시 이용)",
     example: "홀딩 종료 #홀딩종료일#",
     sample: "2026-11-16",
+  },
+  {
+    token: "#예약일시#",
+    desc: "예약한 수업 일시 (수업 예약·취소 알림에서만 값이 채워짐)",
+    example: "#예약일시# 수업 예약 완료",
+    sample: "11/8(토) 14:00",
   },
   {
     token: "#앱설치링크#",

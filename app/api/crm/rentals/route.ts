@@ -9,6 +9,7 @@ import {
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
+import { fireAutoMessage } from "@/app/lib/crm-auto-message";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
@@ -272,6 +273,24 @@ export async function POST(request: Request) {
   }
 
   // 신규/재등록 구분 자동 갱신 (구매 이력 2건 이상 → 재등록)
+
+  // 자동 메세지 '대여권 구매 시' — 판매가가 있는 대여권만.
+  // 회원권에 딸려 0원으로 같이 발급되는 락커(번들 구성품)·무료 이어붙이기는 '구매'가 아니라 보내지 않는다.
+  if ((Number(body.price_won) || 0) > 0) {
+    const { data: mem } = await supabase.from("crm_members").select("name").eq("id", memberId).maybeSingle();
+    await fireAutoMessage({
+      centerId: ctx.centerId,
+      uid: ctx.uid,
+      triggerKey: "rental_purchased",
+      memberId,
+      memberName: (mem as { name?: string } | null)?.name ?? "",
+      dedupeSuffix: `r${created.id}`,
+      product: itemName,
+      startDate: body.start_date ?? undefined,
+      expiry: body.expires_at ?? undefined,
+      price: Number(body.price_won) || 0,
+    });
+  }
 
   return NextResponse.json({ ok: true, rentalId: created.id });
 }

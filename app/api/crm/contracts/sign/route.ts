@@ -4,6 +4,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext, ctxHasPermission } from "@/app/lib/crm-permissions";
 import { sanitizeRichContent, stripTags } from "@/app/lib/sanitize";
+import { fireContractMessage } from "@/app/lib/crm-auto-message";
 
 export const dynamic = "force-dynamic";
 
@@ -167,6 +168,21 @@ export async function POST(request: Request) {
     entity_id: created.id,
     payload: { name, member_id: body.member_id ?? null } as never,
   });
+
+  // 자동 메세지 '계약 완료 시' — 회원 계약서만(직원 근로계약서·회원 미연결 제외)
+  if (body.member_id && !body.staff_member_id) {
+    const pi = (body.product_info ?? {}) as Record<string, unknown>;
+    await fireContractMessage({
+      centerId: ctx.centerId,
+      uid: ctx.uid,
+      memberId: Number(body.member_id),
+      contractId: Number(created.id),
+      memberName: name,
+      product: String(pi.plan_name ?? pi.lesson_kind ?? pi.product_name ?? "") || undefined,
+      startDate: typeof pi.start_date === "string" ? pi.start_date : undefined,
+      expiry: typeof pi.expires_at === "string" ? pi.expires_at : undefined,
+    });
+  }
 
   return NextResponse.json({ ok: true, id: created.id });
 }

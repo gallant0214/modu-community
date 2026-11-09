@@ -10,6 +10,7 @@ import {
   type HoldRow,
 } from "@/app/lib/crm-hold-group";
 import { syncLockerDatesFromRental } from "@/app/lib/crm-locker-sync";
+import { fireHoldMessage } from "@/app/lib/crm-auto-message";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +139,7 @@ export async function POST(request: Request) {
   }
 
   const days = dayDiff(start, end) + 1; // inclusive 양 끝 포함
+  const heldByMember = new Map<number, string[]>();
   const held: {
     kind: HoldKind;
     id: number;
@@ -232,6 +234,12 @@ export async function POST(request: Request) {
       new_expires_at: newExpires,
       bundled: !explicit,
     });
+    heldByMember.set(row.member_id, [...(heldByMember.get(row.member_id) ?? []), row.name]);
+  }
+
+  // 자동 메세지 '상품 홀딩' — 회원당 1건(묶음으로 같이 홀딩된 상품은 #상품명# 에 함께)
+  for (const [memberId, names] of heldByMember) {
+    await fireHoldMessage({ centerId: ctx.centerId, uid: ctx.uid, memberId, products: names, start, end });
   }
 
   if (held.length === 0) {

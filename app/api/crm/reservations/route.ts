@@ -5,6 +5,7 @@ import { paginateAll } from "@/app/lib/crm-coupons-db";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { sendLocalizedPushToMember, memberNotifyOn } from "@/app/lib/member-notify";
+import { fireReservationMessage } from "@/app/lib/crm-auto-message";
 
 export const dynamic = "force-dynamic";
 
@@ -207,7 +208,7 @@ export async function POST(request: Request) {
   // session_minutes 까지 조회 → 예약 종료 시각 서버측 파생
   const { data: pass } = await supabase
     .from("crm_passes")
-    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, total_sessions, status, session_minutes, group_capacity, start_date, expires_at")
+    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, total_sessions, status, session_minutes, group_capacity, start_date, expires_at, lesson_kind")
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -362,6 +363,19 @@ export async function POST(request: Request) {
       { reservationId: String(created.id) }
     ).catch(() => {});
   });
+  // 자동 메세지 '수업 예약 시' — 앱 회원은 위 예약 푸시를 이미 받으므로 자동 메세지 푸시는 생략
+  after(() =>
+    fireReservationMessage({
+      centerId: ctx.centerId,
+      uid: ctx.uid,
+      kind: "booked",
+      memberId: pass.member_id,
+      ref: `r${created.id}`,
+      startsAt: startsAt.toISOString(),
+      product: (pass as { lesson_kind?: string | null }).lesson_kind ?? undefined,
+      appNotified: true,
+    })
+  );
 
   return NextResponse.json({
     ok: true,

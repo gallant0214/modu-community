@@ -1,6 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
+import { fireReservationMessage } from "@/app/lib/crm-auto-message";
+
+/** #상품명# 용 클래스 이름 — 상품관리의 클래스 상품명 */
+async function classProductName(productId: number | null | undefined): Promise<string | undefined> {
+  if (!productId) return undefined;
+  const { data } = await supabase.from("crm_products").select("name").eq("id", productId).maybeSingle();
+  return (data as { name?: string | null } | null)?.name ?? undefined;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -194,7 +202,22 @@ export async function POST(request: Request) {
       .eq("id", pass.id);
   }
 
-  return NextResponse.json({ ok: true, booking_id: (created as { id: number }).id, unlimited: isPeriod });
+  // 자동 메세지 '수업 예약 시' (클래스) — 회원앱이 따로 보내는 예약 알림이 없다
+  const bookingId = (created as { id: number }).id;
+  after(async () =>
+    fireReservationMessage({
+      centerId,
+      uid: ctx.uid,
+      kind: "booked",
+      memberId: ctx.memberId,
+      memberName: ctx.name,
+      ref: `cb${bookingId}`,
+      startsAt: session.starts_at,
+      product: await classProductName(session.product_id),
+    })
+  );
+
+  return NextResponse.json({ ok: true, booking_id: bookingId, unlimited: isPeriod });
 }
 
 /**
@@ -266,6 +289,20 @@ export async function DELETE(request: Request) {
       cancelled_at: new Date().toISOString(),
     } as never)
     .eq("id", bookingId);
+
+  // 자동 메세지 '수업 예약 취소 시' (클래스)
+  after(async () =>
+    fireReservationMessage({
+      centerId,
+      uid: ctx.uid,
+      kind: "cancelled",
+      memberId: ctx.memberId,
+      memberName: ctx.name,
+      ref: `cb${bookingId}`,
+      startsAt: session.starts_at,
+      product: await classProductName(session.product_id),
+    })
+  );
 
   return NextResponse.json({
     ok: true,

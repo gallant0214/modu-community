@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { sendLocalizedPushToMember, memberNotifyOn } from "@/app/lib/member-notify";
+import { fireReservationMessage } from "@/app/lib/crm-auto-message";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,7 @@ export async function DELETE(
 
   const { data: session } = await supabase
     .from("crm_class_sessions")
-    .select("id, starts_at")
+    .select("id, starts_at, product_id")
     .eq("id", sessionId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -123,6 +124,28 @@ export async function DELETE(
         { _slotIso: startsAt },
         { sessionId: String(sessionId) }
       ).catch(() => {});
+    }
+  });
+  // 자동 메세지 '수업 예약 취소 시' — 센터가 수업을 취소(앱 회원은 위 취소 푸시를 이미 받음)
+  after(async () => {
+    const productId = (session as { product_id?: number | null }).product_id;
+    let product: string | undefined;
+    if (productId) {
+      const { data: p } = await supabase.from("crm_products").select("name").eq("id", productId).maybeSingle();
+      product = (p as { name?: string | null } | null)?.name ?? undefined;
+    }
+    for (const b of booked ?? []) {
+      if (!b.member_id) continue;
+      await fireReservationMessage({
+        centerId: ctx.centerId,
+        uid: ctx.uid,
+        kind: "cancelled",
+        memberId: b.member_id,
+        ref: `cb${b.id}`,
+        startsAt,
+        product,
+        appNotified: true,
+      });
     }
   });
 

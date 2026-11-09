@@ -5,6 +5,14 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { sendLocalizedPushToMember, memberNotifyOn } from "@/app/lib/member-notify";
+import { fireReservationMessage } from "@/app/lib/crm-auto-message";
+
+/** #상품명# 용 수업 이름 — 수강권의 수업명 */
+async function passLessonKind(passId: number | null): Promise<string | undefined> {
+  if (!passId) return undefined;
+  const { data } = await supabase.from("crm_passes").select("lesson_kind").eq("id", passId).maybeSingle();
+  return (data as { lesson_kind?: string | null } | null)?.lesson_kind ?? undefined;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +137,19 @@ export async function PATCH(
           { reservationId: String(reservationId) }
         ).catch(() => {});
       });
+      // 자동 메세지 '수업 예약 시' — 신청 승인으로 예약이 확정됨(앱 회원은 위 확정 푸시를 이미 받음)
+      after(async () =>
+        fireReservationMessage({
+          centerId: ctx.centerId,
+          uid: ctx.uid,
+          kind: "booked",
+          memberId: cur.member_id,
+          ref: `r${reservationId}`,
+          startsAt: cur.starts_at,
+          product: await passLessonKind(cur.pass_id),
+          appNotified: true,
+        })
+      );
       return NextResponse.json({ ok: true, status: "booked" });
     }
 
@@ -373,6 +394,22 @@ export async function PATCH(
       entity_id: reservationId,
       payload: body.reason ? ({ reason: body.reason } as never) : null,
     });
+  }
+
+  // 자동 메세지 '수업 예약 취소 시' — 확정된 예약이 취소됐을 때(앱 회원은 아래 취소 푸시를 받음)
+  if (newStatus === "cancelled" && cur.status === "booked") {
+    after(async () =>
+      fireReservationMessage({
+        centerId: ctx.centerId,
+        uid: ctx.uid,
+        kind: "cancelled",
+        memberId: cur.member_id,
+        ref: `r${reservationId}`,
+        startsAt: cur.starts_at,
+        product: await passLessonKind(cur.pass_id),
+        appNotified: true,
+      })
+    );
   }
 
   // 회원 알림: 상태 변경(취소/출석완료/노쇼/예약복구). 실제 변경이 있을 때만. — 회원 언어로 발송

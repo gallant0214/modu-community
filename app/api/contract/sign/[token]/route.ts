@@ -1,6 +1,7 @@
 import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
+import { fireContractMessage } from "@/app/lib/crm-auto-message";
 
 export const dynamic = "force-dynamic";
 
@@ -134,7 +135,7 @@ export async function POST(
 
   const { data: existing } = await supabase
     .from("crm_signed_contracts")
-    .select("id, status, customer_info, terms_snapshot")
+    .select("id, status, customer_info, terms_snapshot, center_id, member_id, staff_member_id, product_info")
     .eq("signing_token", token)
     .maybeSingle();
   if (!existing) {
@@ -200,6 +201,28 @@ export async function POST(
 
   if (error) {
     return NextResponse.json({ error: "저장 실패", detail: errLogOnly(error) }, { status: 500 });
+  }
+
+  // 자동 메세지 '계약 완료 시' — 회원 계약서만(직원 근로계약서·회원 미연결 제외)
+  const ex = existing as unknown as {
+    center_id: number;
+    member_id: number | null;
+    staff_member_id: number | null;
+    product_info: Record<string, unknown> | null;
+    customer_info: Record<string, unknown> | null;
+  };
+  if (ex.member_id && !ex.staff_member_id) {
+    const pi = ex.product_info ?? {};
+    await fireContractMessage({
+      centerId: ex.center_id,
+      uid: "contract-link",
+      memberId: Number(ex.member_id),
+      contractId: Number(existing.id),
+      memberName: typeof ex.customer_info?.name === "string" ? ex.customer_info.name : undefined,
+      product: String(pi.plan_name ?? pi.lesson_kind ?? pi.product_name ?? "") || undefined,
+      startDate: typeof pi.start_date === "string" ? pi.start_date : undefined,
+      expiry: typeof pi.expires_at === "string" ? pi.expires_at : undefined,
+    });
   }
   return NextResponse.json({ ok: true, id: existing.id });
 }

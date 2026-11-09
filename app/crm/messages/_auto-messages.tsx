@@ -800,6 +800,12 @@ function AutoMessageEditor({
                   에게 자동 발송됩니다.
                 </div>
               </div>
+              {(triggerKey === "class_booked" || triggerKey === "class_cancelled") && (
+                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#8C8270] dark:text-zinc-400">
+                  직원이 잡거나 취소한 수업은 회원앱이 예약 알림을 따로 보내요. 그래서 앱을 쓰는 회원에게는 이
+                  메세지의 앱 푸시를 생략하고, 앱이 없는 회원에게만 갑니다(스마트 전송 기준). 문자를 고르면 모두에게 문자가 나가요.
+                </p>
+              )}
             </NumberedField>
 
             {/* 03 전송 기준 (모두 선택 가능) */}

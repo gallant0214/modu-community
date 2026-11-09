@@ -1079,6 +1079,8 @@ export function renderMessage(
     joinDate?: string;
     holdStart?: string;
     holdEnd?: string;
+    /** 예약한 수업 일시 (#예약일시#) — 수업 예약·취소 알림에서만. 예: "11/8(토) 14:00" */
+    reservedAt?: string;
     /** 회원이 가진 쿠폰으로 쿠폰 변수를 채울 때(쿠폰 만료 알림) */
     couponVars?: CouponVars;
   }
@@ -1106,7 +1108,8 @@ export function renderMessage(
     .replaceAll("#다음수업#", vars.nextLesson ?? "")
     .replaceAll("#가입일#", vars.joinDate ?? "")
     .replaceAll("#홀딩시작일#", vars.holdStart ?? "")
-    .replaceAll("#홀딩종료일#", vars.holdEnd ?? "");
+    .replaceAll("#홀딩종료일#", vars.holdEnd ?? "")
+    .replaceAll("#예약일시#", vars.reservedAt ?? "");
   return vars.couponVars ? fillCouponVars(out, vars.couponVars) : out;
 }
 
