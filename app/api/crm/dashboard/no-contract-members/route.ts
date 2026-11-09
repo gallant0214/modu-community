@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,8 @@ async function gather<T>(
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
-  // 데이터 격리: trainer(강사·fc·알바 매핑) 는 센터 집계 금지
-  if (ctx.role === "trainer") {
-    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
-  }
+  const permDenied = await requirePermission(ctx, "dashboard.center_stats");
+  if (permDenied) return permDenied;
 
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 

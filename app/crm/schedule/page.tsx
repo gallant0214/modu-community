@@ -145,7 +145,6 @@ export default function CrmSchedulePage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [classSessions, setClassSessions] = useState<ClassSession[]>([]);
-  const [role, setRole] = useState<"owner" | "admin" | "manager" | "trainer" | null>(null);
   const [perms, setPerms] = useState<Record<string, boolean>>({});
   const [myMemberId, setMyMemberId] = useState<number | null>(null);
   const [selectedTrainerId, setSelectedTrainerId] = useState<number | "all">("all");
@@ -228,7 +227,8 @@ export default function CrmSchedulePage() {
     };
   }, [range.from, range.to, getIdToken]);
 
-  const canPickTrainer = role === "owner" || role === "admin" || role === "manager";
+  // 강사 선택(다른 강사 일정 보기) = 직급권한 '다른 강사 스케줄·회원앱 예약요청 보기' (서버와 같은 스위치)
+  const canPickTrainer = perms["schedule.view_others"] === true;
 
   const load = useCallback(async () => {
     setError("");
@@ -291,7 +291,6 @@ export default function CrmSchedulePage() {
       }
       if (resBoot.ok) {
         const data = await resBoot.json();
-        if (data?.role) setRole(data.role);
         if (data?.permissions) setPerms(data.permissions as Record<string, boolean>);
         if (typeof data?.centerMemberId === "number") setMyMemberId(data.centerMemberId);
       }
@@ -299,7 +298,7 @@ export default function CrmSchedulePage() {
   }, [getIdToken]);
 
   const trainers = useMemo(
-    () => staff.filter((s) => s.role === "trainer" || s.role === "manager" || s.role === "owner" || s.role === "admin"),
+    () => staff.filter((s) => s.role === "trainer" || s.role === "manager" || s.role === "owner" || s.role === "admin"), // perm-gate-ok: 강사 선택 목록(표시용)
     [staff]
   );
 
@@ -962,6 +961,7 @@ function EditReservationModal({
                   {list.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.display_name}
+                      {/* perm-gate-ok: 역할 이름 표시(대표자/관리자/팀장) */}
                       {t.role !== "trainer" && (
                         <> {" "}({t.role === "owner" ? "대표자" : t.role === "admin" ? "관리자" : "팀장"})</>
                       )}
@@ -4140,6 +4140,7 @@ function NewReservationModal({
                 {trainers.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.display_name}
+                    {/* perm-gate-ok: 역할 이름 표시(대표자/관리자/팀장) */}
                     {t.role !== "trainer" &&
                       ` (${t.role === "owner" ? "대표자" : t.role === "admin" ? "관리자" : "팀장"})`}
                   </option>

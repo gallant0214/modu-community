@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +12,10 @@ export const dynamic = "force-dynamic";
  * → { thisWeek, lastWeek } 각 { start, end, total, days: [{date, count}] x7 }
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "dashboard.center_stats");
+  if (permDenied) return permDenied;
 
   const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
   const dow = nowKst.getUTCDay(); // 0=일 .. 6=토

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 import {
   HOLD_COL,
   HOLD_TABLE,
@@ -38,8 +39,10 @@ const revertDays = (extendedDays: number, startDate: string | null, todayKst: st
  *  - 락커 대여권이면 물리 락커(crm_lockers) 만료일도 함께 원복.
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "members.edit_usage");
+  if (permDenied) return permDenied;
 
   let body: { kind?: string; id?: number; include_bundle?: boolean };
   try {

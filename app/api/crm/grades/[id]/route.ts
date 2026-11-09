@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,10 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "staff.permissions_edit");
+  if (permDenied) return permDenied;
 
   const { id } = await params;
   const gradeId = Number(id);
@@ -36,7 +39,7 @@ export async function PATCH(
     .eq("center_id", ctx.centerId)
     .maybeSingle();
   if (!target) return NextResponse.json({ error: "등급을 찾을 수 없습니다" }, { status: 404 });
-  if (target.base_role === "owner") {
+  if (target.base_role === "owner") { // perm-gate-ok: 대표자 등급은 수정 불가(구조)
     return NextResponse.json({ error: "대표자 등급은 수정할 수 없습니다" }, { status: 400 });
   }
 
@@ -86,8 +89,10 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "staff.permissions_edit");
+  if (permDenied) return permDenied;
 
   const { id } = await params;
   const gradeId = Number(id);
@@ -101,7 +106,7 @@ export async function DELETE(
     .maybeSingle();
 
   if (!grade) return NextResponse.json({ error: "등급을 찾을 수 없습니다" }, { status: 404 });
-  if (grade.base_role === "owner") {
+  if (grade.base_role === "owner") { // perm-gate-ok: 대표자 등급은 삭제 불가(구조)
     return NextResponse.json({ error: "대표자 등급은 삭제할 수 없습니다" }, { status: 400 });
   }
 

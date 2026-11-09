@@ -2,7 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { ctxHasPermission, permissionDeniedResponse } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +27,7 @@ export async function GET(request: Request) {
   const allView = url.searchParams.get("all") === "1";
   let canViewAll = false;
   if (allView) {
-    canViewAll =
-      ctx.role === "owner" ||
-      (await loadPermissionsForContext(ctx))["schedule.view_others"] === true;
+    canViewAll = await ctxHasPermission(ctx, "schedule.view_others");
   }
   let personalTrainerId: number | null = null;
   if (!canViewAll) {
@@ -138,15 +136,11 @@ export async function POST(request: Request) {
   }
 
   // 권한 확인 — 타 강사/센터 일정 관리 = schedule.manage_others (직급 권한 일원화)
-  const canManageAll =
-    ctx.role === "owner" ||
-    ctx.role === "admin" ||
-    ctx.isSoloOwner ||
-    (await loadPermissionsForContext(ctx))["schedule.manage_others"] === true;
+  const canManageAll = await ctxHasPermission(ctx, "schedule.manage_others");
 
-  // 센터 일정: 관리자 또는 can_manage_all_schedules 있는 경우만
+  // 센터 일정 등록 = 직급권한 '다른 강사 수업 관리'
   if (type === "center" && !canManageAll) {
-    return NextResponse.json({ error: "센터 일정은 관리자만 등록할 수 있어요" }, { status: 403 });
+    return permissionDeniedResponse("schedule.manage_others");
   }
 
   let trainerMemberId: number | null = null;

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ALL_PERMISSION_KEYS } from "@/app/crm/_components/role-permissions";
-import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { ctxHasPermission, requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +12,10 @@ export const dynamic = "force-dynamic";
  * 센터의 등급별 권한 override 목록. 프론트에서 등급 base_role 기본값과 병합.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "staff.permissions_edit");
+  if (permDenied) return permDenied;
 
   const { data, error } = await supabase
     .from("crm_grade_permissions")
@@ -65,7 +67,7 @@ export async function PATCH(request: Request) {
   if (!grade) {
     return NextResponse.json({ error: "등급을 찾을 수 없습니다" }, { status: 404 });
   }
-  if (grade.base_role === "owner") {
+  if (grade.base_role === "owner") { // perm-gate-ok: 대표자 등급 권한은 항상 전부(구조)
     // 대표자 등급은 항상 전체 권한
     return NextResponse.json({ ok: true, ignored: true });
   }

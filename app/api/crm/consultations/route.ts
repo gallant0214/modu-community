@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { escapePostgrestQuery } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission, requirePermission } from "@/app/lib/crm-permissions";
 import { buildConsultationPayload } from "@/app/lib/crm-consultation";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,8 @@ const LIST_COLUMNS =
 
 /**
  * GET /api/crm/consultations?status=&trainer_id=&q=&from=&to=&limit=
- * PT 상담 목록. trainer/manager 는 본인이 담당한 상담만.
+ * PT 상담 목록. 직급권한 'PT 상담지 전체 보기'(consultations.view_all) 가 없으면
+ * 본인이 담당이거나 **본인이 작성한** 상담만.
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
@@ -43,10 +45,12 @@ export async function GET(request: Request) {
     query = query.or(`name.ilike.${like},phone.ilike.${like}`);
   }
 
-  // trainer/manager 는 본인 담당 상담만. (owner/admin/solo owner 는 전체)
-  const isRestricted = (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner;
-  if (isRestricted) {
-    query = query.eq("trainer_member_id", ctx.centerMemberId);
+  // 전체 보기 권한이 없으면 본인 담당 + 본인 작성 상담만.
+  //  🚨 예전엔 '담당'만 봐서, 아르바이트가 다른 강사를 담당으로 적고 저장하면 자기 상담지를 못 봤다.
+  const canViewAll = await ctxHasPermission(ctx, "consultations.view_all");
+  if (!canViewAll) {
+    query = query.or(`trainer_member_id.eq.${ctx.centerMemberId},created_by_uid.eq.${ctx.uid}`);
+    if (trainerParam) query = query.eq("trainer_member_id", Number(trainerParam));
   } else if (trainerParam) {
     query = query.eq("trainer_member_id", Number(trainerParam));
   }
@@ -87,6 +91,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "consultations.write");
+  if (permDenied) return permDenied;
 
   let body: Record<string, unknown>;
   try {

@@ -70,6 +70,21 @@ const PERM_UNLOCK_HREFS: Record<string, string> = {
   "/crm/touch-attendance-settings": "settings.edit",
 };
 
+/**
+ * 센터설정 메뉴는 안의 탭 중 하나라도 권한이 있으면 보여준다.
+ * (각 탭·API 는 서버가 항목별 직급권한으로 다시 검사 — 메뉴만 열고 안이 비는 일이 없게 탭 키를 모두 나열)
+ */
+const SETTINGS_MENU_KEYS = [
+  "settings.edit",
+  "staff.manage",
+  "staff.permissions_edit",
+  "settings.audit_log",
+  "finance.expenses",
+  "notices.manage",
+  "contracts.member_edit",
+  "staff_contracts.view",
+];
+
 const SOLO_MENU_HREFS = [
   "/crm/dashboard",
   "/crm/members",
@@ -92,9 +107,14 @@ function buildSoloMenu(
     includeCenterInfo: boolean;
     includeAttendanceTools?: boolean;
     permissions?: Record<string, boolean> | null;
+    canSeeSettings?: boolean;
   }
 ): MenuItem[] {
   const base = MENU.filter((m) => SOLO_MENU_HREFS.includes(m.href));
+  if (opts.canSeeSettings) {
+    const item = MENU.find((m) => m.href === "/crm/settings");
+    if (item) base.push(item);
+  }
   // 직급권한으로 명시적으로 켜준 메뉴 추가 (예: 락커 배정 권한 → 락커 관리)
   for (const [href, key] of Object.entries(PERM_UNLOCK_HREFS)) {
     if (opts.permissions?.[key] === true) {
@@ -168,12 +188,16 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
-  // 직원관리·설정 메뉴는 owner/admin 만 노출. manager/trainer 는 숨김.
-  const isStaffLevel = role === "owner" || role === "admin";
+  // 센터설정 메뉴 = 안의 탭 권한 중 하나라도 있으면. 터치출석 설정 = '센터 설정 변경'.
+  //  🚨 예전엔 '대표자·관리자' 역할로 정해서, 직급권한을 켜줘도 메뉴가 안 보이거나(팀장)
+  //     관리자 권한을 꺼도 메뉴가 남는 불일치가 있었다.
+  const canSeeSettings = SETTINGS_MENU_KEYS.some((k) => permissions?.[k] === true);
+  const canManageStaff = permissions?.["staff.manage"] === true;
+  const canEditSettings = permissions?.["settings.edit"] === true;
 
-  // 강사 가입 요청 대기 수 → 센터설정 배지. owner/admin 만. 라우트 이동마다 갱신.
+  // 강사 가입 요청 대기 수 → 센터설정 배지. 직원 관리 권한자만. 라우트 이동마다 갱신.
   useEffect(() => {
-    if (!isStaffLevel) return;
+    if (!canManageStaff) return;
     let cancelled = false;
     (async () => {
       try {
@@ -191,13 +215,13 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
     return () => {
       cancelled = true;
     };
-  }, [isStaffLevel, getIdToken, pathname]);
+  }, [canManageStaff, getIdToken, pathname]);
   // 축소(개인 강사용) 메뉴 대상:
   //  - centerKind='solo' (개인 강사 본인 센터)
   //  - role='trainer' (센터 소속 강사) — 락커/메세지/통계 등 관리 도구 대신 본인 스코프 위주로 표시
-  const isSoloMode = centerKind === "solo" || role === "trainer";
+  const isSoloMode = centerKind === "solo" || role === "trainer"; // perm-gate-ok: 메뉴 배치(축소 메뉴) — 각 메뉴는 직급권한으로 추가
   // 센터 소속 강사(개인 센터가 아닌 실제 센터의 trainer): 출석 현황·터치출석 추가 노출.
-  const isCenterTrainer = role === "trainer" && centerKind !== "solo";
+  const isCenterTrainer = role === "trainer" && centerKind !== "solo"; // perm-gate-ok: 메뉴 배치(출석 도구 묶음)
   const specialBody = isSpecialBodyCenter(centerName);
   // 온라인 주문은 스페셜바디 범어점 전용 — 다른 센터에는 메뉴 자체를 숨긴다
   const onlineOrderAllowed = isOnlineOrderCenter(centerName);
@@ -210,13 +234,12 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
           includeCenterInfo: centerKind === "solo",
           includeAttendanceTools: isCenterTrainer,
           permissions,
+          canSeeSettings,
         })
       : MENU.filter(
           (m) =>
             !m.staffOnly ||
-            isStaffLevel ||
-            // staffOnly 라도 직급권한을 켜준 경우엔 보여준다(예: settings.edit)
-            (PERM_UNLOCK_HREFS[m.href] && permissions?.[PERM_UNLOCK_HREFS[m.href]] === true)
+            (m.href === "/crm/settings" ? canSeeSettings : canEditSettings)
         )
   )
     .filter((m) => (SPECIAL_BODY_ONLY_HREFS.has(m.href) ? specialBody : true))
@@ -358,7 +381,7 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
 
       {/* 데스크탑 사이드바 — navbar(56px) 아래 완전 고정(fixed). 스크롤·overflow 무관하게 항상 고정 */}
       <aside className="hidden lg:flex flex-col w-60 border-r border-[#E1D5C0] dark:border-zinc-800 bg-[#FBF7EB]/82 dark:bg-zinc-950/88 backdrop-blur fixed top-14 left-0 z-30 h-[calc(100dvh-3.5rem)]">
-        <SidebarHeader centerName={centerName} initialLogo={centerLogo ?? null} canEdit={role === "owner" || role === "admin"} />
+        <SidebarHeader centerName={centerName} initialLogo={centerLogo ?? null} canEdit={canEditSettings} />
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-3">{links}</nav>
         <SidebarFooter />
       </aside>
@@ -371,7 +394,7 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
             onClick={() => setMobileOpen(false)}
           />
           <aside className="absolute left-0 top-0 bottom-0 w-72 flex flex-col bg-[#FEFCF7] dark:bg-zinc-950 border-r border-[#E1D5C0] dark:border-zinc-800 shadow-xl">
-            <SidebarHeader centerName={centerName} initialLogo={centerLogo ?? null} canEdit={role === "owner" || role === "admin"} />
+            <SidebarHeader centerName={centerName} initialLogo={centerLogo ?? null} canEdit={canEditSettings} />
             <nav className="flex-1 px-3 pt-2 pb-3 overflow-y-auto">{links}</nav>
             <SidebarFooter />
           </aside>

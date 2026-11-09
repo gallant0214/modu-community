@@ -60,9 +60,9 @@ export async function PATCH(
     .maybeSingle();
   if (!existing) return NextResponse.json({ error: "상품을 찾을 수 없습니다" }, { status: 404 });
   const trainerOwnerId = (existing as { trainer_member_id: number | null }).trainer_member_id;
-  const isAdmin = ctx.role === "owner" || ctx.role === "admin";
+  // 본인 개인 상품은 언제나 수정 가능. 그 외는 직급권한 '상품 수정'
   const isPersonalOwner = trainerOwnerId != null && trainerOwnerId === ctx.centerMemberId;
-  if (!isAdmin && !isPersonalOwner && !(await ctxHasPermission(ctx, "products.edit"))) {
+  if (!isPersonalOwner && !(await ctxHasPermission(ctx, "products.edit"))) {
     return NextResponse.json({ error: "수정 권한이 없습니다" }, { status: 403 });
   }
 
@@ -163,9 +163,9 @@ export async function DELETE(
     .maybeSingle();
   if (!existing) return NextResponse.json({ error: "상품을 찾을 수 없습니다" }, { status: 404 });
   const trainerOwnerId = (existing as { trainer_member_id: number | null }).trainer_member_id;
-  const isAdmin = ctx.role === "owner" || ctx.role === "admin";
+  // 본인 개인 상품은 언제나 삭제 가능. 그 외는 직급권한 '상품 삭제'
   const isPersonalOwner = trainerOwnerId != null && trainerOwnerId === ctx.centerMemberId;
-  if (!isAdmin && !isPersonalOwner && !(await ctxHasPermission(ctx, "products.delete"))) {
+  if (!isPersonalOwner && !(await ctxHasPermission(ctx, "products.delete"))) {
     return NextResponse.json({ error: "삭제 권한이 없습니다" }, { status: 403 });
   }
 

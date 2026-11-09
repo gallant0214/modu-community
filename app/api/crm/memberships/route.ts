@@ -54,8 +54,9 @@ export async function GET(request: Request) {
      김민지 강사에게는 락커만 보였다). 그 회원을 열 수 있는지는 회원 목록 범위
      (members.app_view_all·담당회원)에서 이미 통제된다.
      목록 전체 조회(member_id 없음)에는 기존처럼 격리를 유지한다. */
-  // 데이터 격리: 강사/매니저(1인 강사 제외)는 본인이 판매한 회원권만. (목록 조회에만 적용)
-  if (!memberId && (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
+  // 데이터 격리: '회원권·대여권 목록 전체 보기' 권한이 없으면 본인이 판매한 회원권만. (목록 조회에만 적용)
+  const canViewAllSales = await ctxHasPermission(ctx, "memberships.view_all");
+  if (!memberId && !canViewAllSales) {
     query = query.eq("seller_member_id", ctx.centerMemberId);
   }
 
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
       .limit(limit);
     if (status) rq = rq.eq("status", status);
     if (memberId) rq = rq.eq("member_id", Number(memberId));
-    if ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
+    if (!canViewAllSales) {
       rq = rq.eq("seller_member_id", ctx.centerMemberId);
     }
     const { data: rentals } = await rq;

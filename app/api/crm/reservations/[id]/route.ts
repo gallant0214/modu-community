@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext, permissionDeniedResponse } from "@/app/lib/crm-permissions";
 import { sendLocalizedPushToMember, memberNotifyOn } from "@/app/lib/member-notify";
 import { fireReservationMessage } from "@/app/lib/crm-auto-message";
 
@@ -88,11 +88,11 @@ export async function PATCH(
   if (action) {
     // 예약 처리 = schedule.reserve, 타 강사 요청은 schedule.manage_others (직급 권한 일원화)
     const reqPerms = await loadPermissionsForContext(ctx);
-    const reqBypass = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
-    if (!reqBypass && reqPerms["schedule.reserve"] !== true) {
+    // 대표자·개인원장은 loadPermissionsForContext 가 전부 true 를 돌려준다(관리자도 화면 값대로)
+    if (reqPerms["schedule.reserve"] !== true) {
       return NextResponse.json({ error: "예약 처리 권한이 없습니다" }, { status: 403 });
     }
-    if (!reqBypass && cur.trainer_member_id !== ctx.centerMemberId && reqPerms["schedule.manage_others"] !== true) {
+    if (cur.trainer_member_id !== ctx.centerMemberId && reqPerms["schedule.manage_others"] !== true) {
       return NextResponse.json({ error: "본인 담당 예약요청만 처리할 수 있어요" }, { status: 403 });
     }
     if (cur.status !== "requested") {
@@ -187,20 +187,19 @@ export async function PATCH(
   const roleAllowsAll = rolePerms["schedule.manage_others"] === true;
 
   // 직급권한 추가 게이트: 예약 변경·취소=schedule.reserve, 출석확정·취소=schedule.attend
-  // (owner/admin/solo 는 통과. 강사별 crm_trainer_permissions 는 아래에서 추가로 확인)
-  const gradeBypass = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
-  const gradeAllows = (key: string) => gradeBypass || rolePerms[key] === true;
+  // (대표자·개인원장은 rolePerms 가 전부 true. 관리자도 화면 값대로)
+  const gradeAllows = (key: string) => rolePerms[key] === true;
   const isCancelAttendance = cur.status === "attended" && newStatus === "booked";
   if ((isReschedule || newStatus === "cancelled") && !gradeAllows("schedule.reserve")) {
-    return NextResponse.json({ error: "예약 변경·취소 권한이 없습니다" }, { status: 403 });
+    return permissionDeniedResponse("schedule.reserve");
   }
   if ((newStatus === "attended" || newStatus === "noshow" || isCancelAttendance) && !gradeAllows("schedule.attend")) {
-    return NextResponse.json({ error: "출석 확정·취소 권한이 없습니다" }, { status: 403 });
+    return permissionDeniedResponse("schedule.attend");
   }
 
   // 타 강사 예약 관리 = schedule.manage_others (개별 강사 컬럼 폐지, 직급 권한으로 일원화)
-  if (!gradeBypass && cur.trainer_member_id !== ctx.centerMemberId && !roleAllowsAll) {
-    return NextResponse.json({ error: "다른 강사 예약을 관리할 권한이 없어요" }, { status: 403 });
+  if (cur.trainer_member_id !== ctx.centerMemberId && !roleAllowsAll) {
+    return permissionDeniedResponse("schedule.manage_others");
   }
 
   /* ── reschedule (드래그 이동) 경로 ────────────────────────────── */

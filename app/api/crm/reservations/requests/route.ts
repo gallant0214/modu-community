@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,8 @@ export async function GET(request: Request) {
     .eq("status", "requested")
     .order("starts_at", { ascending: true });
 
-  if (ctx.role === "trainer") {
+  // '다른 강사 스케줄·회원앱 예약요청 보기' 권한이 없으면 본인 담당 요청만
+  if (!(await ctxHasPermission(ctx, "schedule.view_others"))) {
     query = query.eq("trainer_member_id", ctx.centerMemberId);
   }
 

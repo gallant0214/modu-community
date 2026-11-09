@@ -3,7 +3,7 @@ import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { paginateAll } from "@/app/lib/crm-coupons-db";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext, ctxHasPermission, permissionDeniedResponse } from "@/app/lib/crm-permissions";
 import { sendLocalizedPushToMember, memberNotifyOn } from "@/app/lib/member-notify";
 import { fireReservationMessage } from "@/app/lib/crm-auto-message";
 
@@ -62,9 +62,7 @@ export async function GET(request: Request) {
   const allView = url.searchParams.get("all") === "1";
   let canViewAll = false;
   if (allView) {
-    canViewAll =
-      ctx.role === "owner" ||
-      (await loadPermissionsForContext(ctx))["schedule.view_others"] === true;
+    canViewAll = await ctxHasPermission(ctx, "schedule.view_others");
   }
   if (!canViewAll) {
     query = query.eq("trainer_member_id", ctx.centerMemberId);
@@ -183,15 +181,14 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  // 권한은 직급 권한(직급 권한 화면)으로 일원화. owner/admin/solo 는 통과.
+  // 권한은 직급 권한(직급 권한 화면)으로 일원화. 대표자·개인원장만 항상 통과(관리자도 화면 값대로).
   const rolePerms = await loadPermissionsForContext(ctx);
-  const gradeBypassR = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
   // 예약 생성 = schedule.reserve
-  if (!gradeBypassR && rolePerms["schedule.reserve"] !== true) {
-    return NextResponse.json({ error: "예약 생성 권한이 없습니다" }, { status: 403 });
+  if (rolePerms["schedule.reserve"] !== true) {
+    return permissionDeniedResponse("schedule.reserve");
   }
   // 타 강사 예약 = schedule.manage_others (개별 강사 컬럼 폐지)
-  const canManageAll = gradeBypassR || rolePerms["schedule.manage_others"] === true;
+  const canManageAll = rolePerms["schedule.manage_others"] === true;
 
   let body: { pass_id?: number; starts_at?: string; ends_at?: string; trainer_member_id?: number; force?: boolean; booking_reason?: string };
   try {
@@ -254,10 +251,12 @@ export async function POST(request: Request) {
     ctx.centerMemberId != null &&
     (pass.trainer_member_id === ctx.centerMemberId || coTrainerIds.includes(ctx.centerMemberId));
 
-  // trainer/manager 는 본인이 (주강사 또는 추가강사로) 지정된 수강권만
-  // (can_manage_all_schedules 있으면 예외)
-  if (!canManageAll && (ctx.role === "trainer" || ctx.role === "manager") && !isAssignedTrainer) {
-    return NextResponse.json({ error: "이 수강권의 담당이 아닙니다" }, { status: 403 });
+  // 본인이 (주강사 또는 추가강사로) 지정된 수강권만. '다른 강사 수업 관리' 권한이 있으면 예외.
+  if (!canManageAll && !isAssignedTrainer) {
+    return NextResponse.json(
+      { error: "이 수강권의 담당이 아닙니다. 다른 강사 수업은 직급 권한 '다른 강사 수업 관리' 가 있어야 해요.", permission: "schedule.manage_others" },
+      { status: 403 }
+    );
   }
 
   // 예약을 실제로 진행하는 강사에 귀속:

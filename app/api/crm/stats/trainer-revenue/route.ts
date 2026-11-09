@@ -66,27 +66,22 @@ export async function GET(request: Request) {
 
   try {
     // 강사 후보 = 재직 중 수업 관련 등급(owner/admin/manager/trainer)
-    let staffQuery = supabase
+    const staffQuery = supabase
       .from("crm_center_members")
       .select("id, display_name, role")
       .eq("center_id", ctx.centerId)
       .eq("status", "active")
       .in("role", ["owner", "admin", "manager", "trainer"]);
-    // 데이터 격리: trainer/manager 는 본인만
-    if (ctx.role === "trainer" || ctx.role === "manager") {
-      staffQuery = staffQuery.eq("id", ctx.centerMemberId ?? -1);
-    }
+    // 직급권한 '통계 화면 보기(전 강사 포함)' 를 통과한 사람은 전체를 본다 — 역할로 다시 좁히지 않는다.
     const { data: staff, error: staffErr } = await staffQuery;
     if (staffErr) {
       return NextResponse.json({ error: "조회 실패", detail: errDetail(staffErr) }, { status: 500 });
     }
 
-    const isScoped = ctx.role === "trainer" || ctx.role === "manager";
-    const meId = ctx.centerMemberId ?? -1;
 
     // 담당강사 배정 수강권 (issued_at 기준). 매출 = price_won 합.
     const passBuilder = (f: number, t: number) => {
-      let q = supabase
+      const q = supabase
         .from("crm_passes")
         .select("trainer_member_id, price_won, issued_at")
         .eq("center_id", ctx.centerId)
@@ -95,9 +90,6 @@ export async function GET(request: Request) {
         .gte("issued_at", windowStart)
         .lt("issued_at", windowEndExcl)
         .range(f, t);
-      if (ctx.role === "trainer" || ctx.role === "manager") {
-        q = q.eq("trainer_member_id", ctx.centerMemberId ?? -1);
-      }
       return q;
     };
     const passes = await paginateAll<{
@@ -108,7 +100,7 @@ export async function GET(request: Request) {
 
     // 회원권 — 판매 직원(seller_member_id) 귀속. 결제일(purchased_at) 없으면 시작일.
     const membershipBuilder = (f: number, t: number) => {
-      let q = supabase
+      const q = supabase
         .from("crm_memberships")
         .select("seller_member_id, price_won, purchased_at, start_date")
         .eq("center_id", ctx.centerId)
@@ -119,7 +111,6 @@ export async function GET(request: Request) {
             `and(purchased_at.is.null,start_date.gte.${windowStart},start_date.lt.${windowEndExcl})`
         )
         .range(f, t);
-      if (isScoped) q = q.eq("seller_member_id", meId);
       return q;
     };
     const memberships = await paginateAll<{
@@ -131,7 +122,7 @@ export async function GET(request: Request) {
 
     // 기타 — 운동복·락커 등 대여권. 판매 직원 귀속, 시작일 기준.
     const rentalBuilder = (f: number, t: number) => {
-      let q = supabase
+      const q = supabase
         .from("crm_rentals")
         .select("seller_member_id, price_won, start_date")
         .eq("center_id", ctx.centerId)
@@ -140,7 +131,6 @@ export async function GET(request: Request) {
         .gte("start_date", windowStart)
         .lt("start_date", windowEndExcl)
         .range(f, t);
-      if (isScoped) q = q.eq("seller_member_id", meId);
       return q;
     };
     const rentals = await paginateAll<{

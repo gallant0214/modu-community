@@ -232,7 +232,6 @@ function AddStaffModal({
   const [picked, setPicked] = useState<LookupUser | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [gradeId, setGradeId] = useState<number | "">("");
-  const [accessLevel, setAccessLevel] = useState<"none" | "schedule" | "admin">("schedule");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -257,7 +256,7 @@ function AddStaffModal({
         const list = data.grades ?? [];
         setGrades(list);
         // 기본 선택: '강사' 기반 첫 등급
-        const trainerGrade = list.find((g: { base_role: string }) => g.base_role === "trainer");
+        const trainerGrade = list.find((g: { base_role: string }) => g.base_role === "trainer"); // perm-gate-ok: 기본 선택 등급(표시용)
         if (trainerGrade && gradeId === "") setGradeId(trainerGrade.id);
       }
     })();
@@ -273,7 +272,6 @@ function AddStaffModal({
       setPicked(null);
       setDisplayName("");
       setGradeId("");
-      setAccessLevel("schedule");
       setEmail("");
       setPhone("");
       setAddress("");
@@ -284,7 +282,10 @@ function AddStaffModal({
   }, [open]);
 
   const selectedGrade = grades.find((g) => g.id === gradeId);
-  const role = (selectedGrade?.base_role ?? "trainer") as "owner" | "admin" | "manager" | "trainer";
+  // 접근 수준(access_level)은 등급에서 자동으로 정한다 — 등급 변경 시 서버가 맞추는 규칙과 동일.
+  //  (예전 '접근 권한' 선택칸은 실제 권한 판정에 쓰이지 않아 화면에서 뺐다. 권한은 직급 권한 화면에서)
+  const baseRole = selectedGrade?.base_role ?? "trainer";
+  const accessLevel = baseRole === "trainer" || baseRole === "fc" || baseRole === "alba" ? "schedule" : "admin"; // perm-gate-ok: 등급→접근수준 자동 매핑(표시용)
 
   const search = async () => {
     const q = query.trim();
@@ -493,40 +494,23 @@ function AddStaffModal({
               </p>
             </CrmField>
 
-            <div className="grid grid-cols-2 gap-3">
-              <CrmField label="등급" required>
-                <select
-                  className={crmInputClass}
-                  value={gradeId}
-                  onChange={(e) => setGradeId(e.target.value ? Number(e.target.value) : "")}
-                >
-                  <option value="">선택해 주세요</option>
-                  {grades.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.label}
-                    </option>
-                  ))}
-                </select>
-              </CrmField>
-              <CrmField label="접근 권한" required>
-                <select
-                  className={crmInputClass}
-                  value={accessLevel}
-                  onChange={(e) => setAccessLevel(e.target.value as typeof accessLevel)}
-                  disabled={role === "owner"}
-                >
-                  <option value="none">강사</option>
-                  <option value="schedule">스케줄</option>
-                  <option value="admin">관리자</option>
-                </select>
-              </CrmField>
-            </div>
-            <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
-              {role === "owner" && "대표자는 자동으로 관리자 권한을 가져요."}
-              {role === "admin" && "관리자는 디폴트로 모든 데이터를 볼 수 있어요. 강사 권한으로 두면 본인 데이터 위주로만 보입니다."}
-              {role === "manager" && "팀장은 본인 팀의 매출과 회원을 볼 수 있어요. 강사 권한으로 두면 본인 것만 보여요."}
-              {role === "trainer" && "강사는 본인 데이터만 볼 수 있어요. 스케줄을 선택하면 본인 수업 일정만 조회·관리할 수 있어요."}
-            </p>
+            <CrmField label="등급" required>
+              <select
+                className={crmInputClass}
+                value={gradeId}
+                onChange={(e) => setGradeId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">선택해 주세요</option>
+                {grades.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+                등급별로 쓸 수 있는 기능·볼 수 있는 범위는 센터설정 → 직급 권한에서 정해요.
+              </p>
+            </CrmField>
 
             <div className="grid grid-cols-2 gap-3">
               <CrmField label="이메일">
@@ -884,7 +868,7 @@ function StaffTable({
                     >
                       상세
                     </Link>
-                    {deletable && !s.is_solo_owner && s.role !== "owner" && (
+                    {deletable && !s.is_solo_owner && s.role !== "owner" /* perm-gate-ok: 대표자는 삭제 불가(서버와 동일) */ && (
                       <button
                         type="button"
                         onClick={() => remove(s)}

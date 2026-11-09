@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,10 @@ export const dynamic = "force-dynamic";
  * 호출자가 두 번 호출해서 합치는 패턴.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "sales.payroll_view");
+  if (permDenied) return permDenied;
 
   const url = new URL(request.url);
   const target = url.searchParams.get("target_member_id");
@@ -48,8 +51,10 @@ export async function GET(request: Request) {
  *         new_member_value, renewal_value, trial_value }
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "sales.commission_edit");
+  if (permDenied) return permDenied;
 
   let body: {
     target_member_id?: number | null;

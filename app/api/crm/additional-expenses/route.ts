@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +10,10 @@ export const dynamic = "force-dynamic";
  * GET /api/crm/additional-expenses?ym=YYYY-MM 또는 ?months=YYYY-MM,YYYY-MM — 해당 기간의 추가 지출 목록. admin.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "finance.expenses");
+  if (permDenied) return permDenied;
 
   const url = new URL(request.url);
   const ymRaw = url.searchParams.get("ym");
@@ -45,8 +48,10 @@ export async function GET(request: Request) {
  * body: { ym, label, amount_won, memo? }
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "finance.expenses");
+  if (permDenied) return permDenied;
 
   let body: { ym?: string; label?: string; amount_won?: number; memo?: string; vat_deductible?: boolean };
   try {

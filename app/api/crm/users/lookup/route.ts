@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 import { getFirebaseAdmin } from "@/app/lib/firebase-admin";
 import { getAuth } from "firebase-admin/auth";
 
@@ -26,8 +27,10 @@ async function nicknameFor(uid: string): Promise<string | null> {
 }
 
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "members.create");
+  if (permDenied) return permDenied;
 
   const url = new URL(request.url);
   const q = (url.searchParams.get("q") || "").trim();

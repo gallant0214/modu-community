@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +20,10 @@ type Target = { table: "crm_memberships" | "crm_passes" | "crm_rentals"; id: num
  * 각 회원의 유효(status='valid') 회원권·수강권·대여권 만료일을 days 만큼 연장(홀딩 여부 무관).
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "members.edit_usage");
+  if (permDenied) return permDenied;
 
   let body: { member_ids?: number[]; days?: number; reason?: string };
   try {

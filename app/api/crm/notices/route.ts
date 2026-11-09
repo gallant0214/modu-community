@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 import { notifyCenterMembers } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +12,10 @@ export const dynamic = "force-dynamic";
  * 추후 회원 전용 앱은 status='active' AND is_published 인 공지를 별도 조회.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "notices.manage");
+  if (permDenied) return permDenied;
 
   const { data, error } = await supabase
     .from("crm_center_notices")
@@ -32,8 +35,10 @@ export async function GET(request: Request) {
  * body: { title, body?, is_published? }
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "notices.manage");
+  if (permDenied) return permDenied;
 
   let body: { title?: string; body?: string; is_published?: boolean };
   try {

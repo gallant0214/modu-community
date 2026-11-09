@@ -45,13 +45,13 @@ export async function GET(request: Request) {
       if (m.status === "pending") {
         accessAllowed = false;
         canViewMembers = false;
-      } else if (m.is_solo_owner || m.role === "owner") {
-        canViewMembers = true;
       } else {
+        // 대표자·개인원장은 loadPermissionsForContext 가 전부 true
         const perms = await loadPermissionsForContext({
           centerId: m.center_id,
           role: m.role,
           gradeId: m.grade_id ?? null,
+          isSoloOwner: !!m.is_solo_owner,
         } as CrmContext);
         accessAllowed = perms["center.access_crm"] !== false;
         canViewMembers = perms["members.app_view_all"] === true;

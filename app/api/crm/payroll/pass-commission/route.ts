@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,8 @@ export async function PATCH(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  const isAdmin = ctx.accessLevel === "admin" || ctx.role === "owner" || ctx.role === "admin";
-  if (!isAdmin) {
-    return NextResponse.json({ error: "수업료 요율을 변경할 권한이 없습니다" }, { status: 403 });
-  }
+  const permDenied = await requirePermission(ctx, "sales.commission_edit");
+  if (permDenied) return permDenied;
 
   let body: { pass_id?: number; rate?: number | null };
   try {

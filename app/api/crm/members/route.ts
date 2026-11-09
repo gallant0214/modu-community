@@ -3,7 +3,7 @@ import { NextResponse, after } from "next/server";
 import { escapePostgrestQuery } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext, requirePermission } from "@/app/lib/crm-permissions";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
@@ -71,9 +71,8 @@ export async function GET(request: Request) {
 
   const scopes: CenterScope[] = [];
   {
-    // 현재 컨텍스트 센터. solo owner/owner/admin/전체보기권한 = 전체, 그 외 trainer/manager = 담당만.
-    const restricted =
-      (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner && !ctxCanViewAll;
+    // 현재 컨텍스트 센터. '센터 전체 회원 보기' 권한(대표자·개인원장은 항상)이면 전체, 아니면 담당만.
+    const restricted = !ctxCanViewAll;
     const allowedIds = restricted ? await teachingScopeIds(ctx.centerId, ctx.centerMemberId) : null;
     scopes.push({ centerId: ctx.centerId, centerName: ctx.centerName, foreign: false, allowedIds });
   }
@@ -81,14 +80,23 @@ export async function GET(request: Request) {
     // 개인 CRM: 내가 소속된 다른 센터에서 담당하는 회원 합산 (조회 전용)
     const { data: others } = await supabase
       .from("crm_center_members")
-      .select("id, center_id, role, is_solo_owner, crm_centers!inner(name)")
+      .select("id, center_id, role, grade_id, is_solo_owner, crm_centers!inner(name)")
       .eq("firebase_uid", ctx.uid)
       .eq("status", "active")
       .neq("center_id", ctx.centerId);
     for (const om of others ?? []) {
       const centerObj = Array.isArray(om.crm_centers) ? om.crm_centers[0] : om.crm_centers;
       const centerName = (centerObj as { name?: string } | null)?.name ?? "";
-      const restricted = (om.role === "trainer" || om.role === "manager") && !om.is_solo_owner;
+      // 그 센터의 직급권한(센터 전체 회원 보기)을 그대로 따른다
+      const omPerms = await loadPermissionsForContext({
+        ...ctx,
+        centerId: om.center_id,
+        centerMemberId: om.id,
+        role: om.role as typeof ctx.role,
+        gradeId: (om as { grade_id?: number | null }).grade_id ?? null,
+        isSoloOwner: !!om.is_solo_owner,
+      });
+      const restricted = omPerms["members.app_view_all"] !== true;
       const allowedIds = restricted ? await teachingScopeIds(om.center_id, om.id) : null;
       scopes.push({ centerId: om.center_id, centerName, foreign: true, allowedIds });
     }
@@ -487,13 +495,8 @@ export async function POST(request: Request) {
 
   // owner/admin/1인 강사 기본 허용 + 직급권한 members.create 부여받은 직급(예: FC·팀장)도 허용.
   // (FC 역할의 핵심 = 회원 등록/판매 — 직급권한 토글이 실제로 동작하도록)
-  const isAdminRole = ctx.role === "owner" || ctx.role === "admin";
-  if (!isAdminRole && !ctx.isSoloOwner) {
-    const perms = await loadPermissionsForContext(ctx);
-    if (perms["members.create"] !== true) {
-      return NextResponse.json({ error: "회원 등록 권한이 없습니다" }, { status: 403 });
-    }
-  }
+  const createDenied = await requirePermission(ctx, "members.create");
+  if (createDenied) return createDenied;
 
   let body: {
     member_type?: string;

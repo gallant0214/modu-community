@@ -54,8 +54,8 @@ export async function GET(request: Request) {
   }
   if (paymentMethod) query = query.eq("payment_method", paymentMethod);
 
-  // 1인 강사(solo owner)는 본인 센터 전체 접근 → 격리 미적용.
-  if ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
+  // '수강권 목록 전체 보기' 권한이 없으면 본인 담당(주·추가강사)·본인 판매 수강권만.
+  if (!(await ctxHasPermission(ctx, "passes.view_all"))) {
     query = query.or(
       `trainer_member_id.eq.${ctx.centerMemberId},seller_member_id.eq.${ctx.centerMemberId},co_trainer_ids.cs.{${ctx.centerMemberId}}`
     );

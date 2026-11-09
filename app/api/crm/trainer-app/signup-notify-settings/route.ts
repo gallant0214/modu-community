@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext, ctxHasPermission } from "@/app/lib/crm-permissions";
 import type { CrmContext } from "@/app/lib/crm-auth";
 
 export const dynamic = "force-dynamic";
@@ -40,15 +40,14 @@ export async function GET(request: Request) {
       const c = Array.isArray(m.crm_centers)
         ? m.crm_centers[0]
         : (m.crm_centers as { name?: string } | null);
-      let canManage = m.role === "owner" || m.role === "admin" || m.is_solo_owner === true;
-      if (!canManage) {
-        const perms = await loadPermissionsForContext({
-          centerId: m.center_id,
-          role: m.role,
-          gradeId: m.grade_id ?? null,
-        } as CrmContext);
-        canManage = perms["app_notify.signup_purchase"] === true;
-      }
+      // 직급권한 '가입 및 등록 알림' (대표자·개인원장은 항상)
+      const perms = await loadPermissionsForContext({
+        centerId: m.center_id,
+        role: m.role,
+        gradeId: m.grade_id ?? null,
+        isSoloOwner: m.is_solo_owner === true,
+      } as CrmContext);
+      const canManage = perms["app_notify.signup_purchase"] === true;
       return {
         centerId: m.center_id,
         centerName: c?.name ?? "",
@@ -67,11 +66,7 @@ export async function PATCH(request: Request) {
   if (isCrmError(ctx)) return ctx;
 
   // 가입 및 등록 알림 권한 있는 사람만 켤 수 있음
-  let canManage = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner === true;
-  if (!canManage) {
-    const perms = await loadPermissionsForContext(ctx);
-    canManage = perms["app_notify.signup_purchase"] === true;
-  }
+  const canManage = await ctxHasPermission(ctx, "app_notify.signup_purchase");
   if (!canManage) {
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }

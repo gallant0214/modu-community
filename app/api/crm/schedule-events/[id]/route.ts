@@ -2,7 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -97,9 +97,7 @@ export async function PATCH(
     );
   }
   // 센터 일정 지정(개인 → 센터)은 별개 권한 — 만든 사람이라도 관리자급만 가능
-  const isAdmin = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
-  const hasManageAll =
-    isAdmin || (await loadPermissionsForContext(ctx))["schedule.manage_others"] === true;
+  const hasManageAll = await ctxHasPermission(ctx, "schedule.manage_others");
 
   const patch: Record<string, unknown> = {};
   if (typeof body.title === "string") {

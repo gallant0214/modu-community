@@ -31,15 +31,14 @@ export async function GET(request: Request) {
     .maybeSingle();
   if (!me) return NextResponse.json({ error: "이 센터 소속이 아닙니다" }, { status: 403 });
 
-  let allowed = me.is_solo_owner || me.role === "owner";
-  if (!allowed) {
-    const perms = await loadPermissionsForContext({
-      centerId,
-      role: me.role,
-      gradeId: me.grade_id ?? null,
-    } as CrmContext);
-    allowed = perms["members.app_view_all"] === true;
-  }
+  // 그 센터 직급권한 '센터 전체 회원 보기' (대표자·개인원장은 항상)
+  const perms = await loadPermissionsForContext({
+    centerId,
+    role: me.role,
+    gradeId: me.grade_id ?? null,
+    isSoloOwner: !!me.is_solo_owner,
+  } as CrmContext);
+  const allowed = perms["members.app_view_all"] === true;
   if (!allowed) {
     return NextResponse.json({ error: "회원 열람 권한이 없습니다" }, { status: 403 });
   }

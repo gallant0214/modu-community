@@ -2,7 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext, ctxHasPermission, permissionDeniedResponse } from "@/app/lib/crm-permissions";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
 import {
@@ -48,16 +48,17 @@ export async function GET(
     return NextResponse.json({ error: "수강권을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  // trainer/manager 는 본인 담당(주강사/추가강사) 또는 본인 판매만. solo owner 는 예외.
+  // 본인 담당(주강사/추가강사)·본인 판매가 아니면 '수강권 목록 전체 보기' 또는 '센터 전체 회원 보기' 권한 필요.
+  //  (회원 상세에서 그 회원의 수강권을 여는 경로 — 회원 전체 보기 권한자는 회원의 수강권도 봐야 한다)
   const passCoIds = ((pass as { co_trainer_ids?: number[] }).co_trainer_ids ?? []) as number[];
   if (
-    (ctx.role === "trainer" || ctx.role === "manager") &&
-    !ctx.isSoloOwner &&
     pass.trainer_member_id !== ctx.centerMemberId &&
     pass.seller_member_id !== ctx.centerMemberId &&
-    !passCoIds.includes(ctx.centerMemberId as number)
+    !passCoIds.includes(ctx.centerMemberId as number) &&
+    !(await ctxHasPermission(ctx, "passes.view_all")) &&
+    !(await ctxHasPermission(ctx, "members.app_view_all"))
   ) {
-    return NextResponse.json({ error: "접근 권한이 없습니다" }, { status: 403 });
+    return permissionDeniedResponse("passes.view_all");
   }
 
   const coIds = ((pass as { co_trainer_ids?: number[] }).co_trainer_ids ?? []).filter(

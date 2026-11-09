@@ -53,16 +53,13 @@ export async function GET(request: Request) {
 
   try {
     // 강사 후보 = 재직 중 수업 관련 등급(owner/admin/manager/trainer)
-    let staffQuery = supabase
+    const staffQuery = supabase
       .from("crm_center_members")
       .select("id, display_name, role")
       .eq("center_id", ctx.centerId)
       .eq("status", "active")
       .in("role", ["owner", "admin", "manager", "trainer"]);
-    // 데이터 격리: trainer/manager 는 본인만
-    if (ctx.role === "trainer" || ctx.role === "manager") {
-      staffQuery = staffQuery.eq("id", ctx.centerMemberId ?? -1);
-    }
+    // 직급권한 '통계 화면 보기(전 강사 포함)' 를 통과한 사람은 전체를 본다 — 역할로 다시 좁히지 않는다.
     const { data: staff, error: staffErr } = await staffQuery;
     if (staffErr) {
       return NextResponse.json({ error: "조회 실패", detail: errDetail(staffErr) }, { status: 500 });
@@ -70,7 +67,7 @@ export async function GET(request: Request) {
 
     // 출석완료 예약 (수업 진행)
     const resBuilder = (f: number, t: number) => {
-      let q = supabase
+      const q = supabase
         .from("crm_reservations")
         .select("trainer_member_id, starts_at, status")
         .eq("center_id", ctx.centerId)
@@ -78,9 +75,6 @@ export async function GET(request: Request) {
         .gte("starts_at", `${windowStart}T00:00:00+09:00`)
         .lt("starts_at", `${windowEndExcl}T00:00:00+09:00`)
         .range(f, t);
-      if (ctx.role === "trainer" || ctx.role === "manager") {
-        q = q.eq("trainer_member_id", ctx.centerMemberId ?? -1);
-      }
       return q;
     };
     const reservations = await paginateAll<{ trainer_member_id: number | null; starts_at: string }>(

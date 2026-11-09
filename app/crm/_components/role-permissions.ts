@@ -61,11 +61,22 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "members.excel",      label: "회원 목록 엑셀 내보내기",       defaults: D_MGR },
       { key: "members.create",     label: "회원 등록(추가)",             defaults: D_MGR_FC },
       { key: "members.edit_basic", label: "회원 기본정보 수정 — 이름·연락처·메모 등",   defaults: D_MGR_FC },
-      { key: "members.edit_usage", label: "회원 이용권·회원권 정보 수정 — 시작일·만료·홀딩 등",   defaults: D_MGR_FC },
+      { key: "members.edit_usage", label: "회원 이용권·회원권 정보 수정 — 시작일·만료·메모·홀딩(일괄 연장·홀딩 포함)",   defaults: D_MGR_FC },
       { key: "members.delete",     label: "회원 삭제",             defaults: D_ADMIN },
       { key: "members.mileage",    label: "마일리지 적립·사용",   defaults: D_MGR_FC },
       { key: "members.face",       label: "회원 얼굴사진(생체) 등록·삭제", defaults: D_ADMIN },
       { key: "members.records",    label: "회원 운동기록·체성분 작성·삭제", defaults: D_ALL },
+      { key: "memberships.view_all", label: "회원권·대여권 목록 전체 보기 — 끄면 본인이 판매한 건만", defaults: D_ADMIN },
+    ],
+  },
+  {
+    key: "consultations",
+    label: "PT 상담",
+    items: [
+      { key: "consultations.write",         label: "PT 상담지 작성·수정 — 본인이 작성한 상담지는 언제나 볼 수 있음", defaults: D_ALL },
+      { key: "consultations.view_all",      label: "PT 상담지 전체 보기 — 끄면 본인이 작성했거나 담당인 상담지만", defaults: D_ADMIN },
+      { key: "consultations.delete",        label: "PT 상담지 삭제", defaults: D_ADMIN },
+      { key: "consultations.template_edit", label: "PT 상담지 양식 만들기·수정·삭제", defaults: D_ADMIN },
     ],
   },
   {
@@ -77,9 +88,10 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "sales.refund",       label: "회원권·대여권 환불 처리",   defaults: D_ADMIN },
       { key: "sales.delete",       label: "매출(결제) 내역 삭제",             defaults: D_ADMIN },
       { key: "sales.excel",        label: "매출 내역 엑셀 내보내기",       defaults: D_ADMIN },
-      { key: "sales.payroll_view", label: "직원 급여 정책 보기",       defaults: D_ADMIN },
+      { key: "sales.payroll_view", label: "직원 급여·수업료 정책 보기 — 다른 직원 포함", defaults: D_ADMIN },
       { key: "sales.commission_edit", label: "강사 수업료·정산(커미션) 설정", defaults: D_ADMIN },
-      { key: "stats.view",         label: "통계 화면 보기 — 매출·재무 전체", defaults: D_ADMIN },
+      { key: "stats.view",         label: "통계 화면 보기 — 매출·재무 전체 (전 강사 포함)", defaults: D_ADMIN },
+      { key: "finance.expenses",   label: "고정지출·추가지출·기타수입·거래처 보기·관리 (정산 반영)", defaults: D_ADMIN },
       // 경영 요약은 기본 대표자만 (관리자 포함 다른 직급은 직급 권한에서 켜야 보임)
       { key: "stats.business_summary", label: "통계 경영 요약 보기 — 손익분기점·안정성 등급·12개월 순이익", defaults: { owner: true, admin: false, manager: false, trainer: false, fc: false, alba: false } },
     ],
@@ -91,6 +103,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "dashboard.view",     label: "대시보드 화면 보기",                       defaults: D_ALL },
       { key: "dashboard.members",  label: "대시보드 회원·출석·수업 지표 보기",           defaults: D_ALL },
       { key: "dashboard.finance",  label: "대시보드 매출·재무 지표 보기 — 강사 매출 랭킹 등", defaults: D_ADMIN },
+      { key: "dashboard.center_stats", label: "대시보드 센터 고객현황·주간 출석·계약서 미작성 회원 보기", defaults: D_MGR },
     ],
   },
   {
@@ -124,6 +137,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "수강권 관리",
     items: [
       { key: "passes.issue",  label: "수강권 발급(판매)",                          defaults: D_STAFF_NO_ALBA },
+      { key: "passes.view_all", label: "수강권 목록 전체 보기 — 끄면 본인 담당·판매 수강권만", defaults: D_ADMIN },
       { key: "passes.edit",   label: "수강권 수정 — 담당강사·세션수·메모 등", defaults: D_ADMIN },
       { key: "passes.refund", label: "수강권 환불 처리",                          defaults: D_ADMIN },
     ],
@@ -138,12 +152,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "attendance.manage", label: "터치출석 체크인·출석기록 삭제 — 키오스크 입장 처리", defaults: D_STAFF_NO_ALBA },
       {
         key: "schedule.view_others",
-        label: "다른 강사 스케줄 보기",
+        label: "다른 강사 스케줄·회원앱 예약요청 보기",
         defaults: D_ADMIN,
       },
       {
         key: "schedule.manage_others",
-        label: "다른 강사 수업 관리 — 예약·출석·삭제까지",
+        label: "다른 강사 수업 관리 — 예약·출석·삭제, 센터 일정 등록까지",
         defaults: D_ADMIN,
       },
     ],
@@ -155,6 +169,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "staff_contracts.view", label: "직원(근로) 계약서 보기", defaults: D_ADMIN },
       { key: "staff_contracts.edit", label: "직원(근로) 계약서 작성·수정", defaults: D_OWNER },
       { key: "contracts.member_edit", label: "회원 전자계약서 작성·발송·양식 관리", defaults: D_MGR_FC },
+      { key: "contracts.member_void", label: "서명 완료된 회원 전자계약서 무효화", defaults: D_ADMIN },
     ],
   },
   {
@@ -178,7 +193,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     key: "staff",
     label: "직원 · 권한 관리",
     items: [
-      { key: "staff.manage", label: "직원 등록·가입 승인·등급 변경", defaults: D_ADMIN },
+      { key: "staff.manage", label: "직원 등록·가입 승인·등급 변경·삭제 — 다른 직원 상세 보기 포함", defaults: D_ADMIN },
       { key: "staff.permissions_edit", label: "직급 권한·등급 설정 편집", defaults: D_OWNER },
     ],
   },
@@ -187,6 +202,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "센터 설정",
     items: [
       { key: "settings.edit", label: "센터 설정 변경 — 예약·음성·키오스크·사업자정보", defaults: D_ADMIN },
+      { key: "settings.audit_log", label: "활동 로그 보기", defaults: D_ADMIN },
+      { key: "notices.manage", label: "센터 공지사항 작성·수정·삭제", defaults: D_ADMIN },
     ],
   },
   {
@@ -194,6 +211,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "앱 알림 권한 설정",
     items: [
       { key: "app_notify.signup_purchase", label: "가입 및 등록 알림 — 회원 신규가입·상품 구매·환불 시 강사앱 알림 받기", defaults: D_ADMIN },
+      { key: "app_notify.attendance_manage", label: "출석 알림 설정 변경 — 강사앱 출석 알림 켜기·끄기", defaults: D_ADMIN },
     ],
   },
 ];

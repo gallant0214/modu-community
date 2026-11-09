@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +11,10 @@ export const dynamic = "force-dynamic";
  * body: { title?, body?, is_published? }
  */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "notices.manage");
+  if (permDenied) return permDenied;
 
   const { id } = await params;
   const nid = Number(id);
@@ -50,8 +53,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
  * DELETE /api/crm/notices/[id] — 공지 삭제 (soft delete, admin).
  */
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "notices.manage");
+  if (permDenied) return permDenied;
 
   const { id } = await params;
   const nid = Number(id);

@@ -106,7 +106,7 @@ export async function PATCH(request: Request) {
    * ([[crm-center-verify]]). 관리자가 바꿔치울 수 없도록 대표자만 허용한다.
    */
   if (body.business_no !== undefined) {
-    if (ctx.role !== "owner") {
+    if (ctx.role !== "owner") { // perm-gate-ok: 사업자등록번호는 대표자만(양도·탈퇴 본인확인 값)
       return NextResponse.json(
         { error: "사업자등록번호는 대표자만 수정할 수 있습니다" },
         { status: 403 }
@@ -205,7 +205,7 @@ export async function DELETE(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  if (ctx.role !== "owner") {
+  if (ctx.role !== "owner") { // perm-gate-ok: 센터 탈퇴는 대표자 본인만(소유권)
     return NextResponse.json(
       { error: "대표자만 센터를 탈퇴할 수 있습니다" },
       { status: 403 }

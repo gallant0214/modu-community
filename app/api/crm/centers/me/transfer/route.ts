@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  if (ctx.role !== "owner") {
+  if (ctx.role !== "owner") { // perm-gate-ok: 센터 양도는 대표자 본인만(소유권)
     return NextResponse.json(
       { error: "대표자만 센터를 양도할 수 있습니다" },
       { status: 403 }

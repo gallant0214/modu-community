@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +32,10 @@ type TableName = (typeof TABLES)[number];
  *  - 홀딩 기록이 없는 '고아' 일시정지(과거 다른 경로로 is_paused 만 켜진 것)도: is_paused=false 로 해제.
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "members.edit_usage");
+  if (permDenied) return permDenied;
 
   let body: { member_ids?: number[] };
   try {

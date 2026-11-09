@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission, requirePermission, permissionDeniedResponse } from "@/app/lib/crm-permissions";
 import { buildConsultationPayload } from "@/app/lib/crm-consultation";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +32,10 @@ export async function GET(
   }
   if (!data) return NextResponse.json({ error: "상담을 찾을 수 없습니다" }, { status: 404 });
 
-  const isRestricted = (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner;
-  if (isRestricted && data.trainer_member_id !== ctx.centerMemberId) {
-    return NextResponse.json({ error: "접근 권한이 없습니다" }, { status: 403 });
+  // 본인 담당·본인 작성은 언제나 열람. 그 외는 'PT 상담지 전체 보기' 권한 필요.
+  const isMine = data.trainer_member_id === ctx.centerMemberId || data.created_by_uid === ctx.uid;
+  if (!isMine && !(await ctxHasPermission(ctx, "consultations.view_all"))) {
+    return permissionDeniedResponse("consultations.view_all");
   }
 
   // trainer_name join (등록 강사 우선, 없으면 직접 입력값)
@@ -80,15 +82,18 @@ export async function PATCH(
 
   const { data: cur } = await supabase
     .from("crm_pt_consultations")
-    .select("center_id, trainer_member_id")
+    .select("center_id, trainer_member_id, created_by_uid")
     .eq("id", cid)
     .maybeSingle();
   if (!cur || cur.center_id !== ctx.centerId) {
     return NextResponse.json({ error: "상담을 찾을 수 없습니다" }, { status: 404 });
   }
-  const isRestricted = (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner;
-  if (isRestricted && cur.trainer_member_id !== ctx.centerMemberId) {
-    return NextResponse.json({ error: "접근 권한이 없습니다" }, { status: 403 });
+  // 수정 = 'PT 상담지 작성·수정' 권한 + (본인 담당·본인 작성 또는 '전체 보기' 권한)
+  const writeDenied = await requirePermission(ctx, "consultations.write");
+  if (writeDenied) return writeDenied;
+  const isMine = cur.trainer_member_id === ctx.centerMemberId || cur.created_by_uid === ctx.uid;
+  if (!isMine && !(await ctxHasPermission(ctx, "consultations.view_all"))) {
+    return permissionDeniedResponse("consultations.view_all");
   }
 
   let body: Record<string, unknown>;
@@ -162,13 +167,15 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
-/** 상담 삭제 (owner/admin/solo owner 만) */
+/** 상담 삭제 — 직급권한 'PT 상담지 삭제' */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "consultations.delete");
+  if (permDenied) return permDenied;
 
   const { id } = await params;
   const cid = Number(id);

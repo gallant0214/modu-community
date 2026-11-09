@@ -203,7 +203,7 @@ export async function POST(request: Request) {
     }
 
     // 권한 row 보장
-    if (role === "trainer" || role === "manager") {
+    if (role === "trainer" || role === "manager") { // perm-gate-ok: 직원 기본 행 생성(권한 판정 아님)
       await supabase.from("crm_trainer_permissions").upsert(
         { center_member_id: existing.id } as never,
         { onConflict: "center_member_id" }
@@ -248,7 +248,7 @@ export async function POST(request: Request) {
   }
 
   // trainer/manager 면 권한 row 디폴트 (전부 true)
-  if (role === "trainer" || role === "manager") {
+  if (role === "trainer" || role === "manager") { // perm-gate-ok: 직원 기본 행 생성(권한 판정 아님)
     await supabase.from("crm_trainer_permissions").insert({
       center_member_id: created.id,
       can_create_reservation: true,

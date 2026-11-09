@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 import { cached, crmCacheKey } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
@@ -48,8 +49,10 @@ function ageBucket(birth: string | null): (typeof AGE_BUCKETS)[number] {
  * - churn: 마지막 이용권 만료가 그 달인(이탈) 고객 수
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "dashboard.center_stats");
+  if (permDenied) return permDenied;
 
   // 기간 옵션: 최근 1년(월,12) / 월단위(월,24) / 최근 30일(일,30) / 연단위(연,5)
   const sp = new URL(request.url).searchParams;

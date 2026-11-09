@@ -14,7 +14,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
   if (!(await ctxHasPermission(ctx, "products.settings_edit"))) {
     return NextResponse.json({ error: "상품 설정 수정 권한이 없습니다" }, { status: 403 });
@@ -54,7 +54,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
   if (!(await ctxHasPermission(ctx, "products.settings_edit"))) {
     return NextResponse.json({ error: "상품 설정 수정 권한이 없습니다" }, { status: 403 });

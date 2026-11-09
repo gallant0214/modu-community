@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,10 @@ const KIND_BY_TABLE = {
  * 선택 회원들의 '홀딩 가능한'(유효·미홀딩) 회원권·수강권·대여권 목록. 일괄 홀딩 모달의 상품 체크박스용.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "members.edit_usage");
+  if (permDenied) return permDenied;
 
   const raw = new URL(request.url).searchParams.get("member_ids") ?? "";
   const memberIds = Array.from(
@@ -81,8 +84,10 @@ export async function GET(request: Request) {
  * crm_pauses 기록 + 만료일 연장(end-start+1일) + is_paused=true.
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "members.edit_usage");
+  if (permDenied) return permDenied;
 
   let body: {
     member_ids?: number[];

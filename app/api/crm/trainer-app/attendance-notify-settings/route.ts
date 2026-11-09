@@ -2,7 +2,8 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
-import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requireCrmContext, isCrmError, type CrmContext } from "@/app/lib/crm-auth";
+import { ctxHasPermission, loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
 
   const { data: memberships } = await supabase
     .from("crm_center_members")
-    .select("id, center_id, role, is_solo_owner, crm_centers!inner(name)")
+    .select("id, center_id, role, grade_id, is_solo_owner, crm_centers!inner(name)")
     .eq("firebase_uid", user.uid)
     .eq("status", "active");
 
@@ -31,11 +32,18 @@ export async function GET(request: Request) {
     : { data: [] as { center_member_id: number; notify_attendance: boolean }[] };
   const onMap = new Map((prefs ?? []).map((p) => [p.center_member_id, p.notify_attendance === true]));
 
-  const centers = rows.map((m) => {
+  const centers = await Promise.all(rows.map(async (m) => {
     const c = Array.isArray(m.crm_centers)
       ? m.crm_centers[0]
       : (m.crm_centers as { name?: string } | null);
-    const canManage = m.role === "owner" || m.role === "admin" || m.is_solo_owner === true;
+    // 직급권한 '출석 알림 설정 변경' (대표자·개인원장은 항상)
+    const perms = await loadPermissionsForContext({
+      centerId: m.center_id,
+      role: m.role,
+      gradeId: (m as { grade_id?: number | null }).grade_id ?? null,
+      isSoloOwner: m.is_solo_owner === true,
+    } as CrmContext);
+    const canManage = perms["app_notify.attendance_manage"] === true;
     return {
       centerId: m.center_id,
       centerName: c?.name ?? "",
@@ -43,7 +51,7 @@ export async function GET(request: Request) {
       canManage,
       enabled: onMap.get(m.id) === true,
     };
-  });
+  }));
 
   return NextResponse.json({ centers });
 }
@@ -52,8 +60,8 @@ export async function PATCH(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  // 대표자·관리자(또는 개인CRM 본인)만 켤 수 있음
-  const canManage = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner === true;
+  // 직급권한 '출석 알림 설정 변경' (대표자·개인원장은 항상)
+  const canManage = await ctxHasPermission(ctx, "app_notify.attendance_manage");
   if (!canManage) {
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }

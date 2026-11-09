@@ -111,6 +111,8 @@ interface BootstrapInfo {
   role: "owner" | "admin" | "manager" | "trainer";
   centerName: string;
   businessNo: string | null;
+  /** 직급권한 맵 — 화면의 편집 가능 여부도 서버와 같은 스위치로 판단 */
+  permissions: Record<string, boolean>;
 }
 
 type SettingsTab =
@@ -250,7 +252,7 @@ export default function CrmSettingsPage() {
       setSettings(data.settings);
       if (b.ok) {
         const bi = await b.json();
-        setInfo({ role: bi.role, centerName: bi.centerName, businessNo: bi.businessNo ?? null });
+        setInfo({ role: bi.role, centerName: bi.centerName, businessNo: bi.businessNo ?? null, permissions: bi.permissions ?? {} });
       }
       if (c.ok) {
         const cc = await c.json();
@@ -593,7 +595,7 @@ export default function CrmSettingsPage() {
         </div>
       )}
 
-      {tab === "center" && <CenterProfilePanel role={info?.role ?? "trainer"} />}
+      {tab === "center" && <CenterProfilePanel role={info?.role ?? "trainer"} canEdit={info?.permissions?.["settings.edit"] === true} />}
 
       {tab === "display" && (
         <Card title="화면 모드">
@@ -642,7 +644,7 @@ export default function CrmSettingsPage() {
         </Card>
       )}
 
-      {tab === "voice" && <AttendanceVoicePanel role={info?.role ?? "trainer"} />}
+      {tab === "voice" && <AttendanceVoicePanel canEdit={info?.permissions?.["settings.edit"] === true} />}
 
       {tab === "permissions" && (
         <div className="space-y-6">
@@ -889,7 +891,7 @@ function HourMinuteSelect({ value, onChange }: { value: string; onChange: (v: st
   );
 }
 
-function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "trainer" }) {
+function CenterProfilePanel({ role, canEdit }: { role: "owner" | "admin" | "manager" | "trainer"; canEdit: boolean }) {
   const { getIdToken } = useAuth();
   const toast = useCrmToast();
   const [profile, setProfile] = useState<CenterProfile | null>(null);
@@ -897,9 +899,9 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
-  const canEdit = role === "owner" || role === "admin";
+  // 편집 가능 여부 = 직급권한 '센터 설정 변경'(서버와 같은 스위치)
   // 사업자등록번호는 센터 양도·탈퇴 본인확인 대조 항목 → 대표자만 수정
-  const isOwner = role === "owner";
+  const isOwner = role === "owner"; // perm-gate-ok: 사업자등록번호는 대표자만(서버와 동일)
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -1623,14 +1625,13 @@ function findTriggerMeta(t: VoiceTrigger) {
   return VOICE_TRIGGER_OPTIONS.find((o) => o.key === t)!;
 }
 
-function AttendanceVoicePanel({ role }: { role: "owner" | "admin" | "manager" | "trainer" }) {
+function AttendanceVoicePanel({ canEdit }: { canEdit: boolean }) {
   const { getIdToken } = useAuth();
   const toast = useCrmToast();
   const [rules, setRules] = useState<VoiceRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const canEdit = role === "owner" || role === "admin";
 
   const load = useCallback(async () => {
     setError("");
@@ -2054,12 +2055,13 @@ function GradesPanel() {
               className="flex items-center justify-between gap-3 rounded-xl border border-[#E4D9C6] bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:bg-[#FFFCF6] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/55"
             >
               <div className="flex flex-1 items-center gap-3 min-w-0">
+                {/* perm-gate-ok: 등급 아이콘 색상(표시용) */}
                 <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[12px] font-bold ${
                   g.base_role === "owner"
                     ? "bg-[#2F3A2B] text-white dark:bg-[#A8B87A] dark:text-zinc-950"
-                    : g.base_role === "admin"
+                    : g.base_role === "admin" /* perm-gate-ok: 표시용 색상 */
                     ? "bg-[#5A8BB0]/12 text-[#315F7D] dark:bg-sky-950/40 dark:text-sky-300"
-                    : g.base_role === "manager"
+                    : g.base_role === "manager" /* perm-gate-ok: 표시용 색상 */
                     ? "bg-[#B47B2A]/12 text-[#8A641D] dark:bg-amber-950/35 dark:text-amber-300"
                     : "bg-[#8B6BAA]/12 text-[#6E548B] dark:bg-purple-950/35 dark:text-purple-300"
                 }`}>
@@ -2111,7 +2113,7 @@ function GradesPanel() {
                       취소
                     </button>
                   </>
-                ) : g.base_role === "owner" ? (
+                ) : g.base_role === "owner" /* perm-gate-ok: 대표자 등급은 고정(이름 변경·삭제 불가) */ ? (
                   <>
                     {g.is_system && (
                       <span className="px-2.5 py-1 rounded-md bg-[#6B7B3A]/10 text-[11.5px] font-semibold text-[#6B7B3A] dark:bg-[#A8B87A]/15 dark:text-[#A8B87A]">
@@ -2625,7 +2627,7 @@ function RolePermissionsPanel() {
   const matrix = buildGradePermissionMatrix(grades, items);
 
   const toggle = async (grade: GradeMeta, permKey: string, next: boolean) => {
-    if (grade.base_role === "owner") return; // 대표자 등급은 항상 활성
+    if (grade.base_role === "owner") return; // perm-gate-ok: 대표자 등급은 항상 활성
     const cellId = `${grade.id}:${permKey}`;
     setSaving(cellId);
     // 낙관적 업데이트
@@ -2657,7 +2659,18 @@ function RolePermissionsPanel() {
     <div className="space-y-4">
       <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
         각 직급이 CRM 에서 사용할 수 있는 기능을 On/Off 로 설정해요. 직급별로 개별 설정되며, 대표자는 항상 모든 권한이 활성 상태예요.
+        관리자도 여기서 끈 기능은 실제로 막혀요.
       </p>
+      {/* 스위치로 바꿀 수 없는 고정 규칙 — 숨기지 않고 여기 모두 적는다 */}
+      <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60 px-4 py-3 text-[12px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+        <div className="font-semibold text-[#3A342A] dark:text-zinc-200 mb-1">스위치로 바꿀 수 없는 고정 규칙</div>
+        <ul className="list-disc pl-4 space-y-0.5">
+          <li>센터 양도·탈퇴, 사업자등록번호 수정은 대표자만 할 수 있어요.</li>
+          <li>센터·개인 일정의 수정·삭제·이동은 그 일정을 등록한 직원만 할 수 있어요.</li>
+          <li>PT 상담지는 직접 작성했거나 담당인 상담지라면 언제나 볼 수 있어요.</li>
+          <li>본인 정보·본인 급여 내역은 언제나 볼 수 있고, 본인보다 높은 등급은 부여할 수 없어요.</li>
+        </ul>
+      </div>
 
       {error && (
         <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
@@ -2709,7 +2722,7 @@ function RolePermissionsPanel() {
                           const on = matrix[g.id]?.[it.key] ?? false;
                           const cellId = `${g.id}:${it.key}`;
                           const isSaving = saving === cellId;
-                          const locked = g.base_role === "owner";
+                          const locked = g.base_role === "owner"; // perm-gate-ok: 대표자 열은 항상 켜짐(잠금 표시)
                           return (
                             <td key={g.id} className="px-2 py-1.5 text-center">
                               <button

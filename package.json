@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/check-crm-permission-gates.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

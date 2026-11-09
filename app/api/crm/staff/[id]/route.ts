@@ -2,7 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext, ctxHasPermission } from "@/app/lib/crm-permissions";
+import { ctxHasPermission, permissionDeniedResponse, requirePermission } from "@/app/lib/crm-permissions";
 import { savePayVersion } from "@/app/lib/crm-pay-history";
 
 export const dynamic = "force-dynamic";
@@ -32,10 +32,10 @@ export async function GET(
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
-  const isManagerish = ctx.role === "owner" || ctx.role === "admin" || ctx.role === "manager";
+  // 본인 정보는 언제나. 다른 직원 상세는 직급권한 '직원 등록·가입 승인·등급 변경·삭제'
   const isSelf = memberId === ctx.centerMemberId;
-  if (!isManagerish && !isSelf) {
-    return NextResponse.json({ error: "본인 정보만 조회할 수 있습니다" }, { status: 403 });
+  if (!isSelf && !(await ctxHasPermission(ctx, "staff.manage"))) {
+    return permissionDeniedResponse("staff.manage");
   }
 
   const { data: member, error } = await supabase
@@ -87,10 +87,9 @@ export async function PATCH(
   const memberId = Number(id);
   if (!memberId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
-  const isManagerish = ctx.role === "owner" || ctx.role === "admin" || ctx.role === "manager";
   const isSelf = memberId === ctx.centerMemberId;
-  if (!isManagerish && !isSelf) {
-    return NextResponse.json({ error: "본인 정보만 수정할 수 있습니다" }, { status: 403 });
+  if (!isSelf && !(await ctxHasPermission(ctx, "staff.manage"))) {
+    return permissionDeniedResponse("staff.manage");
   }
 
   let body: {
@@ -127,29 +126,6 @@ export async function PATCH(
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
-  // trainer 본인이 관리자 전용 필드를 건드리려 하면 즉시 차단
-  if (!isManagerish) {
-    const adminOnlyKeys = [
-      "role",
-      "grade_id",
-      "access_level",
-      "status",
-      "employment_status",
-      "employment_type",
-      "commission_type",
-      "commission_rate",
-      "commission_tiers",
-      "base_salary",
-      "cash_pay_enabled",
-      "cash_pay_won",
-      "commission_bonuses",
-    ] as const;
-    const blocked = adminOnlyKeys.find((k) => (body as Record<string, unknown>)[k] !== undefined);
-    if (blocked) {
-      return NextResponse.json({ error: "본인이 수정할 수 없는 항목입니다" }, { status: 403 });
-    }
-  }
-
   // 직원의 역할/등급/접근권한/재직상태 변경은 staff.manage 권한 필요 (팀장도 토글 없으면 불가)
   const touchesStaffCore =
     body.role !== undefined ||
@@ -161,8 +137,9 @@ export async function PATCH(
   // 🚨 본인이라도 예외 없다 — 예전엔 `!isSelf` 예외가 있어서, staff.manage 없는 팀장이
   //   자기 등급(grade_id)을 같은 서열의 더 넓은 권한 등급으로 바꿀 수 있었다(권한 상승).
   //   owner/admin 은 ctxHasPermission 이 항상 통과시키므로 영향 없음.
+  // (역할·등급·재직상태 = staff.manage, 수업료 = sales.commission_edit — 아래 각각 검사)
   if (touchesStaffCore && !(await ctxHasPermission(ctx, "staff.manage"))) {
-    return NextResponse.json({ error: "직원 관리 권한이 없습니다" }, { status: 403 });
+    return permissionDeniedResponse("staff.manage");
   }
 
   // 동료의 개인정보(이름·연락처·이메일·주소·생년월일)도 staff.manage 필요 — 본인 것은 자유롭게.
@@ -210,9 +187,8 @@ export async function PATCH(
     body.cash_pay_won !== undefined ||
     body.commission_bonuses !== undefined;
   if (touchesCommission) {
-    const perms = await loadPermissionsForContext(ctx);
-    if (!perms["sales.commission_edit"]) {
-      return NextResponse.json({ error: "수업료 설정 권한이 없습니다" }, { status: 403 });
+    if (!(await ctxHasPermission(ctx, "sales.commission_edit"))) {
+      return permissionDeniedResponse("sales.commission_edit");
     }
     if (body.pay_effective_from && !/^\d{4}-\d{2}-\d{2}$/.test(String(body.pay_effective_from))) {
       return NextResponse.json({ error: "적용 시작일 형식이 잘못됐어요 (YYYY-MM-DD)" }, { status: 400 });
@@ -269,7 +245,7 @@ export async function PATCH(
 
   // 등급(base_role)에 따라 접근 권한 자동 세팅 (owner/admin/manager → admin, trainer → schedule)
   const accessForRole = (role: string): "admin" | "schedule" =>
-    role === "trainer" ? "schedule" : "admin";
+    role === "trainer" ? "schedule" : "admin"; // perm-gate-ok: 역할→접근수준 매핑(구조)
 
   // grade_id 변경: 해당 등급의 base_role 로 role + access_level 자동 sync
   if (body.grade_id !== undefined && body.grade_id !== null) {
@@ -285,9 +261,9 @@ export async function PATCH(
     patch.grade_id = g.id;
     // fc(FC)·alba(아르바이트) 기반 등급은 역할·접근권한상 강사(trainer)로 매핑.
     // (권한은 등급별 설정을 그대로 사용, 메뉴/접근 게이트만 강사 기준)
-    const effRole = g.base_role === "fc" || g.base_role === "alba" ? "trainer" : g.base_role;
+    const effRole = g.base_role === "fc" || g.base_role === "alba" ? "trainer" : g.base_role; // perm-gate-ok: 등급→역할 매핑(구조)
     // 역할 상한: 본인 서열보다 높은 등급(특히 owner)을 부여할 수 없음
-    if ((ROLE_RANK[effRole] ?? 0) > (ROLE_RANK[ctx.role] ?? 0)) {
+    if ((ROLE_RANK[effRole] ?? 0) > (ROLE_RANK[ctx.role] ?? 0)) { // perm-gate-ok: 권한 상승 방지(본인보다 높은 역할 부여 금지)
       return NextResponse.json({ error: "본인보다 상위 역할의 등급은 부여할 수 없습니다" }, { status: 403 });
     }
     patch.role = effRole;
@@ -296,7 +272,7 @@ export async function PATCH(
     if (!ALLOWED_ROLES.includes(body.role as CrmRole)) {
       return NextResponse.json({ error: "등급 값이 잘못됨" }, { status: 400 });
     }
-    if ((ROLE_RANK[body.role] ?? 0) > (ROLE_RANK[ctx.role] ?? 0)) {
+    if ((ROLE_RANK[body.role] ?? 0) > (ROLE_RANK[ctx.role] ?? 0)) { // perm-gate-ok: 권한 상승 방지(본인보다 높은 역할 부여 금지)
       return NextResponse.json({ error: "본인보다 상위 역할은 부여할 수 없습니다" }, { status: 403 });
     }
     patch.role = body.role;
@@ -350,7 +326,7 @@ export async function PATCH(
   }
 
   // 본인 자신을 trainer 로 낮추는 거 방지 (CRM 진입 자체가 막힘)
-  if ((patch.role === "trainer" || patch.role === "manager") && ctx.centerMemberId === memberId) {
+  if ((patch.role === "trainer" || patch.role === "manager") && ctx.centerMemberId === memberId) { // perm-gate-ok: 본인 등급 셀프 강등 방지(잠김 방지)
     return NextResponse.json(
       { error: "본인 등급은 직접 낮출 수 없습니다. 다른 관리자에게 요청하세요." },
       { status: 400 }
@@ -358,14 +334,14 @@ export async function PATCH(
   }
 
   // 마지막 owner 보호: 이 직원이 유일한 owner 인데 role 을 owner 가 아닌 값으로 바꾸려는 경우
-  if (patch.role && patch.role !== "owner") {
+  if (patch.role && patch.role !== "owner") { // perm-gate-ok: 대표자 보호(마지막 대표자 강등 방지)
     const { data: cur } = await supabase
       .from("crm_center_members")
       .select("role")
       .eq("id", memberId)
       .maybeSingle();
 
-    if (cur?.role === "owner") {
+    if (cur?.role === "owner") { // perm-gate-ok: 대표자 보호(마지막 대표자 강등 방지)
       const { count } = await supabase
         .from("crm_center_members")
         .select("id", { count: "exact", head: true })
@@ -460,10 +436,8 @@ export async function DELETE(
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  const isManagerish = ctx.role === "owner" || ctx.role === "admin" || ctx.role === "manager";
-  if (!isManagerish) {
-    return NextResponse.json({ error: "직원을 삭제할 권한이 없습니다" }, { status: 403 });
-  }
+  const permDenied = await requirePermission(ctx, "staff.manage");
+  if (permDenied) return permDenied;
 
   const { id } = await params;
   const memberId = Number(id);
@@ -485,7 +459,7 @@ export async function DELETE(
   if (s.status !== "inactive") {
     return NextResponse.json({ error: "재직 상태인 직원은 삭제할 수 없어요. 먼저 퇴사 처리해 주세요." }, { status: 400 });
   }
-  if (s.role === "owner" || s.is_solo_owner) {
+  if (s.role === "owner" || s.is_solo_owner) { // perm-gate-ok: 대표자·개인원장은 삭제 불가(구조)
     return NextResponse.json({ error: "센터 오너는 삭제할 수 없습니다" }, { status: 400 });
   }
 

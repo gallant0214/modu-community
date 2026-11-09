@@ -120,6 +120,12 @@ interface BootstrapResp {
 /** 수업을 하지 않는 직급(수업·수업료 지표를 숨기고 간단 대시보드) */
 const NON_TEACHING_GRADES = ["아르바이트", "FC"];
 
+/** 센터 대시보드(센터 전체 집계)를 보는가 = 직급권한 '통계 화면 보기'. 개인 CRM 은 항상 개인 대시보드.
+ *  🚨 예전엔 역할(trainer)로 정해서, 강사 등급에 통계 권한을 켜줘도 센터 대시보드를 볼 수 없었다. */
+function seesCenterDashboard(me: BootstrapResp | null): boolean {
+  return !!me && me.centerKind !== "solo" && me.permissions?.["stats.view"] === true;
+}
+
 const DONUT_COLORS = ["#6B7B3A", "#B47B2A", "#A8B87A", "#E8C088", "#8C8270"];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -171,9 +177,8 @@ export default function CrmDashboardPage() {
       const d = await fetch("/api/crm/bootstrap", { headers: auth, cache: "no-store" });
       const meData: BootstrapResp | null = d.ok ? await d.json() : null;
       setMe(meData);
-      // solo·강사·비교육직급(아르바이트·FC) 은 센터 집계 API 를 호출하지 않는다
-      const isTrainer = meData?.centerKind === "solo" || meData?.role === "trainer";
-      if (isTrainer) return;
+      // 센터 대시보드 대상이 아니면(개인 CRM·통계 권한 없음) 센터 집계 API 를 호출하지 않는다
+      if (!seesCenterDashboard(meData)) return;
 
       // 월선택·기간선택은 명시 구간(from/to)을 함께 전달.
       let summaryUrl = `/api/crm/dashboard/summary?period=${period}`;
@@ -205,9 +210,9 @@ export default function CrmDashboardPage() {
     load();
   }, [load]);
 
-  // 계약서 미작성 유효회원 — 센터 직원(trainer 제외) 에게만, 한 번만 조회
+  // 계약서 미작성 유효회원 — 직급권한 '대시보드 센터 고객현황…' 이 있을 때만, 한 번만 조회
   useEffect(() => {
-    if (!me || me.centerKind === "solo" || me.role === "trainer") return;
+    if (!seesCenterDashboard(me) || me?.permissions?.["dashboard.center_stats"] !== true) return;
     (async () => {
       const token = await getIdToken();
       if (!token) return;
@@ -219,19 +224,12 @@ export default function CrmDashboardPage() {
     })();
   }, [me, getIdToken]);
 
-  // 비교육 직급(아르바이트·FC) → 수업 지표 없는 간단 대시보드.
-  //   solo 는 제외(개인 CRM 운영자). 센터 소속 trainer 중 해당 라벨만.
-  if (
-    me &&
-    me.centerKind !== "solo" &&
-    me.role === "trainer" &&
-    me.gradeLabel &&
-    NON_TEACHING_GRADES.includes(me.gradeLabel)
-  ) {
-    return <SimpleDashboard centerName={me.centerName} displayName={me.displayName} />;
-  }
-  // 개인/프리랜서 트레이너(solo 또는 role='trainer') → 트레이너 전용 대시보드로 분기.
-  if (me && (me.centerKind === "solo" || me.role === "trainer")) {
+  // 센터 대시보드 대상이 아니면:
+  //   비교육 직급(아르바이트·FC) → 수업 지표 없는 간단 대시보드 / 그 외 → 본인 수업 위주 대시보드
+  if (me && !seesCenterDashboard(me)) {
+    if (me.centerKind !== "solo" && me.gradeLabel && NON_TEACHING_GRADES.includes(me.gradeLabel)) {
+      return <SimpleDashboard centerName={me.centerName} displayName={me.displayName} />;
+    }
     return <TrainerDashboard centerName={me.centerName} displayName={me.displayName} />;
   }
   // bootstrap 로딩 중 (센터/트레이너 판정 전) — 잠깐 로딩만 표시해 센터 대시보드 깜빡임 방지.
@@ -248,8 +246,8 @@ export default function CrmDashboardPage() {
   // '대시보드 회원·출석·수업 지표 보기'(dashboard.members) — 예전엔 쓰이지 않던 권한.
   // 기본값이 전 직급 허용이라 끄지 않는 한 지금과 동일하게 보인다.
   const canMemberStats = me?.permissions?.["dashboard.members"] !== false;
-  // 고객 현황은 전체 센터 집계 → trainer 제외 (데이터 격리)
-  const canCustomers = !!me && me.role !== "trainer";
+  // 고객 현황 탭 = 직급권한 '대시보드 센터 고객현황·주간 출석·계약서 미작성 회원 보기'
+  const canCustomers = me?.permissions?.["dashboard.center_stats"] === true;
 
   const todayLabel = (() => {
     const d = new Date();
@@ -685,13 +683,15 @@ export default function CrmDashboardPage() {
                 subtitle="출석 흐름과 장기 미출석 유효회원"
               />
               <section className="grid gap-3">
-                {/* 주간 입장 출석 고객 수 — 저번 주 vs 이번 주 (요일별) */}
-                <div className="px-5 py-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
-                  <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-                    주간 입장 출석 고객 수
-                  </h3>
-                  <WeeklyAttendanceChart />
-                </div>
+                {/* 주간 입장 출석 고객 수 — 저번 주 vs 이번 주 (요일별). 직급권한 '대시보드 센터 고객현황…' */}
+                {canCustomers && (
+                  <div className="px-5 py-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
+                    <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
+                      주간 입장 출석 고객 수
+                    </h3>
+                    <WeeklyAttendanceChart />
+                  </div>
+                )}
                 <Link href="/crm/members?status=valid&absence=15d" className="block md:max-w-xs">
                   <GenderStatCard
                     label="15일 이상 미출석"

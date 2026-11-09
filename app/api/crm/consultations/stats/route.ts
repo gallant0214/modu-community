@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,10 @@ export async function GET(request: Request) {
   if (from) query = query.gte("consulted_at", from);
   if (to) query = query.lte("consulted_at", to);
 
-  const isRestricted = (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner;
-  if (isRestricted) query = query.eq("trainer_member_id", ctx.centerMemberId);
+  // 'PT 상담지 전체 보기' 권한이 없으면 본인 담당 상담의 전환률만
+  if (!(await ctxHasPermission(ctx, "consultations.view_all"))) {
+    query = query.eq("trainer_member_id", ctx.centerMemberId);
+  }
 
   const { data, error } = await query;
   if (error) {

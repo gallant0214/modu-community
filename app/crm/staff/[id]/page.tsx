@@ -219,7 +219,7 @@ export default function CrmStaffDetailPage() {
     );
   }
 
-  const isTrainerLike = member.role === "trainer" || member.role === "manager";
+  const isTrainerLike = member.role === "trainer" || member.role === "manager"; // perm-gate-ok: 보고 있는 직원의 화면 구성(표시용)
   const isSelfNotOwner = member.is_solo_owner;
 
   return (

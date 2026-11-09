@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 import { kstMonthStart } from "@/app/lib/crm-fixed-expenses";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +19,10 @@ function normalizeBillingDay(v: unknown): number | null {
  * GET /api/crm/fixed-expenses — 센터 고정 지출 목록 (활성만). admin.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "finance.expenses");
+  if (permDenied) return permDenied;
 
   const { data, error } = await supabase
     .from("crm_fixed_expenses")
@@ -42,8 +45,10 @@ export async function GET(request: Request) {
  * body: { label, amount_won, billing_day?, memo? }
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "finance.expenses");
+  if (permDenied) return permDenied;
 
   let body: { label?: string; amount_won?: number; billing_day?: number | null; memo?: string; vat_deductible?: boolean };
   try {

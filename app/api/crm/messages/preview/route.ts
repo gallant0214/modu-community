@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 import { resolveAudience } from "../route";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +12,10 @@ export const dynamic = "force-dynamic";
  * 대상 유형 선택 시 실제 몇 명에게 갈지 미리 보여주기 위한 endpoint.
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "messages.send");
+  if (permDenied) return permDenied;
 
   let body: {
     audience_kind?: string;

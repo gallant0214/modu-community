@@ -2,7 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { ctxHasPermission, requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +11,10 @@ export const dynamic = "force-dynamic";
  * 센터의 저장된 권한 override 목록. 프론트에서 defaults 와 병합.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "staff.permissions_edit");
+  if (permDenied) return permDenied;
 
   const { data, error } = await supabase
     .from("crm_role_permissions")

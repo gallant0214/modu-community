@@ -73,7 +73,6 @@ export async function GET(request: Request) {
   // 개인 CRM(solo)·owner 는 항상 허용.
   if (
     ctx.centerKind !== "solo" &&
-    ctx.role !== "owner" &&
     permissions["center.access_crm"] === false
   ) {
     return NextResponse.json({

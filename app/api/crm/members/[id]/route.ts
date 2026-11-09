@@ -77,8 +77,7 @@ export async function GET(
   // 다른 센터 조회(readOnly)일 땐 그 센터에서 내가 담당한 수강권만.
   const canViewAll = (await loadPermissionsForContext(ctx))["members.app_view_all"] === true;
   const restricted =
-    readOnly ||
-    ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner && !canViewAll);
+    readOnly || !canViewAll;
   if (restricted) {
     // 주강사 또는 추가강사(co_trainer_ids)로 배정된 수강권만
     passQuery = passQuery.or(

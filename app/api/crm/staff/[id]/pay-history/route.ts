@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission, permissionDeniedResponse } from "@/app/lib/crm-permissions";
 import { loadPayHistory } from "@/app/lib/crm-pay-history";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +20,10 @@ export async function GET(
   const memberId = Number(id);
   if (!memberId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
-  const isManagerish = ctx.role === "owner" || ctx.role === "admin" || ctx.role === "manager";
+  // 본인 이력은 언제나. 다른 직원은 직급권한 '직원 급여·수업료 정책 보기'
   const isSelf = memberId === ctx.centerMemberId;
-  if (!isManagerish && !isSelf) {
-    return NextResponse.json({ error: "본인 정보만 조회할 수 있습니다" }, { status: 403 });
+  if (!isSelf && !(await ctxHasPermission(ctx, "sales.payroll_view"))) {
+    return permissionDeniedResponse("sales.payroll_view");
   }
 
   const history = (await loadPayHistory(ctx.centerId, [memberId])).get(memberId) ?? [];

@@ -260,6 +260,7 @@ export default function CrmContractSignNewPage() {
         const list: TrainerOption[] = (data.staff ?? []).filter(
           (s: { status: string; role: string }) =>
             s.status === "active" &&
+            // perm-gate-ok: 담당자 선택 목록(표시용) — 권한 판정 아님
             (s.role === "trainer" || s.role === "manager" || s.role === "owner" || s.role === "admin")
         );
         setTrainers(list);

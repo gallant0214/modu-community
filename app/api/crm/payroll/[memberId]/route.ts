@@ -46,9 +46,8 @@ export async function GET(
   const trainerId = Number(memberId);
   if (!trainerId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
-  const isAdmin = ctx.accessLevel === "admin" || ctx.role === "owner" || ctx.role === "admin";
   const isSelf = trainerId === (ctx.centerMemberId ?? -1);
-  if (!isAdmin && !isSelf && !(await ctxHasPermission(ctx, "sales.payroll_view"))) {
+  if (!isSelf && !(await ctxHasPermission(ctx, "sales.payroll_view"))) {
     return NextResponse.json({ error: "본인 수업료만 조회할 수 있습니다" }, { status: 403 });
   }
 

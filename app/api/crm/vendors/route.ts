@@ -2,13 +2,16 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requirePermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
 /** GET /api/crm/vendors — 센터 거래처 목록 (활성만). admin. */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "finance.expenses");
+  if (permDenied) return permDenied;
 
   const { data, error } = await supabase
     .from("crm_vendors")
@@ -29,8 +32,10 @@ export async function GET(request: Request) {
  * body: { name(상호), phone?, category?(무슨 가게/어떤 거래), memo? }
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const permDenied = await requirePermission(ctx, "finance.expenses");
+  if (permDenied) return permDenied;
 
   let body: { name?: string; phone?: string; category?: string; memo?: string };
   try {

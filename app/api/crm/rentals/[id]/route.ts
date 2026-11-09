@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { syncLockerDatesFromRental } from "@/app/lib/crm-locker-sync";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext, requirePermission } from "@/app/lib/crm-permissions";
 import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
 import {
   findProductPayment,
@@ -27,7 +27,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
   const { id } = await params;
@@ -70,10 +70,17 @@ export async function PATCH(
     body.start_date !== undefined ||
     body.paid_at !== undefined;
   if (touchesPayment) {
-    const perms = await loadPermissionsForContext(ctx);
-    if (!perms["sales.edit"]) {
-      return NextResponse.json({ error: "결제 수정 권한이 없습니다" }, { status: 403 });
-    }
+    const permDenied = await requirePermission(ctx, "sales.edit");
+    if (permDenied) return permDenied;
+  }
+  // 만료일·메모 등 이용 정보 수정 = 회원 이용권·회원권 정보 수정 권한
+  //  (🚨 예전엔 화면에 없는 '관리자 이상' 조건이 걸려 있어 이 권한을 켜도 403 이었다)
+  const touchesUsage = Object.keys(body).some(
+    (k) => !["price_won", "discount_won", "vat_included", "payment_method", "payment_method_custom", "seller_member_id", "start_date", "purchased_at", "paid_at"].includes(k)
+  );
+  if (touchesUsage) {
+    const permDenied = await requirePermission(ctx, "members.edit_usage");
+    if (permDenied) return permDenied;
   }
 
   const patch: Record<string, unknown> = {};
