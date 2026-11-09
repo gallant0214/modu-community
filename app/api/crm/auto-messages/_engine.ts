@@ -1,4 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
+import { benefitText, type CouponDef } from "@/app/lib/crm-coupons";
+import { fillCouponVars, fmtExpiry, type CouponVars } from "@/app/lib/crm-auto-coupon-vars";
 
 /**
  * 자동 메세지 회원 매칭 엔진.
@@ -43,6 +45,8 @@ export interface Match {
   /** 홀딩 시작일·종료일 (#홀딩시작일# #홀딩종료일#) — 홀딩 알림에서만 */
   holdStart?: string;
   holdEnd?: string;
+  /** 회원이 이미 갖고 있는 쿠폰 정보(#쿠폰명# 등) — 쿠폰 만료 알림에서만. 새 쿠폰을 발급하지 않는다 */
+  couponVars?: CouponVars;
 }
 
 export interface TriggerSetting {
@@ -78,6 +82,7 @@ export const SCAN_TRIGGERS = new Set<string>([
   "membership_renew",
   "attendance_coupon",
   "hold_ending_soon",
+  "coupon_expired",
 ]);
 
 /** 만료 임박(#전송기준# 잔여일 계산) 트리거 */
@@ -553,6 +558,57 @@ async function matchDepleted(
 }
 
 /**
+ * 쿠폰 만료 매칭 (coupon_expired).
+ * 사용하지 않은 쿠폰(status 'issued') 중 사용 기한(expires_at = 쓸 수 있는 마지막 날)이 target 인 것.
+ * 회원당 하루 1건 — 같은 날 여러 장이 끝나면 혜택이 큰(먼저 발급된) 한 장만 안내한다.
+ * 중복 방지: 쿠폰 1장당 1회(`coupon_expired:{회원}:ci{발급id}`).
+ * 🚨 쿠폰 변수(#쿠폰명# 등)는 **회원이 가진 그 쿠폰**으로 채운다 — 새 쿠폰을 발급하지 않는다.
+ */
+async function matchCouponExpiry(
+  centerId: number,
+  members: Map<number, MemberLite>,
+  target: string
+): Promise<Match[]> {
+  const issues = await paginateAll<{ id: number; member_id: number; coupon_id: number; code: string; expires_at: string }>(
+    async (f, t) => {
+      const r = await supabase
+        .from("crm_coupon_issues")
+        .select("id, member_id, coupon_id, code, expires_at")
+        .eq("center_id", centerId)
+        .eq("status", "issued")
+        .eq("expires_at", target)
+        .order("id")
+        .range(f, t);
+      return { data: r.data as { id: number; member_id: number; coupon_id: number; code: string; expires_at: string }[] | null, error: r.error };
+    }
+  );
+  if (issues.length === 0) return [];
+  const couponIds = Array.from(new Set(issues.map((i) => Number(i.coupon_id))));
+  const { data: defs } = await supabase.from("crm_coupons").select("*").in("id", couponIds);
+  const byId = new Map(((defs ?? []) as CouponDef[]).map((c) => [Number(c.id), c]));
+
+  const out: Match[] = [];
+  const seen = new Set<number>();
+  for (const i of issues) {
+    const m = members.get(i.member_id);
+    const c = byId.get(Number(i.coupon_id));
+    if (!m || !c || seen.has(i.member_id)) continue;
+    seen.add(i.member_id);
+    out.push({
+      member_id: i.member_id,
+      name: m.name,
+      product: c.name,
+      expiry: i.expires_at,
+      dedupeKey: `coupon_expired:${i.member_id}:ci${i.id}`,
+      couponVars: { name: c.name, benefit: benefitText(c), code: i.code, expires: fmtExpiry(i.expires_at) },
+      memberNo: m.attendance_no ?? undefined,
+      mileage: m.mileage ?? undefined,
+    });
+  }
+  return out;
+}
+
+/**
  * 출석일수 기준 쿠폰 전송 매칭 (attendance_coupon).
  *
  * 1) 설정한 규칙의 상품(crm_products.id)으로 발급된 회원권 중 **만료일이 target 당일**인 건을 찾는다.
@@ -946,6 +1002,11 @@ async function matchTrigger(
     }
   }
 
+  // 쿠폰 만료 — 안 쓴 쿠폰의 사용 기한(마지막 사용일)이 target 인 회원. 즉시=기한 당일, 일정=N일 전/후
+  if (key === "coupon_expired") {
+    return matchCouponExpiry(centerId, members, targetExpiry(setting, today));
+  }
+
   // 홀딩 종료 임박 — 홀딩 종료일 N일 전(또는 후)
   if (key === "hold_ending_soon") {
     return matchHoldEnding(centerId, members, targetExpiry(setting, today));
@@ -1018,9 +1079,11 @@ export function renderMessage(
     joinDate?: string;
     holdStart?: string;
     holdEnd?: string;
+    /** 회원이 가진 쿠폰으로 쿠폰 변수를 채울 때(쿠폰 만료 알림) */
+    couponVars?: CouponVars;
   }
 ): string {
-  return (template || "")
+  const out = (template || "")
     .replaceAll("#센터명#", vars.center)
     .replaceAll("#회원명#", vars.name)
     .replaceAll("#상품명#", vars.product ?? "")
@@ -1044,6 +1107,7 @@ export function renderMessage(
     .replaceAll("#가입일#", vars.joinDate ?? "")
     .replaceAll("#홀딩시작일#", vars.holdStart ?? "")
     .replaceAll("#홀딩종료일#", vars.holdEnd ?? "");
+  return vars.couponVars ? fillCouponVars(out, vars.couponVars) : out;
 }
 
 /** 두 YYYY-MM-DD 사이 일수(b-a). */
@@ -1065,7 +1129,10 @@ export function basisText(
   expiry?: string
 ): string {
   if (
-    (EXPIRING_TRIGGERS.has(triggerKey) || triggerKey === "attendance_coupon" || triggerKey === "hold_ending_soon") &&
+    (EXPIRING_TRIGGERS.has(triggerKey) ||
+      triggerKey === "attendance_coupon" ||
+      triggerKey === "hold_ending_soon" ||
+      triggerKey === "coupon_expired") &&
     expiry
   ) {
     return `${Math.max(0, daysBetween(today, expiry))}일`;

@@ -44,7 +44,14 @@ export const AUTO_MESSAGE_CATEGORIES: AutoMsgCategory[] = [
           "#회원명#님, #센터명#의 첫 등록을 환영합니다! 🎉\n#결제내역# 결제가 완료되었어요.\n궁금한 점은 언제든 데스크에 말씀해 주세요.",
       },
       { key: "long_absence", label: "장기 미출석 시", bases: ["schedule", "count"], recipient: "장기 미출석(휴면) 회원", basisNoun: "마지막 출석일" },
-      { key: "coupon_expired", label: "쿠폰 만료", bases: ["immediate", "schedule"], recipient: "쿠폰이 만료된 회원", basisNoun: "쿠폰 만료일" },
+      {
+        key: "coupon_expired",
+        label: "쿠폰 만료",
+        // 즉시 = 사용 기한 당일(그날까지 사용 가능) 발송 시각에 / 일정 = 기한 N일 전·후
+        bases: ["immediate", "schedule"],
+        recipient: "아직 쓰지 않은 쿠폰의 사용 기한이 된 회원",
+        basisNoun: "쿠폰 사용 기한",
+      },
     ],
   },
   {
@@ -161,6 +168,7 @@ export const DISPATCHABLE_TRIGGERS = new Set<string>([
   "long_absence",
   "attendance_coupon",
   "hold_ending_soon",
+  "coupon_expired",
   // 즉시형(발급·결제 직후 발사) — 신규/재등록은 스캔형에도 있다
   "membership_new",
   "membership_renew",

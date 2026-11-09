@@ -114,6 +114,7 @@ export async function POST(request: Request) {
         joinDate: m.joinDate,
         holdStart: m.holdStart,
         holdEnd: m.holdEnd,
+        couponVars: m.couponVars,
       }),
       methods: (Array.isArray(s.methods) ? s.methods : []) as never,
       status: "pending",

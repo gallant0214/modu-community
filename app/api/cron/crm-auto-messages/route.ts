@@ -159,6 +159,7 @@ export async function GET(request: Request) {
         joinDate: m.joinDate,
         holdStart: m.holdStart,
         holdEnd: m.holdEnd,
+        couponVars: m.couponVars,
         lastVisit: m.lastVisit,
       });
 

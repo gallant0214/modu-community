@@ -35,6 +35,17 @@ export function applyCouponVars(message: string, v: CouponVars): string {
 }
 
 /**
+ * 쿠폰 변수만 바꾼다(안내 블록을 덧붙이지 않음) — 회원이 이미 가진 쿠폰을 안내할 때(쿠폰 만료 알림).
+ */
+export function fillCouponVars(message: string, v: CouponVars): string {
+  return message
+    .replaceAll("#쿠폰명#", v.name)
+    .replaceAll("#쿠폰혜택#", v.benefit)
+    .replaceAll("#쿠폰코드#", v.code)
+    .replaceAll("#쿠폰기한#", v.expires);
+}
+
+/**
  * 쿠폰이 안 붙었을 때 본문에 남은 쿠폰 변수를 지운다.
  * 🚨 예전엔 쿠폰이 없으면(06 미설정·규칙 쿠폰 사용 등) `#쿠폰혜택#` 같은 글자가 그대로 발송됐다.
  *    변수를 지우고 그 변수만 있던 줄·여분 공백도 정리한다.
