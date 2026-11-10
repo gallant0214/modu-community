@@ -217,6 +217,116 @@ export async function notifyMembersByIds(
   }
 }
 
+/**
+ * 회원마다 본문이 다른 알림(회원 이름·쿠폰코드 같은 변수를 치환한 문구) — 알림함 저장 + 푸시.
+ * 본문이 모두 같으면 notifyMembersByIds 로 넘긴다(멀티캐스트 한 번).
+ * 다르면 토큰을 회원별로 모아 회원마다 1번씩 보낸다(앱 연결 회원만 해당).
+ */
+export async function notifyMembersEach(
+  centerId: number,
+  items: { memberId: number; body: string }[],
+  type: string,
+  title: string,
+  data?: Record<string, string>
+) {
+  try {
+    const seen = new Set<number>();
+    let list = (items ?? []).filter((it) => {
+      if (!Number.isInteger(it.memberId) || it.memberId <= 0 || seen.has(it.memberId)) return false;
+      seen.add(it.memberId);
+      return true;
+    });
+    if (list.length === 0) return;
+    if (new Set(list.map((it) => it.body)).size === 1) {
+      await notifyMembersByIds(centerId, list.map((it) => it.memberId), type, title, list[0].body, data);
+      return;
+    }
+
+    // 센터 메세지 알림을 끈 회원 제외 — notifyMembersByIds 와 같은 규칙('message' 타입만)
+    if (type === "message") {
+      const optedOut = new Set<number>();
+      for (let i = 0; i < list.length; i += 500) {
+        const { data: offs } = await supabase
+          .from("crm_members")
+          .select("id")
+          .in("id", list.slice(i, i + 500).map((it) => it.memberId))
+          .eq("notify_center_messages", false);
+        for (const m of offs ?? []) optedOut.add(m.id);
+      }
+      list = list.filter((it) => !optedOut.has(it.memberId));
+      if (list.length === 0) return;
+    }
+
+    const rows = list.map((it) => ({
+      center_id: centerId,
+      member_id: it.memberId,
+      type,
+      title,
+      body: it.body ?? null,
+      data_json: (data ?? null) as never,
+    }));
+    for (let i = 0; i < rows.length; i += 500) {
+      await supabase.from("crm_member_notifications").insert(rows.slice(i, i + 500) as never);
+    }
+
+    // 토큰 → 회원: member_id 로 등록된 토큰 + 연동 uid 로 등록된 토큰
+    const ids = list.map((it) => it.memberId);
+    const memberOfUid = new Map<string, number>();
+    for (let i = 0; i < ids.length; i += 500) {
+      const { data: mrows } = await supabase
+        .from("crm_members")
+        .select("id, linked_firebase_uid")
+        .in("id", ids.slice(i, i + 500))
+        .not("linked_firebase_uid", "is", null);
+      for (const m of (mrows ?? []) as { id: number; linked_firebase_uid: string | null }[]) {
+        if (m.linked_firebase_uid) memberOfUid.set(m.linked_firebase_uid, m.id);
+      }
+    }
+    const tokensOf = new Map<number, Set<string>>();
+    const addToken = (memberId: number | undefined, token: string | null | undefined) => {
+      if (!memberId || !token) return;
+      const set = tokensOf.get(memberId) ?? new Set<string>();
+      set.add(token);
+      tokensOf.set(memberId, set);
+    };
+    for (let i = 0; i < ids.length; i += 500) {
+      const { data: tokens } = await supabase
+        .from("crm_member_device_tokens")
+        .select("token, member_id")
+        .in("member_id", ids.slice(i, i + 500));
+      for (const t of (tokens ?? []) as { token: string; member_id: number }[]) addToken(t.member_id, t.token);
+    }
+    const uids = Array.from(memberOfUid.keys());
+    for (let i = 0; i < uids.length; i += 500) {
+      const { data: tokens } = await supabase
+        .from("crm_member_device_tokens")
+        .select("token, firebase_uid")
+        .in("firebase_uid", uids.slice(i, i + 500));
+      for (const t of (tokens ?? []) as { token: string; firebase_uid: string }[]) {
+        addToken(memberOfUid.get(t.firebase_uid), t.token);
+      }
+    }
+
+    const jobs = list.filter((it) => (tokensOf.get(it.memberId)?.size ?? 0) > 0);
+    if (jobs.length === 0) return;
+    const messaging = getMessaging(getAdmin());
+    // 동시 8명씩 — 회원이 많아도 한꺼번에 수백 건을 열지 않게
+    for (let i = 0; i < jobs.length; i += 8) {
+      await Promise.all(
+        jobs.slice(i, i + 8).map((it) =>
+          sendMulticastPrune(messaging, Array.from(tokensOf.get(it.memberId) ?? []), {
+            title,
+            body: it.body,
+            data: { type, ...data },
+          }).catch(() => {})
+        )
+      );
+    }
+  } catch (e) {
+    console.error("[member-notify] notifyMembersEach error", e);
+  }
+}
+
 /** 회원의 앱 언어(app_language) 조회. 미설정이면 ko. */
 export async function getMemberLang(memberId: number): Promise<NotifLang> {
   try {

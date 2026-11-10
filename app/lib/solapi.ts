@@ -50,15 +50,34 @@ export async function solapiSend(opts: {
   subject?: string;
   msgType?: "SMS" | "LMS";
 }): Promise<SolapiSendResult> {
-  const sender = normalizePhone(process.env.SOLAPI_SENDER ?? "");
   const type = opts.msgType ?? inferMsgType(opts.msg);
-  const messages = opts.receivers.map((to) => ({
-    to: normalizePhone(to),
-    from: sender,
-    text: opts.msg,
-    type,
-    ...(type === "LMS" && opts.subject ? { subject: opts.subject } : {}),
-  }));
+  return solapiSendEach({
+    items: opts.receivers.map((to) => ({ to, text: opts.msg })),
+    subject: opts.subject,
+    msgType: type,
+  });
+}
+
+/**
+ * 수신자마다 내용이 다른 발송(회원 이름·쿠폰코드 등 변수 치환 문구) — 한 번의 요청으로 보낸다.
+ * msgType 을 안 주면 건마다 길이로 SMS/LMS 를 고른다.
+ */
+export async function solapiSendEach(opts: {
+  items: { to: string; text: string }[];
+  subject?: string;
+  msgType?: "SMS" | "LMS";
+}): Promise<SolapiSendResult> {
+  const sender = normalizePhone(process.env.SOLAPI_SENDER ?? "");
+  const messages = opts.items.map(({ to, text }) => {
+    const type = opts.msgType ?? inferMsgType(text);
+    return {
+      to: normalizePhone(to),
+      from: sender,
+      text,
+      type,
+      ...(type === "LMS" && opts.subject ? { subject: opts.subject } : {}),
+    };
+  });
 
   const res = await fetch(`${SOLAPI_BASE}/messages/v4/send-many/detail`, {
     method: "POST",

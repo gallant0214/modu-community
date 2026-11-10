@@ -763,81 +763,101 @@ async function matchAttendanceCoupon(
   return out;
 }
 
+/** enrichMatches 가 조회할 값 — 기본은 전부. 대량 발송은 문구에 쓴 변수만 켠다 */
+interface EnrichNeed {
+  outstanding: boolean;
+  totalAttend: boolean;
+  nextLesson: boolean;
+}
+const ENRICH_ALL: EnrichNeed = { outstanding: true, totalAttend: true, nextLesson: true };
+/** .in() 에 한 번에 넣는 회원 수 — 너무 길면 요청 URL 한도를 넘는다 */
+const IN_CHUNK = 300;
+
 /**
  * 매칭 결과 공통 보강 — 미수금·누적 출석일수·다음 수업·가입일.
  * 트리거마다 따로 긁지 않고 **대상자만** 한 번에 조회한다(대상은 보통 수십 명).
+ * 쿠폰 발송처럼 대상이 수천 명일 수 있어 회원을 IN_CHUNK 씩 나눠 조회한다.
  */
 async function enrichMatches(
   centerId: number,
   matches: Match[],
-  members: Map<number, MemberLite>
+  members: Map<number, MemberLite>,
+  need: EnrichNeed = ENRICH_ALL
 ): Promise<Match[]> {
   if (matches.length === 0) return matches;
   const ids = Array.from(new Set(matches.map((m) => m.member_id)));
 
-  const [mbDue, passDue, attends, nextRes] = await Promise.all([
-    supabase
-      .from("crm_memberships")
-      .select("member_id, outstanding_won")
-      .eq("center_id", centerId)
-      .in("member_id", ids)
-      .gt("outstanding_won", 0)
-      .neq("status", "deleted")
-      .neq("status", "refunded"),
-    supabase
-      .from("crm_passes")
-      .select("member_id, outstanding_won")
-      .eq("center_id", centerId)
-      .in("member_id", ids)
-      .gt("outstanding_won", 0)
-      .neq("status", "deleted")
-      .neq("status", "refunded"),
-    paginateAll<{ member_id: number; checked_in_at: string }>(async (f, t) => {
+  type DueRow = { member_id: number; outstanding_won: number | null };
+  const loadDue = (table: "crm_memberships" | "crm_passes", part: number[]) =>
+    paginateAll<DueRow>(async (f, t) => {
       const r = await supabase
-        .from("crm_attendances")
-        .select("member_id, checked_in_at")
+        .from(table)
+        .select("member_id, outstanding_won")
         .eq("center_id", centerId)
-        .in("member_id", ids)
+        .in("member_id", part)
+        .gt("outstanding_won", 0)
+        .neq("status", "deleted")
+        .neq("status", "refunded")
         .range(f, t);
-      return { data: r.data as { member_id: number; checked_in_at: string }[] | null, error: r.error };
-    }),
-    supabase
-      .from("crm_reservations")
-      .select("member_id, starts_at")
-      .eq("center_id", centerId)
-      .in("member_id", ids)
-      .eq("status", "booked")
-      .gte("starts_at", new Date().toISOString())
-      .order("starts_at", { ascending: true }),
-  ]);
+      return { data: r.data as DueRow[] | null, error: r.error };
+    });
 
   const due = new Map<number, number>();
-  for (const r of [...(mbDue.data ?? []), ...(passDue.data ?? [])] as {
-    member_id: number;
-    outstanding_won: number | null;
-  }[]) {
-    due.set(r.member_id, (due.get(r.member_id) ?? 0) + (r.outstanding_won ?? 0));
-  }
-
   // 누적 출석일수 = 출석한 '날짜' 수 (하루 여러 번은 1일)
   const attendDays = new Map<number, Set<string>>();
-  for (const a of attends) {
-    const ymd = ymdOf(new Date(new Date(a.checked_in_at).getTime() + 9 * 3600 * 1000));
-    const set = attendDays.get(a.member_id) ?? new Set<string>();
-    set.add(ymd);
-    attendDays.set(a.member_id, set);
-  }
-
   const DOW = ["일", "월", "화", "수", "목", "금", "토"];
   const nextByMember = new Map<number, string>();
-  for (const r of (nextRes.data ?? []) as { member_id: number; starts_at: string }[]) {
-    if (nextByMember.has(r.member_id)) continue; // 가장 이른 1건
-    const k = new Date(new Date(r.starts_at).getTime() + 9 * 3600 * 1000);
-    const mm = String(k.getUTCMonth() + 1);
-    const dd = String(k.getUTCDate());
-    const hh = String(k.getUTCHours()).padStart(2, "0");
-    const mi = String(k.getUTCMinutes()).padStart(2, "0");
-    nextByMember.set(r.member_id, `${mm}/${dd}(${DOW[k.getUTCDay()]}) ${hh}:${mi}`);
+
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const part = ids.slice(i, i + IN_CHUNK);
+    const [mbDue, passDue, attends, nextRes] = await Promise.all([
+      need.outstanding ? loadDue("crm_memberships", part) : Promise.resolve([] as DueRow[]),
+      need.outstanding ? loadDue("crm_passes", part) : Promise.resolve([] as DueRow[]),
+      need.totalAttend
+        ? paginateAll<{ member_id: number; checked_in_at: string }>(async (f, t) => {
+            const r = await supabase
+              .from("crm_attendances")
+              .select("member_id, checked_in_at")
+              .eq("center_id", centerId)
+              .in("member_id", part)
+              .range(f, t);
+            return { data: r.data as { member_id: number; checked_in_at: string }[] | null, error: r.error };
+          })
+        : Promise.resolve([] as { member_id: number; checked_in_at: string }[]),
+      need.nextLesson
+        ? paginateAll<{ member_id: number; starts_at: string }>(async (f, t) => {
+            const r = await supabase
+              .from("crm_reservations")
+              .select("member_id, starts_at")
+              .eq("center_id", centerId)
+              .in("member_id", part)
+              .eq("status", "booked")
+              .gte("starts_at", new Date().toISOString())
+              .order("starts_at", { ascending: true })
+              .range(f, t);
+            return { data: r.data as { member_id: number; starts_at: string }[] | null, error: r.error };
+          })
+        : Promise.resolve([] as { member_id: number; starts_at: string }[]),
+    ]);
+
+    for (const r of [...mbDue, ...passDue]) {
+      due.set(r.member_id, (due.get(r.member_id) ?? 0) + (r.outstanding_won ?? 0));
+    }
+    for (const a of attends) {
+      const ymd = ymdOf(new Date(new Date(a.checked_in_at).getTime() + 9 * 3600 * 1000));
+      const set = attendDays.get(a.member_id) ?? new Set<string>();
+      set.add(ymd);
+      attendDays.set(a.member_id, set);
+    }
+    for (const r of nextRes) {
+      if (nextByMember.has(r.member_id)) continue; // 가장 이른 1건
+      const k = new Date(new Date(r.starts_at).getTime() + 9 * 3600 * 1000);
+      const mm = String(k.getUTCMonth() + 1);
+      const dd = String(k.getUTCDate());
+      const hh = String(k.getUTCHours()).padStart(2, "0");
+      const mi = String(k.getUTCMinutes()).padStart(2, "0");
+      nextByMember.set(r.member_id, `${mm}/${dd}(${DOW[k.getUTCDay()]}) ${hh}:${mi}`);
+    }
   }
 
   for (const m of matches) {
@@ -851,6 +871,42 @@ async function enrichMatches(
     m.joinDate = join ? join.slice(0, 10) : undefined;
   }
   return matches;
+}
+
+/**
+ * 트리거 없이 여러 회원에게 한꺼번에 보내는 문구(쿠폰 발송 등)의 회원별 치환값.
+ * 문구에 쓴 변수만 조회한다 — 전체 회원에게 #회원명# 만 쓰는데 출석 기록 수만 건을 긁지 않게.
+ * → Map<회원 id, Match>(이름·회원번호·마일리지·미수금·총출석·다음수업·가입일·마지막방문일)
+ */
+export async function loadMembersCommonVars(
+  centerId: number,
+  memberIds: number[],
+  template: string
+): Promise<Map<number, Match>> {
+  const ids = Array.from(new Set(memberIds));
+  const members = new Map<number, MemberLite>();
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const { data } = await supabase
+      .from("crm_members")
+      .select(
+        "id, name, birth, last_attended_at, attendance_no, mileage, first_registered_at, registered_at"
+      )
+      .eq("center_id", centerId)
+      .in("id", ids.slice(i, i + IN_CHUNK));
+    for (const m of (data ?? []) as MemberLite[]) members.set(m.id, m);
+  }
+  const matches: Match[] = Array.from(members.values()).map((mem) => ({
+    member_id: mem.id,
+    name: mem.name,
+    memberNo: mem.attendance_no ?? undefined,
+    mileage: mem.mileage ?? undefined,
+  }));
+  await enrichMatches(centerId, matches, members, {
+    outstanding: template.includes("#미수금#"),
+    totalAttend: template.includes("#총출석#"),
+    nextLesson: template.includes("#다음수업#"),
+  });
+  return new Map(matches.map((m) => [m.member_id, m]));
 }
 
 /**

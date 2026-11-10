@@ -186,20 +186,65 @@ export function generateCouponCode(): string {
   return `${out.slice(0, 4)}-${out.slice(4)}`;
 }
 
-/** 기본 안내 문구 (발송 화면 미리보기와 같은 규칙) */
-export function defaultCouponMessage(opts: {
-  centerName: string;
-  couponName: string;
-  benefit: string;
-  condition: string;
-  expiresAt: string | null;
-}): string {
-  const lines = [
-    `[${opts.centerName}] '${opts.couponName}' 쿠폰이 도착했어요 🎁`,
-    `혜택: ${opts.benefit}${opts.condition ? ` (${opts.condition})` : ""}`,
-  ];
-  if (opts.expiresAt) lines.push(`사용 기한: ${opts.expiresAt.replace(/-/g, ".")}까지`);
-  lines.push("결제하실 때 직원에게 쿠폰 사용을 말씀해 주세요.");
-  return lines.join("\n");
+/**
+ * CRM 기본 안내 문구 — 쿠폰 발송 화면의 '기본 입력값' 버튼이 채우는 추천 문구.
+ * 변수만 써서 어느 쿠폰을 골라도 그대로 쓸 수 있다(발송 때 회원·쿠폰 값으로 바뀜).
+ */
+export function defaultCouponMessage(): string {
+  return [
+    "[#센터명#] #회원명#님, 쿠폰이 도착했어요 🎁",
+    "",
+    "쿠폰: #쿠폰명#",
+    "혜택: #쿠폰혜택#",
+    "사용 조건: #쿠폰조건#",
+    "사용 기한: #쿠폰기한#",
+    "쿠폰코드: #쿠폰코드#",
+    "",
+    "결제하실 때 직원에게 쿠폰 사용을 말씀해 주세요.",
+  ].join("\n");
+}
+
+/**
+ * 쿠폰 발송 문구 전용 변수 — 자동 메세지에는 없다.
+ * 조건이 없는 쿠폰이면 이 변수가 든 줄을 통째로 빼고 보낸다('사용 조건: ' 만 남지 않게).
+ */
+export const COUPON_CONDITION_VAR = {
+  token: "#쿠폰조건#",
+  desc: "쿠폰 사용 조건 (조건이 없는 쿠폰이면 이 줄을 빼고 보내요)",
+  example: "사용 조건: #쿠폰조건#",
+  sample: "150,000원 이상 결제 시 · 회원권 전용",
+};
+
+/**
+ * 쿠폰 발송 안내 문구에서 쓸 수 있는 변수.
+ * 자동 메세지 변수 중 만료일·결제내역·홀딩일처럼 '알림 사건'에 딸린 값은 쿠폰 발송엔 없어서 뺐다
+ * (넣어도 빈칸으로 나간다). 순서 = 화면 버튼 순서.
+ */
+export const COUPON_SEND_MEMBER_TOKENS = [
+  "#회원명#",
+  "#센터명#",
+  "#회원번호#",
+  "#마일리지#",
+  "#미수금#",
+  "#총출석#",
+  "#마지막방문일#",
+  "#다음수업#",
+  "#가입일#",
+  "#센터전화#",
+  "#센터주소#",
+  "#운영시간#",
+  "#앱설치링크#",
+] as const;
+export const COUPON_SEND_COUPON_TOKENS = ["#쿠폰명#", "#쿠폰혜택#", "#쿠폰조건#", "#쿠폰기한#", "#쿠폰코드#"] as const;
+
+/** #쿠폰조건# 치환 — 조건이 없으면 그 변수가 든 줄을 뺀다. 발송 서버와 화면 미리보기가 같이 쓴다 */
+export function fillCouponCondition(message: string, condition: string): string {
+  const token = COUPON_CONDITION_VAR.token;
+  if (!message.includes(token)) return message;
+  if (condition) return message.replaceAll(token, condition);
+  return message
+    .split("\n")
+    .filter((line) => !line.includes(token))
+    .join("\n");
 }
 

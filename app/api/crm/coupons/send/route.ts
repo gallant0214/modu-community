@@ -4,8 +4,8 @@ import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-av
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
-import { notifyMembersByIds } from "@/app/lib/member-notify";
-import { inferMsgType, normalizePhone, solapiConfigured, solapiSend } from "@/app/lib/solapi";
+import { notifyMembersEach } from "@/app/lib/member-notify";
+import { inferMsgType, normalizePhone, solapiConfigured, solapiSendEach } from "@/app/lib/solapi";
 import { logSmsSend } from "@/app/lib/crm-sms-log";
 import { resolveAudience } from "@/app/api/crm/messages/route";
 import {
@@ -13,10 +13,21 @@ import {
   conditionText,
   defaultCouponMessage,
   effectiveStatus,
+  fillCouponCondition,
   generateCouponCode,
   issueExpiryYmd,
   kstTodayYmd,
 } from "@/app/lib/crm-coupons";
+import { fmtExpiry } from "@/app/lib/crm-auto-coupon-vars";
+import {
+  loadCenterAddress,
+  loadCenterHours,
+  loadCenterPhone,
+  loadJoinLink,
+  loadMembersCommonVars,
+  renderMessage,
+  type Match,
+} from "@/app/api/crm/auto-messages/_engine";
 import { loadCoupons, paginateAll } from "@/app/lib/crm-coupons-db";
 import { staffDisplayName } from "@/app/lib/crm-coupons-server";
 
@@ -25,6 +36,32 @@ export const maxDuration = 120;
 
 const SMS_CHUNK = 1000;
 
+/** 회원별 값이 들어가는 변수 — 하나라도 쓰면 회원 정보를 조회한다 */
+const MEMBER_VAR_TOKENS = ["#회원명#", "#회원번호#", "#마일리지#", "#미수금#", "#총출석#", "#마지막방문일#", "#다음수업#", "#가입일#"];
+
+/**
+ * GET /api/crm/coupons/send
+ * 쿠폰 발송 화면을 열 때 안내 문구 칸에 채울 '마지막으로 보낸 문구'(변수 포함 원본).
+ * 아직 보낸 적이 없으면 null → 화면은 CRM 기본 안내문구를 채운다.
+ */
+export async function GET(request: Request) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "coupons.send"))) {
+    return NextResponse.json({ error: "쿠폰 발송 권한이 없습니다" }, { status: 403 });
+  }
+  const { data } = await supabase
+    .from("crm_coupon_sends")
+    .select("message_template")
+    .eq("center_id", ctx.centerId)
+    .not("message_template", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const last = (data as { message_template?: string | null } | null)?.message_template?.trim() || null;
+  return NextResponse.json({ last_message: last });
+}
+
 /**
  * POST /api/crm/coupons/send
  * body: {
@@ -32,9 +69,10 @@ const SMS_CHUNK = 1000;
  *   audience_kind: 'all'|'active'|'expiring'|'expired'|'unassigned'|'dormant'|'individual',
  *   member_ids?, within_days?, inactive_days?,
  *   channels: ('push'|'sms')[]   — 빈 배열이면 알림 없이 쿠폰함에만 발급
- *   message?: string              — 비우면 기본 안내 문구
+ *   message?: string              — 안내 문구(#회원명# #쿠폰코드# 같은 변수 포함). 비우면 CRM 기본 안내문구
  * }
  * 회원마다 고유 코드가 붙은 쿠폰 1장씩 발급하고, 선택한 채널로 안내한다.
+ * 문구의 변수는 회원마다 실제 값으로 바꿔 보낸다(자동 메세지와 같은 치환 함수 renderMessage).
  */
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
@@ -131,15 +169,8 @@ export async function POST(request: Request) {
   }
 
   const expiresAt = issueExpiryYmd(coupon);
-  const message =
-    (body.message ?? "").trim().slice(0, 1000) ||
-    defaultCouponMessage({
-      centerName: ctx.centerName,
-      couponName: coupon.name,
-      benefit: benefitText(coupon),
-      condition: conditionText(coupon),
-      expiresAt,
-    });
+  // 직원이 쓴 원본(변수 포함) — 발송 기록에 남기고, 다음에 발송 화면을 열 때 그대로 채운다
+  const template = (body.message ?? "").trim().slice(0, 1000) || defaultCouponMessage();
   const channel = wantsPush && wantsSms ? "both" : wantsPush ? "push" : wantsSms ? "sms" : "none";
   const sentByName = await staffDisplayName(ctx.centerMemberId);
 
@@ -149,7 +180,8 @@ export async function POST(request: Request) {
       center_id: ctx.centerId,
       coupon_id: couponId,
       channel,
-      message: channel === "none" ? null : message,
+      message: channel === "none" ? null : template,
+      message_template: channel === "none" ? null : template,
       recipient_count: 0,
       skipped_count: skipped,
       audience_kind: kind,
@@ -169,6 +201,7 @@ export async function POST(request: Request) {
 
   // 회원마다 고유 코드로 1장씩 발급 (코드 충돌 시 해당 묶음만 코드 새로 뽑아 재시도)
   let issued = 0;
+  const codeOf = new Map<number, string>();
   for (let i = 0; i < memberIds.length; i += 500) {
     const chunk = memberIds.slice(i, i + 500);
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -184,6 +217,7 @@ export async function POST(request: Request) {
       const { error } = await supabase.from("crm_coupon_issues").insert(rows as never);
       if (!error) {
         issued += rows.length;
+        for (const r of rows) codeOf.set(r.member_id, r.code);
         break;
       }
       if (attempt === 2) {
@@ -192,36 +226,77 @@ export async function POST(request: Request) {
     }
   }
 
-  // 문자 — 전화번호는 서버에서만 조회
+  // ── 회원별 문구 — 문구에 쓴 변수만 조회해서 치환한다 ──
+  const has = (t: string) => template.includes(t);
+  const [memberVars, centerPhone, centerAddress, centerHours, appLink] = await Promise.all([
+    MEMBER_VAR_TOKENS.some(has)
+      ? loadMembersCommonVars(ctx.centerId, memberIds, template)
+      : Promise.resolve(new Map<number, Match>()),
+    has("#센터전화#") ? loadCenterPhone(ctx.centerId) : Promise.resolve(""),
+    has("#센터주소#") ? loadCenterAddress(ctx.centerId) : Promise.resolve(""),
+    has("#운영시간#") ? loadCenterHours(ctx.centerId) : Promise.resolve(""),
+    has("#앱설치링크#") ? loadJoinLink(ctx.centerId) : Promise.resolve(""),
+  ]);
+  const withCondition = fillCouponCondition(template, conditionText(coupon));
+  const couponBase = { name: coupon.name, benefit: benefitText(coupon), expires: fmtExpiry(expiresAt) };
+  const messageOf = (memberId: number): string => {
+    const m = memberVars.get(memberId);
+    return renderMessage(withCondition, {
+      center: ctx.centerName,
+      name: m?.name ?? "",
+      memberNo: m?.memberNo,
+      mileage: m?.mileage,
+      outstanding: m?.outstanding,
+      totalAttend: m?.totalAttend,
+      nextLesson: m?.nextLesson,
+      joinDate: m?.joinDate,
+      lastVisit: m?.lastVisit,
+      centerPhone,
+      centerAddress,
+      centerHours,
+      appLink,
+      couponVars: { ...couponBase, code: codeOf.get(memberId) ?? "" },
+    }).trim();
+  };
+  const sendIdsList = memberIds.filter((id) => codeOf.has(id));
+  const messages = new Map(sendIdsList.map((id) => [id, messageOf(id)]));
+
+  // 문자 — 전화번호는 서버에서만 조회. 같은 번호·같은 문구는 1건만(가족이 번호를 같이 써도 문구가 다르면 각각)
   let smsSent = 0;
   let smsFailed = 0;
   if (wantsSms) {
-    const phones: string[] = [];
-    for (let i = 0; i < memberIds.length; i += 500) {
+    const items: { to: string; text: string }[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < sendIdsList.length; i += 500) {
       const { data } = await supabase
         .from("crm_members")
-        .select("phone")
+        .select("id, phone")
         .eq("center_id", ctx.centerId)
-        .in("id", memberIds.slice(i, i + 500));
-      for (const r of data ?? []) {
-        const p = normalizePhone(String((r as { phone?: string | null }).phone ?? ""));
-        if (p) phones.push(p);
+        .in("id", sendIdsList.slice(i, i + 500));
+      for (const r of (data ?? []) as { id: number; phone: string | null }[]) {
+        const to = normalizePhone(String(r.phone ?? ""));
+        const text = messages.get(r.id);
+        if (!to || !text) continue;
+        const key = `${to}\n${text}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({ to, text });
       }
     }
-    const receivers = Array.from(new Set(phones));
     const title = `[${ctx.centerName}] 쿠폰 도착`;
-    const msgType = inferMsgType(message);
-    for (let i = 0; i < receivers.length; i += SMS_CHUNK) {
-      const chunk = receivers.slice(i, i + SMS_CHUNK);
-      const r = await solapiSend({ receivers: chunk, msg: message, subject: title, msgType });
+    for (let i = 0; i < items.length; i += SMS_CHUNK) {
+      const chunk = items.slice(i, i + SMS_CHUNK);
+      const r = await solapiSendEach({ items: chunk, subject: title });
       smsSent += r.success;
       smsFailed += r.failed + (r.ok ? 0 : chunk.length - r.success - r.failed);
+      // 발송 로그 — 문구가 하나뿐이면 그 문구, 회원마다 다르면 원본(변수 포함)을 남긴다
+      const texts = new Set(chunk.map((c) => c.text));
       await logSmsSend({
         centerId: ctx.centerId,
         uid: ctx.uid,
-        receivers: chunk,
-        msg: message,
-        msgType,
+        receivers: chunk.map((c) => c.to),
+        msg: texts.size === 1 ? chunk[0].text : template,
+        msgType: chunk.some((c) => inferMsgType(c.text) === "LMS") ? "LMS" : "SMS",
         title,
         testmode: false,
         resultCode: r.ok ? 1 : -1,
@@ -247,9 +322,13 @@ export async function POST(request: Request) {
   if (wantsPush) {
     const pushTitle = `🎁 ${coupon.name} 쿠폰이 도착했어요`;
     after(async () => {
-      await notifyMembersByIds(ctx.centerId, memberIds, "coupon", pushTitle, message, {
-        couponSendId: String(sendId),
-      });
+      await notifyMembersEach(
+        ctx.centerId,
+        sendIdsList.map((id) => ({ memberId: id, body: messages.get(id) ?? "" })),
+        "coupon",
+        pushTitle,
+        { couponSendId: String(sendId) }
+      );
     });
   }
 

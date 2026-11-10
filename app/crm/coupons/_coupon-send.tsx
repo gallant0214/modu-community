@@ -1,18 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SMS_NOT_READY_MESSAGE } from "@/app/lib/crm-sms-availability";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
+import { VarHintBubble, type VarDef } from "../_components/message-var-hint";
 import {
+  COUPON_CONDITION_VAR,
+  COUPON_SEND_COUPON_TOKENS,
+  COUPON_SEND_MEMBER_TOKENS,
   benefitText,
   conditionText,
   defaultCouponMessage,
+  fillCouponCondition,
   issueExpiryYmd,
 } from "@/app/lib/crm-coupons";
+import { MESSAGE_VARIABLES, smsByteLength, smsKind } from "@/app/lib/auto-message-triggers";
+// 미리보기는 발송 서버와 같은 쿠폰 치환 함수를 쓴다(문구가 어긋나지 않게)
+import { fillCouponVars, fmtExpiry } from "@/app/lib/crm-auto-coupon-vars";
 import type { CouponRow } from "./_coupon-list";
-import { EmptyBox, FieldLabel, Section, authedFetch, formatYmd, primaryBtn } from "./_shared";
+import { EmptyBox, Section, authedFetch, formatYmd, primaryBtn } from "./_shared";
 
 type AudienceKind = "all" | "active" | "dormant" | "expiring" | "expired" | "unassigned" | "individual";
 
@@ -26,6 +34,13 @@ const AUDIENCE_OPTIONS: { key: AudienceKind; label: string; desc: string }[] = [
   { key: "unassigned", label: "미가입 회원", desc: "수강권/회원권 이력 없음" },
   { key: "individual", label: "개별 선택", desc: "회원을 직접 검색·선택" },
 ];
+
+/** 안내 문구 변수 — 자동 메세지 변수 + 쿠폰 발송 전용 #쿠폰조건# */
+const VAR_DEFS: VarDef[] = [...MESSAGE_VARIABLES, COUPON_CONDITION_VAR];
+const varDefOf = (token: string) => VAR_DEFS.find((v) => v.token === token);
+/** 쿠폰 발송에서 값이 채워지는 변수 — 나머지(만료일·결제내역 등 알림 사건 값)는 빈칸으로 나간다 */
+const ALLOWED_TOKENS = new Set<string>([...COUPON_SEND_MEMBER_TOKENS, ...COUPON_SEND_COUPON_TOKENS]);
+const SAMPLE_CODE = "ABCD-1234";
 
 interface MemberOption {
   id: number;
@@ -62,8 +77,14 @@ export function CouponSendTab({
   const [listQuery, setListQuery] = useState("");
   const [push, setPush] = useState(true);
   const [sms, setSms] = useState(false);
+  // 안내 문구 — 처음엔 '마지막으로 보낸 문구'(없으면 CRM 기본 안내문구)로 채운다
   const [message, setMessage] = useState("");
-  const [messageTouched, setMessageTouched] = useState(false);
+  const [messageLoaded, setMessageLoaded] = useState(false);
+  const [lastSent, setLastSent] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // 센터 실제 값(센터명·전화·주소·운영시간·앱설치링크) — 변수 미리보기용
+  const [varSamples, setVarSamples] = useState<Record<string, string>>({});
+  const [varHint, setVarHint] = useState<{ token: string; left: number; top: number; above: boolean } | null>(null);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -84,23 +105,40 @@ export function CouponSendTab({
     })();
   }, [getIdToken]);
 
-  const coupon = coupons.find((c) => c.id === couponId) ?? null;
+  // 마지막으로 보낸 문구 → 없으면(처음 보내는 센터·조회 실패) CRM 기본 안내문구
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      let last: string | null = null;
+      try {
+        const r = await authedFetch(getIdToken, "/api/crm/coupons/send");
+        if (r.ok) last = (r.data.last_message as string | null) ?? null;
+      } catch {
+        /* 기본 문구로 */
+      }
+      if (!alive) return;
+      setLastSent(last);
+      // 불러오는 사이 직원이 먼저 입력했으면 덮어쓰지 않는다
+      setMessage((cur) => cur || last || defaultCouponMessage());
+      setMessageLoaded(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [getIdToken]);
 
-  // 기본 문구 — 직원이 손대기 전까지는 쿠폰을 바꿀 때마다 새로 채운다
-  const defaultMsg = useMemo(
-    () =>
-      coupon
-        ? defaultCouponMessage({
-            centerName,
-            couponName: coupon.name,
-            benefit: benefitText(coupon),
-            condition: conditionText(coupon),
-            expiresAt: issueExpiryYmd(coupon),
-          })
-        : "",
-    [coupon, centerName]
-  );
-  const shownMessage = messageTouched ? message : defaultMsg;
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await authedFetch(getIdToken, "/api/crm/auto-messages/var-samples");
+        if (r.ok) setVarSamples((r.data.samples as Record<string, string>) ?? {});
+      } catch {
+        /* 예시값으로 */
+      }
+    })();
+  }, [getIdToken]);
+
+  const coupon = coupons.find((c) => c.id === couponId) ?? null;
 
   // 받을 회원 명단 — 누가 받는지 보여주고, 거기서 뺄 수 있게 한다
   const refreshCount = useCallback(async () => {
@@ -169,6 +207,80 @@ export function CouponSendTab({
       })
     : recipients;
 
+  // ── 안내 문구 변수 ──
+  const firstName = sendTargets[0]?.name ?? "";
+  const sampleOf = (token: string): string => {
+    if (token === "#회원명#" && firstName) return firstName;
+    if (varSamples[token]) return varSamples[token];
+    if (token === "#센터명#" && centerName) return centerName;
+    if (coupon) {
+      if (token === "#쿠폰명#") return coupon.name;
+      if (token === "#쿠폰혜택#") return benefitText(coupon);
+      if (token === "#쿠폰기한#") return fmtExpiry(issueExpiryYmd(coupon));
+      if (token === "#쿠폰조건#") return conditionText(coupon) || "(조건 없는 쿠폰 — 이 줄은 빼고 보내요)";
+    }
+    if (token === "#쿠폰코드#") return SAMPLE_CODE;
+    return varDefOf(token)?.sample ?? "";
+  };
+  const openVarHint = (token: string, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const W = 300;
+    const H = 150; // 말풍선 대략 높이 — 아래로 공간이 없으면 위로 띄운다
+    const above = r.bottom + H > window.innerHeight;
+    setVarHint({
+      token,
+      left: Math.max(10, Math.min(r.left, window.innerWidth - W - 10)),
+      top: above ? r.top - 8 : r.bottom + 8,
+      above,
+    });
+  };
+  const insertVar = (token: string) => {
+    const el = bodyRef.current;
+    if (!el) {
+      setMessage((b) => b + token);
+      return;
+    }
+    const start = el.selectionStart ?? message.length;
+    const end = el.selectionEnd ?? message.length;
+    setMessage(message.slice(0, start) + token + message.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + token.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+  const resetToDefault = () => {
+    const def = defaultCouponMessage();
+    if (message.trim() && message !== def && !confirm("지금 문구를 지우고 CRM 기본 안내문구로 바꿀까요?")) return;
+    setMessage(def);
+  };
+
+  // 회원이 받는 메세지 미리보기 — 발송 서버와 같은 순서로 치환(#쿠폰조건# → 쿠폰 변수 → 나머지)
+  const previewBody = (() => {
+    if (!message.trim() || !coupon) return "";
+    let out = fillCouponCondition(message, conditionText(coupon));
+    out = fillCouponVars(out, {
+      name: coupon.name,
+      benefit: benefitText(coupon),
+      code: SAMPLE_CODE,
+      expires: fmtExpiry(issueExpiryYmd(coupon)),
+    });
+    for (const v of MESSAGE_VARIABLES) out = out.replaceAll(v.token, ALLOWED_TOKENS.has(v.token) ? sampleOf(v.token) : "");
+    return out.trim();
+  })();
+  const usedTokens = Array.from(new Set(message.match(/#[^#\s]{1,12}#/g) ?? []));
+  // 없는 변수(오타) — 치환되지 않고 글자 그대로 나간다
+  const unknownVars = usedTokens.filter((t) => !varDefOf(t));
+  // 자동 메세지 전용 변수 — 쿠폰 발송엔 값이 없어 빈칸으로 나간다
+  const blankVars = usedTokens.filter((t) => varDefOf(t) && !ALLOWED_TOKENS.has(t));
+  const messageHint = !messageLoaded
+    ? "불러오는 중…"
+    : message === defaultCouponMessage()
+      ? "CRM 기본 안내문구"
+      : lastSent && message === lastSent
+        ? "마지막으로 보낸 문구"
+        : "수정한 문구 — 보내면 다음에도 이 문구로 채워져요";
+
   const channelsLabel = push && sms ? "앱 알림 + 문자" : push ? "앱 알림" : sms ? "문자" : "알림 없이 쿠폰함에만 발급";
 
   const send = async () => {
@@ -176,6 +288,7 @@ export function CouponSendTab({
     if (audience === "individual" && selected.length === 0) return alert("회원을 선택해 주세요");
     const n = sendTargets.length;
     if (n === 0) return alert("보낼 회원이 없어요. 명단에서 한 명 이상 선택해 주세요.");
+    if ((push || sms) && !message.trim()) return alert("안내 문구를 입력해 주세요");
     if (!confirm(`'${coupon.name}' 쿠폰을 ${n.toLocaleString()}명에게 발급할까요?\n발송 방법: ${channelsLabel}${sms ? "\n※ 문자는 건당 요금이 발생해요" : ""}`))
       return;
     setSending(true);
@@ -190,7 +303,7 @@ export function CouponSendTab({
         within_days: withinDays,
         inactive_days: inactiveDays,
         channels,
-        message: messageTouched ? message : "",
+        message: push || sms ? message : "",
         exclude_member_ids: Array.from(excluded),
       }),
     });
@@ -203,6 +316,8 @@ export function CouponSendTab({
         (Number(r.data.skipped) > 0 ? ` · 이미 보유한 ${r.data.skipped}명은 건너뜀(1인 1장)` : "") +
         (smsInfo ? ` · 문자 성공 ${smsInfo.sent} / 실패 ${smsInfo.failed}` : "")
     );
+    // 방금 보낸 문구 = 다음에 이 화면을 열 때 채워질 문구
+    if (push || sms) setLastSent(message.trim());
     setSelected([]);
     setExcluded(new Set());
     onSent();
@@ -446,21 +561,97 @@ export function CouponSendTab({
         )}
         {(push || sms) && (
           <>
-            <FieldLabel hint={messageTouched ? "" : "(쿠폰 내용으로 자동 작성됨 — 고쳐도 돼요)"}>안내 문구</FieldLabel>
-            <textarea
-              className={`${crmInputClass} min-h-[132px] leading-relaxed`}
-              value={shownMessage}
-              maxLength={1000}
-              onChange={(e) => {
-                setMessage(e.target.value);
-                setMessageTouched(true);
-              }}
-            />
-            {messageTouched && (
-              <button type="button" className="mt-1 text-[12px] text-[#6B7B3A] underline" onClick={() => setMessageTouched(false)}>
-                기본 문구로 되돌리기
+            <div className="mt-3 mb-1.5 flex flex-wrap items-center gap-2">
+              <span className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400">안내 문구</span>
+              <span className="text-[11.5px] text-[#A89B80]">({messageHint})</span>
+              <button
+                type="button"
+                onClick={resetToDefault}
+                disabled={!messageLoaded}
+                className="ml-auto px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-40"
+              >
+                기본 입력값
               </button>
-            )}
+            </div>
+            <p className="mb-2 text-[11.5px] leading-relaxed text-[#8C8270] dark:text-zinc-400">
+              아래 변수 버튼을 누르면 커서 위치에 들어가요. 버튼에 마우스를 올리면 회원이 받는 메세지에 어떻게 보이는지 미리 볼 수 있어요.
+              보낼 때 회원마다 실제 값(이름·쿠폰코드 등)으로 바뀝니다.
+            </p>
+            {/* 변수 버튼 — 자동 메세지 07 '메세지 입력'과 같은 방식 */}
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {COUPON_SEND_MEMBER_TOKENS.map((token) => (
+                <button
+                  key={token}
+                  type="button"
+                  onClick={() => insertVar(token)}
+                  onMouseEnter={(e) => openVarHint(token, e.currentTarget)}
+                  onMouseLeave={() => setVarHint(null)}
+                  onFocus={(e) => openVarHint(token, e.currentTarget)}
+                  onBlur={() => setVarHint(null)}
+                  className="px-2 py-1 rounded-md text-[11.5px] font-semibold border border-[#E8E0D0] dark:border-zinc-700 text-[#6B7B3A] dark:text-[#A8B87A] bg-white dark:bg-zinc-900 hover:bg-[#6B7B3A]/5"
+                >
+                  {token}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+              <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">쿠폰</span>
+              {COUPON_SEND_COUPON_TOKENS.map((token) => (
+                <button
+                  key={token}
+                  type="button"
+                  onClick={() => insertVar(token)}
+                  onMouseEnter={(e) => openVarHint(token, e.currentTarget)}
+                  onMouseLeave={() => setVarHint(null)}
+                  onFocus={(e) => openVarHint(token, e.currentTarget)}
+                  onBlur={() => setVarHint(null)}
+                  className="px-2 py-1 rounded-md text-[11.5px] font-semibold border border-[#B47B2A]/40 text-[#B47B2A] dark:text-amber-300 bg-[#F5E4C8]/20 hover:bg-[#F5E4C8]/40"
+                >
+                  {token}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-3">
+              <div>
+                <textarea
+                  ref={bodyRef}
+                  className={`${crmInputClass} min-h-[220px] leading-relaxed resize-y`}
+                  value={message}
+                  maxLength={1000}
+                  disabled={!messageLoaded}
+                  placeholder={messageLoaded ? "회원에게 보낼 안내 문구를 입력하세요. 위 변수를 눌러 넣을 수 있어요." : "불러오는 중…"}
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+                {/* 🚨 오타 변수 — 치환되지 않고 글자 그대로 발송된다 */}
+                {unknownVars.length > 0 && (
+                  <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#C0392B] dark:text-red-300">
+                    🚨 {unknownVars.join(", ")} 는 없는 변수예요. 치환되지 않고 <strong>글자 그대로 발송</strong>되니 위 버튼의 변수로 바꿔 주세요.
+                  </p>
+                )}
+                {blankVars.length > 0 && (
+                  <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
+                    ⚠️ {blankVars.join(", ")} 는 자동 메세지 전용이라 쿠폰 발송에선 <strong>빈칸으로 발송</strong>돼요.
+                  </p>
+                )}
+                <div className="mt-1 text-right text-[11.5px] text-[#8C8270]">{message.length} / 1000자</div>
+              </div>
+              <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 overflow-hidden self-start">
+                <div className="px-3 py-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#F5F0E5]/60 dark:bg-zinc-800/40 flex items-center justify-between gap-2">
+                  <span className="text-[11.5px] font-semibold text-[#3A342A] dark:text-zinc-200">회원이 받는 메세지</span>
+                  {sms && previewBody && (
+                    <span className="text-[10.5px] text-[#8C8270]">
+                      문자 {smsByteLength(previewBody)} Byte · {smsKind(previewBody)}
+                    </span>
+                  )}
+                </div>
+                <div className="px-3 py-2.5 text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap break-words min-h-[64px]">
+                  {previewBody || <span className="text-[#A89B80]">메세지 내용이 여기에 표시됩니다.</span>}
+                </div>
+                <div className="px-3 pb-2.5 text-[10.5px] leading-relaxed text-[#A89B80]">
+                  👤 {firstName ? `이름은 받는 회원 중 ${firstName} 님 기준이고, ` : ""}마일리지 등 회원별 값과 쿠폰코드는 예시예요. 실제로는 회원마다 바뀌어요.
+                </div>
+              </div>
+            </div>
           </>
         )}
       </Section>
@@ -478,6 +669,18 @@ export function CouponSendTab({
         </button>
         {result && <span className="text-[12.5px] text-[#4d5a29] dark:text-[#A8B87A]">{result}</span>}
       </div>
+
+      {/* 변수 호버 미리보기 — '내가 쓴 문구' vs '회원이 받는 메세지' */}
+      {varHint && (
+        <VarHintBubble
+          token={varHint.token}
+          left={varHint.left}
+          top={varHint.top}
+          above={varHint.above}
+          sample={sampleOf(varHint.token)}
+          vars={VAR_DEFS}
+        />
+      )}
     </div>
   );
 }
