@@ -3,7 +3,9 @@ import {
   benefitText,
   computeCouponDiscount,
   conditionText,
+  defaultCouponMessage,
   effectiveStatus,
+  fillCouponCondition,
   generateCouponCode,
   type CouponDef,
 } from "../app/lib/crm-coupons";
@@ -95,5 +97,19 @@ describe("쿠폰 상태·표시", () => {
       expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
       expect(code).not.toMatch(/[01OIL]/);
     }
+  });
+});
+
+describe("쿠폰 발송 안내 문구", () => {
+  it("#쿠폰조건# — 조건이 있으면 치환, 없으면 그 줄을 뺀다", () => {
+    const msg = "혜택: #쿠폰혜택#\n사용 조건: #쿠폰조건#\n끝";
+    expect(fillCouponCondition(msg, "회원권 전용")).toBe("혜택: #쿠폰혜택#\n사용 조건: 회원권 전용\n끝");
+    expect(fillCouponCondition(msg, "")).toBe("혜택: #쿠폰혜택#\n끝");
+  });
+  it("기본 안내문구는 변수만 써서 어느 쿠폰에도 그대로 쓸 수 있다", () => {
+    const msg = defaultCouponMessage();
+    expect(msg).toContain("#회원명#");
+    expect(msg).toContain("#쿠폰코드#");
+    expect(msg).not.toMatch(/재등록|할인권/);
   });
 });
