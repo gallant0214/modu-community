@@ -196,7 +196,6 @@ export function defaultCouponMessage(): string {
     "",
     "쿠폰: #쿠폰명#",
     "혜택: #쿠폰혜택#",
-    "사용 조건: #쿠폰조건#",
     "사용 기한: #쿠폰기한#",
     "쿠폰코드: #쿠폰코드#",
     "",

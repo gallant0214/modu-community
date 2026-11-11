@@ -110,6 +110,7 @@ describe("쿠폰 발송 안내 문구", () => {
     const msg = defaultCouponMessage();
     expect(msg).toContain("#회원명#");
     expect(msg).toContain("#쿠폰코드#");
+    expect(msg).not.toContain("#쿠폰조건#");
     expect(msg).not.toMatch(/재등록|할인권/);
   });
 });
