@@ -81,6 +81,9 @@ export function CouponSendTab({
   const [message, setMessage] = useState("");
   const [messageLoaded, setMessageLoaded] = useState(false);
   const [lastSent, setLastSent] = useState<string | null>(null);
+  // '현재 문구 저장'으로 고정한 문구 — 있으면 발송해도 바뀌지 않고 화면을 열 때 항상 이걸 채운다
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [savingMessage, setSavingMessage] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   // 센터 실제 값(센터명·전화·주소·운영시간·앱설치링크) — 변수 미리보기용
   const [varSamples, setVarSamples] = useState<Record<string, string>>({});
@@ -105,21 +108,26 @@ export function CouponSendTab({
     })();
   }, [getIdToken]);
 
-  // 마지막으로 보낸 문구 → 없으면(처음 보내는 센터·조회 실패) CRM 기본 안내문구
+  // 저장한 문구 → 마지막으로 보낸 문구 → 없으면(처음 보내는 센터·조회 실패) CRM 기본 안내문구
   useEffect(() => {
     let alive = true;
     (async () => {
+      let saved: string | null = null;
       let last: string | null = null;
       try {
         const r = await authedFetch(getIdToken, "/api/crm/coupons/send");
-        if (r.ok) last = (r.data.last_message as string | null) ?? null;
+        if (r.ok) {
+          saved = (r.data.saved_message as string | null) ?? null;
+          last = (r.data.last_message as string | null) ?? null;
+        }
       } catch {
         /* 기본 문구로 */
       }
       if (!alive) return;
+      setSavedMessage(saved);
       setLastSent(last);
       // 불러오는 사이 직원이 먼저 입력했으면 덮어쓰지 않는다
-      setMessage((cur) => cur || last || defaultCouponMessage());
+      setMessage((cur) => cur || saved || last || defaultCouponMessage());
       setMessageLoaded(true);
     })();
     return () => {
@@ -254,6 +262,19 @@ export function CouponSendTab({
     if (message.trim() && message !== def && !confirm("지금 문구를 지우고 CRM 기본 안내문구로 바꿀까요?")) return;
     setMessage(def);
   };
+  const saveMessage = async () => {
+    const text = message.trim();
+    if (!text) return alert("저장할 안내 문구를 입력해 주세요");
+    setSavingMessage(true);
+    const r = await authedFetch(getIdToken, "/api/crm/coupons/send", {
+      method: "PUT",
+      body: JSON.stringify({ message: text }),
+    });
+    setSavingMessage(false);
+    if (!r.ok) return alert(String(r.data.error ?? "안내 문구를 저장하지 못했어요"));
+    setSavedMessage(text);
+    setMessage(text);
+  };
 
   // 회원이 받는 메세지 미리보기 — 발송 서버와 같은 순서로 치환(#쿠폰조건# → 쿠폰 변수 → 나머지)
   const previewBody = (() => {
@@ -273,13 +294,20 @@ export function CouponSendTab({
   const unknownVars = usedTokens.filter((t) => !varDefOf(t));
   // 자동 메세지 전용 변수 — 쿠폰 발송엔 값이 없어 빈칸으로 나간다
   const blankVars = usedTokens.filter((t) => varDefOf(t) && !ALLOWED_TOKENS.has(t));
+  const isSavedMessage = !!savedMessage && message.trim() === savedMessage;
   const messageHint = !messageLoaded
     ? "불러오는 중…"
-    : message === defaultCouponMessage()
-      ? "CRM 기본 안내문구"
-      : lastSent && message === lastSent
-        ? "마지막으로 보낸 문구"
-        : "수정한 문구 — 보내면 다음에도 이 문구로 채워져요";
+    : isSavedMessage
+      ? "저장한 문구 — 다음에도 이 문구로 채워져요"
+      : message === defaultCouponMessage()
+        ? savedMessage
+          ? "CRM 기본 안내문구 — 저장해야 다음에도 이 문구로 채워져요"
+          : "CRM 기본 안내문구"
+        : !savedMessage && lastSent && message.trim() === lastSent
+          ? "마지막으로 보낸 문구"
+          : savedMessage
+            ? "수정한 문구 — '현재 문구 저장'을 눌러야 다음에도 이 문구로 채워져요"
+            : "수정한 문구 — 저장하거나 보내면 다음에도 이 문구로 채워져요";
 
   const channelsLabel = push && sms ? "앱 알림 + 문자" : push ? "앱 알림" : sms ? "문자" : "알림 없이 쿠폰함에만 발급";
 
@@ -316,7 +344,7 @@ export function CouponSendTab({
         (Number(r.data.skipped) > 0 ? ` · 이미 보유한 ${r.data.skipped}명은 건너뜀(1인 1장)` : "") +
         (smsInfo ? ` · 문자 성공 ${smsInfo.sent} / 실패 ${smsInfo.failed}` : "")
     );
-    // 방금 보낸 문구 = 다음에 이 화면을 열 때 채워질 문구
+    // 방금 보낸 문구 = 다음에 이 화면을 열 때 채워질 문구(저장한 문구가 없을 때만)
     if (push || sms) setLastSent(message.trim());
     setSelected([]);
     setExcluded(new Set());
@@ -566,9 +594,18 @@ export function CouponSendTab({
               <span className="text-[11.5px] text-[#A89B80]">({messageHint})</span>
               <button
                 type="button"
+                onClick={saveMessage}
+                disabled={!messageLoaded || savingMessage || !message.trim() || isSavedMessage}
+                title="지금 입력한 문구를 저장해요. 다음에 이 화면을 열면 항상 이 문구가 채워져요(보내도 바뀌지 않아요)."
+                className="ml-auto px-2.5 py-1 rounded-lg border border-[#6B7B3A] bg-[#6B7B3A] text-white text-[12px] font-semibold hover:bg-[#5A6830] disabled:opacity-40"
+              >
+                {savingMessage ? "저장 중…" : isSavedMessage ? "저장됨" : "현재 문구 저장"}
+              </button>
+              <button
+                type="button"
                 onClick={resetToDefault}
                 disabled={!messageLoaded}
-                className="ml-auto px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-40"
+                className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-40"
               >
                 기본 입력값
               </button>

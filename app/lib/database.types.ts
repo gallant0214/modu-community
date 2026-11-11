@@ -4544,6 +4544,7 @@ export type Database = {
           cancel_enabled: boolean
           booking_enabled: boolean
           class_booking_enabled: boolean
+          coupon_send_message: string | null
           member_can_self_cancel_consumed: boolean
           booking_unit_min: number
           booking_horizon_days: number
@@ -4564,6 +4565,7 @@ export type Database = {
           center_id: number
           cancel_hours?: number
           class_booking_enabled?: boolean
+          coupon_send_message?: string | null
           member_can_self_cancel_consumed?: boolean
           booking_unit_min?: number
           booking_horizon_days?: number
@@ -4582,6 +4584,7 @@ export type Database = {
           center_id?: number
           cancel_hours?: number
           class_booking_enabled?: boolean
+          coupon_send_message?: string | null
           member_can_self_cancel_consumed?: boolean
           booking_unit_min?: number
           booking_horizon_days?: number

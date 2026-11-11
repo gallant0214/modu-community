@@ -39,10 +39,15 @@ const SMS_CHUNK = 1000;
 /** 회원별 값이 들어가는 변수 — 하나라도 쓰면 회원 정보를 조회한다 */
 const MEMBER_VAR_TOKENS = ["#회원명#", "#회원번호#", "#마일리지#", "#미수금#", "#총출석#", "#마지막방문일#", "#다음수업#", "#가입일#"];
 
+/** 안내 문구 길이 상한 — 발송(POST)과 저장(PUT)이 같이 쓴다 */
+const MESSAGE_MAX = 1000;
+
 /**
  * GET /api/crm/coupons/send
- * 쿠폰 발송 화면을 열 때 안내 문구 칸에 채울 '마지막으로 보낸 문구'(변수 포함 원본).
- * 아직 보낸 적이 없으면 null → 화면은 CRM 기본 안내문구를 채운다.
+ * 쿠폰 발송 화면을 열 때 안내 문구 칸에 채울 값(둘 다 변수 포함 원본).
+ * - saved_message: '현재 문구 저장'으로 고정한 문구 — 있으면 화면은 항상 이걸 채운다
+ * - last_message: 마지막으로 보낸 문구 — 저장한 문구가 없을 때 채운다
+ * 둘 다 없으면 화면은 CRM 기본 안내문구를 채운다.
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
@@ -50,16 +55,60 @@ export async function GET(request: Request) {
   if (!(await ctxHasPermission(ctx, "coupons.send"))) {
     return NextResponse.json({ error: "쿠폰 발송 권한이 없습니다" }, { status: 403 });
   }
-  const { data } = await supabase
-    .from("crm_coupon_sends")
-    .select("message_template")
-    .eq("center_id", ctx.centerId)
-    .not("message_template", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const [{ data: savedRow }, { data }] = await Promise.all([
+    supabase.from("crm_center_settings").select("coupon_send_message").eq("center_id", ctx.centerId).maybeSingle(),
+    supabase
+      .from("crm_coupon_sends")
+      .select("message_template")
+      .eq("center_id", ctx.centerId)
+      .not("message_template", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const saved = (savedRow as { coupon_send_message?: string | null } | null)?.coupon_send_message?.trim() || null;
   const last = (data as { message_template?: string | null } | null)?.message_template?.trim() || null;
-  return NextResponse.json({ last_message: last });
+  return NextResponse.json({ saved_message: saved, last_message: last });
+}
+
+/**
+ * PUT /api/crm/coupons/send
+ * body: { message: string } — 안내 문구 저장(센터 공용). 이후 발송 화면을 열면 항상 이 문구가 채워진다.
+ * 발송해도 바뀌지 않고, 다시 저장해야 바뀐다.
+ */
+export async function PUT(request: Request) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "coupons.send"))) {
+    return NextResponse.json({ error: "쿠폰 발송 권한이 없습니다" }, { status: 403 });
+  }
+  let body: { message?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청입니다" }, { status: 400 });
+  }
+  const message = typeof body.message === "string" ? body.message.trim() : "";
+  if (!message) return NextResponse.json({ error: "저장할 안내 문구를 입력해 주세요" }, { status: 400 });
+  if (message.length > MESSAGE_MAX) {
+    return NextResponse.json({ error: `안내 문구는 ${MESSAGE_MAX}자까지 쓸 수 있어요` }, { status: 400 });
+  }
+  const { error } = await supabase
+    .from("crm_center_settings")
+    .upsert(
+      { center_id: ctx.centerId, coupon_send_message: message, updated_at: new Date().toISOString() },
+      { onConflict: "center_id" }
+    );
+  if (error) return NextResponse.json({ error: "안내 문구를 저장하지 못했어요", detail: errDetail(error) }, { status: 500 });
+  await supabase.from("crm_audit_logs").insert({
+    center_id: ctx.centerId,
+    actor_uid: ctx.uid,
+    action: "coupon.save_message",
+    entity_type: "coupon",
+    entity_id: null,
+    payload: { length: message.length } as never,
+  });
+  return NextResponse.json({ ok: true, saved_message: message });
 }
 
 /**
@@ -170,7 +219,7 @@ export async function POST(request: Request) {
 
   const expiresAt = issueExpiryYmd(coupon);
   // 직원이 쓴 원본(변수 포함) — 발송 기록에 남기고, 다음에 발송 화면을 열 때 그대로 채운다
-  const template = (body.message ?? "").trim().slice(0, 1000) || defaultCouponMessage();
+  const template = (body.message ?? "").trim().slice(0, MESSAGE_MAX) || defaultCouponMessage();
   const channel = wantsPush && wantsSms ? "both" : wantsPush ? "push" : wantsSms ? "sms" : "none";
   const sentByName = await staffDisplayName(ctx.centerMemberId);
 

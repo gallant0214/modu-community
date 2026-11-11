@@ -115,6 +115,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "coupon.restore": "쿠폰 보관 해제",
   "coupon.delete": "쿠폰 삭제",
   "coupon.send": "쿠폰 발송",
+  "coupon.save_message": "쿠폰 안내 문구 저장",
   "coupon.revoke": "쿠폰 회수",
   "coupon.revoke_send": "쿠폰 일괄 회수",
   "coupon.restore_issue": "쿠폰 회수 취소",
