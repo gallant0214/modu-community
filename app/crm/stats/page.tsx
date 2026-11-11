@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmDeniedNotice } from "@/app/crm/_components/crm-denied-notice";
 import { ROLE_LABEL, formatWon, parseWon } from "../_components/crm-labels";
@@ -31,17 +32,25 @@ interface MonthlyResp {
 
 type Tab = "summary" | "trainer" | "center" | "saleslist" | "settlement" | "payroll" | "market";
 
+const STATS_TABS: readonly Tab[] = ["summary", "trainer", "center", "saleslist", "settlement", "payroll", "market"];
+
+function parseStatsTab(t: string | null): Tab {
+  return t && (STATS_TABS as readonly string[]).includes(t) ? (t as Tab) : "center";
+}
+
 type DateMode = "year" | "month" | "range";
 
 export default function CrmStatsPage() {
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<Tab>(() => {
-    if (typeof window === "undefined") return "center";
-    const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "summary" || t === "payroll" || t === "trainer" || t === "settlement" || t === "saleslist" || t === "center" || t === "market"
-      ? (t as Tab)
-      : "center";
-  });
+  // ?tab= 은 useSearchParams 로 읽는다. window.location 은 다른 화면에서 넘어온 직후엔 아직 이전 주소라서
+  // 탭이 기본값으로 떨어지고, 같은 화면 안의 ?tab= 링크(경영 요약 → 정산)는 아예 반영되지 않는다.
+  const urlTab = useSearchParams().get("tab");
+  const [tab, setTab] = useState<Tab>(() => parseStatsTab(urlTab));
+  const [seenUrlTab, setSeenUrlTab] = useState(urlTab);
+  if (urlTab !== seenUrlTab) {
+    setSeenUrlTab(urlTab);
+    setTab(parseStatsTab(urlTab));
+  }
   // 입력값(pending) — 사용자가 드롭다운/날짜를 바꾸면 여기만 갱신됨
   const [dateMode, setDateMode] = useState<DateMode>("month");
   const [year, setYear] = useState(() => new Date().getFullYear());

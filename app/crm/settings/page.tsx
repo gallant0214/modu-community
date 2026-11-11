@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { actionLabel, summarizeAuditLog } from "@/app/lib/crm-audit-format";
 import { CrmModal } from "../_components/crm-modal";
@@ -206,13 +207,21 @@ function CheckoutMileageField({
   );
 }
 
+function parseSettingsTab(t: string | null): SettingsTab {
+  return t && SETTINGS_TABS.some((x) => x.key === t) ? (t as SettingsTab) : "reservation";
+}
+
 export default function CrmSettingsPage() {
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<SettingsTab>(() => {
-    if (typeof window === "undefined") return "reservation";
-    const t = new URLSearchParams(window.location.search).get("tab");
-    return t && SETTINGS_TABS.some((x) => x.key === t) ? (t as SettingsTab) : "reservation";
-  });
+  // ?tab= 은 useSearchParams 로 읽는다. 다른 화면의 링크(통계 → 고정 지출 등)로 넘어온 직후엔
+  // window.location 이 아직 이전 화면 주소라서 탭이 '예약 정책'으로 떨어진다.
+  const urlTab = useSearchParams().get("tab");
+  const [tab, setTab] = useState<SettingsTab>(() => parseSettingsTab(urlTab));
+  const [seenUrlTab, setSeenUrlTab] = useState(urlTab);
+  if (urlTab !== seenUrlTab) {
+    setSeenUrlTab(urlTab);
+    setTab(parseSettingsTab(urlTab));
+  }
   const { theme, setTheme } = useCrmTheme();
   const toast = useCrmToast();
   const [settings, setSettings] = useState<Settings | null>(null);
