@@ -109,8 +109,11 @@ const GRADE: Record<SummaryResp["grade"], { label: string; box: string; badge: s
   },
 };
 
-/** 통계 > 경영 요약 */
-export function BusinessSummary() {
+/**
+ * 통계 > 경영 요약
+ * onOpenSettlement: '추가 지출 등록' — 요약이 기준으로 삼은 달(직전 완료 월)로 정산 탭을 연다
+ */
+export function BusinessSummary({ onOpenSettlement }: { onOpenSettlement: (ym: string) => void }) {
   const { getIdToken } = useAuth();
   const [data, setData] = useState<SummaryResp | null>(null);
   const [error, setError] = useState("");
@@ -192,12 +195,13 @@ export function BusinessSummary() {
             >
               고정 지출·카드 수수료 설정 →
             </Link>
-            <Link
-              href="/crm/stats?tab=settlement"
+            <button
+              type="button"
+              onClick={() => onOpenSettlement(data.last_full_ym)}
               className="rounded-lg border border-amber-400/70 bg-white px-2.5 py-1 text-[12px] font-semibold text-amber-900 hover:bg-amber-100 dark:bg-zinc-900 dark:text-amber-200"
             >
               추가 지출 등록 →
-            </Link>
+            </button>
           </div>
         </section>
       )}

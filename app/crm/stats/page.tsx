@@ -361,7 +361,16 @@ export default function CrmStatsPage() {
         <MarketTrend />
       ) : tab === "summary" ? (
         canSummary ? (
-          <BusinessSummary />
+          <BusinessSummary
+            onOpenSettlement={(ymSel) => {
+              // 요약이 보여 준 달 그대로 정산을 연다 (검색하기 없이 바로 조회)
+              setDateMode("month");
+              setYm(ymSel);
+              setAppliedDateMode("month");
+              setAppliedYm(ymSel);
+              setTab("settlement");
+            }}
+          />
         ) : (
           <div className="text-[13px] text-[#8C8270]">
             {canSummary === null ? "권한 확인 중…" : "경영 요약을 볼 권한이 없어요."}
