@@ -468,26 +468,6 @@ export default function CrmSchedulePage() {
           className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
         />
 
-        <div className="ml-auto flex items-center gap-1.5">
-          <button
-            onClick={() => navigate(-1)}
-            className="px-2 py-1 rounded text-[12.5px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-          >
-            ‹ 이전
-          </button>
-          <button
-            onClick={() => setAnchor(new Date().toISOString().slice(0, 10))}
-            className="px-2 py-1 rounded text-[12.5px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-          >
-            오늘
-          </button>
-          <button
-            onClick={() => navigate(1)}
-            className="px-2 py-1 rounded text-[12.5px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-          >
-            다음 ›
-          </button>
-        </div>
         </>
         )}
       </header>
@@ -552,6 +532,27 @@ export default function CrmSchedulePage() {
               {s.label}
             </span>
           ))}
+        </div>
+        {/* 이전·오늘·다음 — 이 줄 맨 오른쪽(주간 보기에서 '토' 칸 위) */}
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={() => navigate(-1)}
+            className="px-3 py-1.5 rounded-lg text-[14px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            ‹ 이전
+          </button>
+          <button
+            onClick={() => setAnchor(new Date().toISOString().slice(0, 10))}
+            className="px-3 py-1.5 rounded-lg text-[14px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            오늘
+          </button>
+          <button
+            onClick={() => navigate(1)}
+            className="px-3 py-1.5 rounded-lg text-[14px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            다음 ›
+          </button>
         </div>
       </div>
       )}
