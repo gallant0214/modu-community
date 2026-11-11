@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SMS_NOT_READY_MESSAGE } from "@/app/lib/crm-sms-availability";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
@@ -85,6 +85,10 @@ export function CouponSendTab({
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [savingMessage, setSavingMessage] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // '기본 입력값' 결과 안내 — 바꿨으면 되돌리기(prev)를 준다. 확인창 대신(크롬 '대화상자 차단' 시 조용히 취소되던 문제)
+  const [resetNote, setResetNote] = useState<{ text: string; prev: string | null } | null>(null);
+  const [bodyFlash, setBodyFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 센터 실제 값(센터명·전화·주소·운영시간·앱설치링크) — 변수 미리보기용
   const [varSamples, setVarSamples] = useState<Record<string, string>>({});
   const [varHint, setVarHint] = useState<{ token: string; left: number; top: number; above: boolean } | null>(null);
@@ -251,6 +255,7 @@ export function CouponSendTab({
     const start = el.selectionStart ?? message.length;
     const end = el.selectionEnd ?? message.length;
     setMessage(message.slice(0, start) + token + message.slice(end));
+    setResetNote(null);
     requestAnimationFrame(() => {
       el.focus();
       const pos = start + token.length;
@@ -259,9 +264,40 @@ export function CouponSendTab({
   };
   const resetToDefault = () => {
     const def = defaultCouponMessage();
-    if (message.trim() && message !== def && !confirm("지금 문구를 지우고 CRM 기본 안내문구로 바꿀까요?")) return;
-    setMessage(def);
+    const same = message.trim() === def.trim();
+    if (!same) setMessage(def);
+    // 이미 같은 문구면 글자가 안 바뀌어 눌러도 반응이 없어 보인다 → 칸을 깜빡이고 안내를 띄운다
+    setResetNote(
+      same
+        ? { text: "이미 CRM 기본 안내문구가 들어 있어요", prev: null }
+        : { text: "CRM 기본 안내문구로 바꿨어요", prev: message }
+    );
+    setBodyFlash(true);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setBodyFlash(false), 900);
+    requestAnimationFrame(() => {
+      const el = bodyRef.current;
+      if (!el) return;
+      el.scrollTop = 0;
+      el.focus();
+      el.setSelectionRange(0, 0);
+    });
   };
+  const undoReset = () => {
+    if (resetNote?.prev == null) return;
+    setMessage(resetNote.prev);
+    setResetNote(null);
+  };
+  useEffect(() => () => {
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+  }, []);
+  // 입력칸 높이 = 문구 길이에 맞춤(최대 560px) — 고정 높이면 앞 몇 줄만 보여 미리보기와 달라 보인다
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(Math.max(el.scrollHeight + 2, 220), 560)}px`;
+  }, [message]);
   const saveMessage = async () => {
     const text = message.trim();
     if (!text) return alert("저장할 안내 문구를 입력해 주세요");
@@ -652,13 +688,28 @@ export function CouponSendTab({
               <div>
                 <textarea
                   ref={bodyRef}
-                  className={`${crmInputClass} min-h-[220px] leading-relaxed resize-y`}
+                  className={`${crmInputClass} min-h-[220px] leading-relaxed resize-none overflow-y-auto transition-shadow ${
+                    bodyFlash ? "ring-2 ring-[#6B7B3A]/60" : ""
+                  }`}
                   value={message}
                   maxLength={1000}
                   disabled={!messageLoaded}
                   placeholder={messageLoaded ? "회원에게 보낼 안내 문구를 입력하세요. 위 변수를 눌러 넣을 수 있어요." : "불러오는 중…"}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    setResetNote(null);
+                  }}
                 />
+                {resetNote && (
+                  <p className="mt-1.5 text-[11.5px] text-[#6B7B3A] dark:text-[#A8B87A]">
+                    ✓ {resetNote.text}
+                    {resetNote.prev != null && (
+                      <button type="button" onClick={undoReset} className="ml-2 underline font-semibold">
+                        되돌리기
+                      </button>
+                    )}
+                  </p>
+                )}
                 {/* 🚨 오타 변수 — 치환되지 않고 글자 그대로 발송된다 */}
                 {unknownVars.length > 0 && (
                   <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#C0392B] dark:text-red-300">
@@ -681,7 +732,7 @@ export function CouponSendTab({
                     </span>
                   )}
                 </div>
-                <div className="px-3 py-2.5 text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap break-words min-h-[64px]">
+                <div className="px-3 py-2.5 text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap break-keep break-words min-h-[64px]">
                   {previewBody || <span className="text-[#A89B80]">메세지 내용이 여기에 표시됩니다.</span>}
                 </div>
                 <div className="px-3 pb-2.5 text-[10.5px] leading-relaxed text-[#A89B80]">
