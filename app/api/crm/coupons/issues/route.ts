@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { benefitText, effectiveStatus, kstTodayYmd } from "@/app/lib/crm-coupons";
+import { loadIssueSources } from "@/app/lib/crm-coupon-issue-source";
 import {
   ISSUE_SELECT,
   loadCoupons,
@@ -54,6 +55,8 @@ export async function GET(request: Request) {
   const coupons = await loadCoupons(ctx.centerId, Array.from(new Set(rows.map((r) => Number(r.coupon_id)))));
   const members = await loadMemberNames(ctx.centerId, rows.map((r) => r.member_id));
   const refNames = await loadUsedRefNames(rows.map((r) => ({ kind: r.used_ref_kind, id: r.used_ref_id })));
+  // 어떻게 발급됐는지(쿠폰 발송 / 자동 메세지 / 직접) — 처리 내용 칸에 표시
+  const sources = await loadIssueSources(ctx.centerId, rows.map((r) => ({ id: r.id, sendId: r.send_id })));
 
   let list = rows.map((r) => {
     const c = coupons.get(Number(r.coupon_id));
@@ -80,6 +83,7 @@ export async function GET(request: Request) {
       revokedAt: r.revoked_at,
       revokedByName: r.revoked_by_name,
       revokeReason: r.revoke_reason,
+      source: sources.get(r.id) ?? { kind: "none" as const },
     };
   });
 

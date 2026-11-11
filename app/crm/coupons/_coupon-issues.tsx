@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
-import { crmInputClass } from "../_components/crm-modal";
+import { CrmModal, crmInputClass } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
 import type { IssueStatus } from "@/app/lib/crm-coupons";
 import type { CouponRow } from "./_coupon-list";
@@ -38,6 +38,26 @@ interface IssueRow {
   revokedAt: string | null;
   revokedByName: string | null;
   revokeReason: string | null;
+  /** 어떻게 회원에게 갔는지 — 쿠폰 발송 / 자동 메세지 / 기록 없음 */
+  source:
+    | { kind: "send"; sendId: number; channel: string; channelLabel: string; sentByName: string | null; sentAt: string }
+    | { kind: "auto"; queueId: number; triggerLabel: string; channelLabel: string; status: string; statusLabel: string; sentAt: string | null }
+    | { kind: "none" };
+}
+
+interface SentDetail {
+  title: string | null;
+  body: string | null;
+  exact: boolean;
+  note: string | null;
+}
+
+/** 발급 경로 한 줄 — '처리 내용'·CSV 공용 */
+function sourceText(r: IssueRow): string {
+  const s = r.source;
+  if (s.kind === "send") return `쿠폰 발송 · ${s.channelLabel}${s.sentByName ? ` · ${s.sentByName}` : ""}`;
+  if (s.kind === "auto") return `자동 메세지 '${s.triggerLabel}' · ${s.channelLabel} · ${s.statusLabel}`;
+  return "발송 기록 없음(직접 발급)";
 }
 
 const STATUS_FILTERS: { key: "all" | IssueStatus; label: string }[] = [
@@ -88,6 +108,24 @@ export function CouponIssuesTab({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<number | null>(null);
+  // '발송 내용' 보기 — 회원이 받은 메세지
+  const [viewing, setViewing] = useState<IssueRow | null>(null);
+  const [sent, setSent] = useState<{ loading: boolean; error: string; data: SentDetail | null }>({
+    loading: false,
+    error: "",
+    data: null,
+  });
+  const openSent = async (row: IssueRow) => {
+    setViewing(row);
+    setSent({ loading: true, error: "", data: null });
+    try {
+      const r = await authedFetch(getIdToken, `/api/crm/coupons/issues/${row.id}`);
+      if (!r.ok) setSent({ loading: false, error: String(r.data.error ?? "불러오지 못했어요"), data: null });
+      else setSent({ loading: false, error: "", data: r.data as unknown as SentDetail });
+    } catch {
+      setSent({ loading: false, error: "네트워크 오류로 불러오지 못했어요", data: null });
+    }
+  };
 
   useEffect(() => {
     setCouponId(presetCouponId ?? "");
@@ -175,6 +213,7 @@ export function CouponIssuesTab({
       "처리 직원",
       "회수일",
       "회수 사유",
+      "발급 경로",
     ];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = rows.map((r) =>
@@ -199,6 +238,7 @@ export function CouponIssuesTab({
         r.usedByName ?? "",
         r.revokedAt ? formatDateTime(r.revokedAt) : "",
         r.revokeReason ?? "",
+        sourceText(r),
       ]
         .map(esc)
         .join(","),
@@ -322,7 +362,7 @@ export function CouponIssuesTab({
         </EmptyBox>
       ) : (
         <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 overflow-x-auto">
-          <table className="w-full min-w-[760px] text-[12.5px]">
+          <table className="w-full min-w-[880px] text-[12.5px]">
             <thead className="bg-[#FBF7EB]/70 dark:bg-zinc-900/70 text-[#6B5D47] dark:text-zinc-400">
               <tr className="text-left">
                 <th className="px-3 py-2 font-semibold">회원</th>
@@ -332,6 +372,7 @@ export function CouponIssuesTab({
                   {status === "used" ? "사용" : "발급 · 기한"}
                 </th>
                 <th className="px-3 py-2 font-semibold">처리 내용</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">발송 내용</th>
                 {canManage && (
                   <th className="px-3 py-2 font-semibold w-[1%]"></th>
                 )}
@@ -394,12 +435,39 @@ export function CouponIssuesTab({
                     )}
                     {r.status === "revoked" && (
                       <div className="text-[11.5px]">
-                        {formatDateTime(r.revokedAt)} 회수
+                        <span className="text-[#2A251D] dark:text-zinc-100">
+                          {formatDateTime(r.revokedAt)} 회수
+                        </span>
                         {r.revokedByName && ` · ${r.revokedByName}`}
                         {r.revokeReason && (
                           <div className="text-[#A89B80]">{r.revokeReason}</div>
                         )}
                       </div>
+                    )}
+                    {r.status === "issued" && (
+                      <div className="text-[#2A251D] dark:text-zinc-100">
+                        발급 완료 · 아직 사용 전
+                      </div>
+                    )}
+                    {r.status === "expired" && (
+                      <div className="text-[#2A251D] dark:text-zinc-100">
+                        {formatYmd(r.expiresAt)} 기한 만료 · 사용 안 함
+                      </div>
+                    )}
+                    {/* 발급 경로 — 모든 상태에 표시 */}
+                    <div className="mt-0.5 text-[11.5px] text-[#A89B80]">
+                      {sourceText(r)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {r.source.kind === "send" && r.source.channel === "none" ? (
+                      <span className="text-[11.5px] text-[#A89B80]">알림 없음</span>
+                    ) : r.source.kind === "none" ? (
+                      <span className="text-[11.5px] text-[#A89B80]">-</span>
+                    ) : (
+                      <button type="button" className={ghostBtn} onClick={() => openSent(r)}>
+                        보기
+                      </button>
                     )}
                   </td>
                   {canManage && (
@@ -442,6 +510,55 @@ export function CouponIssuesTab({
           </table>
         </div>
       )}
+
+      <CrmModal open={!!viewing} onClose={() => setViewing(null)} title="발송 내용" size="md">
+        {viewing && (
+          <div className="space-y-3">
+            <dl className="grid grid-cols-[84px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[12.5px]">
+              <dt className="text-[#8C8270]">받은 회원</dt>
+              <dd className="text-[#2A251D] dark:text-zinc-100 font-semibold">{viewing.memberName}</dd>
+              <dt className="text-[#8C8270]">쿠폰</dt>
+              <dd className="text-[#2A251D] dark:text-zinc-100">
+                {viewing.couponName} · <span className="font-mono">{viewing.code}</span>
+              </dd>
+              <dt className="text-[#8C8270]">보낸 방법</dt>
+              <dd className="text-[#2A251D] dark:text-zinc-100">{sourceText(viewing)}</dd>
+              <dt className="text-[#8C8270]">보낸 때</dt>
+              <dd className="text-[#2A251D] dark:text-zinc-100">
+                {viewing.source.kind === "none" ? "-" : formatDateTime(viewing.source.sentAt)}
+              </dd>
+            </dl>
+            {sent.loading ? (
+              <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+            ) : sent.error ? (
+              <EmptyBox>{sent.error}</EmptyBox>
+            ) : sent.data ? (
+              <>
+                {sent.data.body ? (
+                  <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 overflow-hidden">
+                    <div className="px-3 py-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#F5F0E5]/60 dark:bg-zinc-800/40 text-[11.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                      회원이 받은 메세지
+                    </div>
+                    {sent.data.title && (
+                      <div className="px-3 pt-2.5 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                        {sent.data.title}
+                      </div>
+                    )}
+                    <div className="px-3 py-2.5 text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap break-keep break-words max-h-[50vh] overflow-y-auto">
+                      {sent.data.body}
+                    </div>
+                  </div>
+                ) : null}
+                {sent.data.note && (
+                  <p className="text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
+                    {sent.data.note}
+                  </p>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
+      </CrmModal>
     </div>
   );
 }

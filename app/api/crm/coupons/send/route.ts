@@ -9,25 +9,13 @@ import { inferMsgType, normalizePhone, solapiConfigured, solapiSendEach } from "
 import { logSmsSend } from "@/app/lib/crm-sms-log";
 import { resolveAudience } from "@/app/api/crm/messages/route";
 import {
-  benefitText,
-  conditionText,
   defaultCouponMessage,
   effectiveStatus,
-  fillCouponCondition,
   generateCouponCode,
   issueExpiryYmd,
   kstTodayYmd,
 } from "@/app/lib/crm-coupons";
-import { fmtExpiry } from "@/app/lib/crm-auto-coupon-vars";
-import {
-  loadCenterAddress,
-  loadCenterHours,
-  loadCenterPhone,
-  loadJoinLink,
-  loadMembersCommonVars,
-  renderMessage,
-  type Match,
-} from "@/app/api/crm/auto-messages/_engine";
+import { renderCouponMessages } from "@/app/lib/crm-coupon-send-render";
 import { loadCoupons, paginateAll } from "@/app/lib/crm-coupons-db";
 import { staffDisplayName } from "@/app/lib/crm-coupons-server";
 
@@ -35,9 +23,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 const SMS_CHUNK = 1000;
-
-/** 회원별 값이 들어가는 변수 — 하나라도 쓰면 회원 정보를 조회한다 */
-const MEMBER_VAR_TOKENS = ["#회원명#", "#회원번호#", "#마일리지#", "#미수금#", "#총출석#", "#마지막방문일#", "#다음수업#", "#가입일#"];
 
 /** 안내 문구 길이 상한 — 발송(POST)과 저장(PUT)이 같이 쓴다 */
 const MESSAGE_MAX = 1000;
@@ -276,39 +261,16 @@ export async function POST(request: Request) {
   }
 
   // ── 회원별 문구 — 문구에 쓴 변수만 조회해서 치환한다 ──
-  const has = (t: string) => template.includes(t);
-  const [memberVars, centerPhone, centerAddress, centerHours, appLink] = await Promise.all([
-    MEMBER_VAR_TOKENS.some(has)
-      ? loadMembersCommonVars(ctx.centerId, memberIds, template)
-      : Promise.resolve(new Map<number, Match>()),
-    has("#센터전화#") ? loadCenterPhone(ctx.centerId) : Promise.resolve(""),
-    has("#센터주소#") ? loadCenterAddress(ctx.centerId) : Promise.resolve(""),
-    has("#운영시간#") ? loadCenterHours(ctx.centerId) : Promise.resolve(""),
-    has("#앱설치링크#") ? loadJoinLink(ctx.centerId) : Promise.resolve(""),
-  ]);
-  const withCondition = fillCouponCondition(template, conditionText(coupon));
-  const couponBase = { name: coupon.name, benefit: benefitText(coupon), expires: fmtExpiry(expiresAt) };
-  const messageOf = (memberId: number): string => {
-    const m = memberVars.get(memberId);
-    return renderMessage(withCondition, {
-      center: ctx.centerName,
-      name: m?.name ?? "",
-      memberNo: m?.memberNo,
-      mileage: m?.mileage,
-      outstanding: m?.outstanding,
-      totalAttend: m?.totalAttend,
-      nextLesson: m?.nextLesson,
-      joinDate: m?.joinDate,
-      lastVisit: m?.lastVisit,
-      centerPhone,
-      centerAddress,
-      centerHours,
-      appLink,
-      couponVars: { ...couponBase, code: codeOf.get(memberId) ?? "" },
-    }).trim();
-  };
   const sendIdsList = memberIds.filter((id) => codeOf.has(id));
-  const messages = new Map(sendIdsList.map((id) => [id, messageOf(id)]));
+  const messages = await renderCouponMessages({
+    centerId: ctx.centerId,
+    centerName: ctx.centerName,
+    template,
+    coupon,
+    expiresAt,
+    memberIds: sendIdsList,
+    codeOf,
+  });
 
   // 문자 — 전화번호는 서버에서만 조회. 같은 번호·같은 문구는 1건만(가족이 번호를 같이 써도 문구가 다르면 각각)
   let smsSent = 0;
