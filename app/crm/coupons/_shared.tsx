@@ -55,7 +55,7 @@ const STATUS_TEXT: Record<IssueStatus, string> = {
 };
 export function StatusBadge({ status }: { status: IssueStatus }) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[status]}`}>
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[status]}`}>
       {STATUS_TEXT[status]}
     </span>
   );

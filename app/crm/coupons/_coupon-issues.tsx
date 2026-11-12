@@ -170,6 +170,33 @@ export function CouponIssuesTab({
     load();
   }, [load, refreshKey]);
 
+  // 회원 얼굴 썸네일 — 목록 응답엔 무거운 사진을 싣지 않고, 보이는 회원 것만 따로 불러온다(회원 목록과 같은 방식)
+  const [thumbs, setThumbs] = useState<Record<number, string>>({});
+  useEffect(() => {
+    const need = Array.from(new Set(rows.map((r) => r.memberId))).filter((id) => !(id in thumbs));
+    if (need.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const merged: Record<number, string> = {};
+      // thumbs API 는 한 번에 200명까지
+      for (let i = 0; i < need.length; i += 200) {
+        const ids = need.slice(i, i + 200);
+        const r = await authedFetch(getIdToken, "/api/crm/members/thumbs", {
+          method: "POST",
+          body: JSON.stringify({ ids }),
+        });
+        if (!r.ok) break;
+        const got = (r.data.thumbs ?? {}) as Record<number, string>;
+        // 사진 없는 회원은 빈 문자열로 남겨 다시 묻지 않는다
+        for (const id of ids) merged[id] = got[id] ?? "";
+      }
+      if (!cancelled && Object.keys(merged).length > 0) setThumbs((prev) => ({ ...prev, ...merged }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rows, thumbs, getIdToken]);
+
   const act = async (row: IssueRow, action: "revoke" | "restore" | "unuse") => {
     const msg = {
       revoke: `${row.memberName} 회원의 '${row.couponName}' 쿠폰을 회수할까요?\n\n회수 사유(선택)`,
@@ -380,19 +407,34 @@ export function CouponIssuesTab({
             </thead>
             <tbody className="divide-y divide-[#E8E0D0] dark:divide-zinc-800">
               {rows.map((r) => (
-                <tr key={r.id} className="align-top">
-                  <td className="px-3 py-2.5">
-                    <a
-                      href={`/crm/members/${r.memberId}`}
-                      className="font-semibold text-[#2A251D] dark:text-zinc-100 hover:underline"
-                    >
-                      {r.memberName}
+                // 가운데 정렬 — 두 줄짜리 글자 칸과 한 줄짜리 배지·버튼이 같은 높이에 오도록
+                <tr key={r.id} className="align-middle">
+                  {/* 얼굴 + 이름·연락처. 줄바꿈 금지 (좁아지면 번호가 두 줄로 꺾였다) */}
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <a href={`/crm/members/${r.memberId}`} className="group flex items-center gap-2.5">
+                      {thumbs[r.memberId] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={thumbs[r.memberId]}
+                          alt=""
+                          className="w-9 h-9 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
+                        />
+                      ) : (
+                        <span className="w-9 h-9 rounded-full flex items-center justify-center bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 text-[#A89B80] text-[13px] font-semibold shrink-0">
+                          {r.memberName?.slice(0, 1) || "—"}
+                        </span>
+                      )}
+                      <span>
+                        <span className="block font-semibold text-[#2A251D] dark:text-zinc-100 group-hover:underline">
+                          {r.memberName}
+                        </span>
+                        {r.memberPhone && (
+                          <span className="block text-[11.5px] text-[#8C8270] tabular-nums">
+                            {formatPhone(r.memberPhone)}
+                          </span>
+                        )}
+                      </span>
                     </a>
-                    {r.memberPhone && (
-                      <div className="text-[11.5px] text-[#8C8270]">
-                        {formatPhone(r.memberPhone)}
-                      </div>
-                    )}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="font-medium text-[#2A251D] dark:text-zinc-100">
@@ -402,10 +444,10 @@ export function CouponIssuesTab({
                       {r.benefit} · <span className="font-mono">{r.code}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-2.5 whitespace-nowrap">
                     <StatusBadge status={r.status} />
                   </td>
-                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap tabular-nums">
                     {r.status === "used" ? (
                       formatDateTime(r.usedAt)
                     ) : (
