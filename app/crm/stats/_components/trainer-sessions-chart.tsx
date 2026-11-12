@@ -305,7 +305,8 @@ export function TrainerRevenueChart() {
             })}
           </div>
 
-          <CrmMultiLineChart months={data.months} series={series} unit="원" />
+          {/* 왼쪽 눈금 = 100만원 배수로 딱 떨어지게 */}
+          <CrmMultiLineChart months={data.months} series={series} unit="원" yStep={1_000_000} />
           <p className="mt-2 text-[11px] leading-relaxed text-[#A89B80] dark:text-zinc-500">
             수강권은 담당 강사, 회원권·기타(운동복·락커)는 판매 직원 기준으로 집계돼요. 회원권·기타는 판매 직원이
             지정된 건만 잡혀서 센터 전체 매출보다 적게 보일 수 있어요.

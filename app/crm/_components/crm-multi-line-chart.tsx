@@ -14,13 +14,28 @@ interface Props {
   series: LineSeries[];
   unit?: string;
   height?: number;
+  /**
+   * y축 눈금 최소 단위 (예: 1_000_000 = 100만원). 주면 눈금이 이 값의 배수(×1·2·5·10…)로
+   * 5~6칸이 되도록 맞춰지고 숫자에 콤마가 붙는다. 안 주면 최댓값의 0·¼·½·¾·1 지점.
+   */
+  yStep?: number;
+}
+
+/** 최솟단위 base 의 1·2·5·10·20·50… 배 중 칸 수가 maxIntervals 이하가 되는 가장 작은 간격 */
+function niceStep(max: number, base: number, maxIntervals = 6): number {
+  for (let pow = 1; ; pow *= 10) {
+    for (const m of [1, 2, 5]) {
+      const step = base * m * pow;
+      if (Math.ceil(max / step) <= maxIntervals) return step;
+    }
+  }
 }
 
 /**
  * 다중 라인 차트 (월별). 강사별 월별 수업 수 등에 사용.
  * 외부 라이브러리 없이 SVG 로 직접 렌더 ([[feedback-vercel-ssr-esm]]).
  */
-export function CrmMultiLineChart({ months, series, unit = "", height = 240 }: Props) {
+export function CrmMultiLineChart({ months, series, unit = "", height = 240, yStep }: Props) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   if (months.length === 0 || series.length === 0) {
@@ -31,22 +46,35 @@ export function CrmMultiLineChart({ months, series, unit = "", height = 240 }: P
     );
   }
 
+  const dataMax = Math.max(1, ...series.flatMap((s) => s.values));
+  // y축 눈금 — yStep 이 있으면 그 배수로 딱 떨어지게, 없으면 최댓값 기준 4등분
+  let max = dataMax;
+  let ticks: { v: number; label: string }[];
+  if (yStep) {
+    const step = niceStep(dataMax, yStep);
+    max = Math.ceil(dataMax / step) * step;
+    ticks = Array.from({ length: max / step + 1 }, (_, i) => ({
+      v: i * step,
+      label: (i * step).toLocaleString(),
+    }));
+  } else {
+    ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({ v: max * t, label: String(Math.round(max * t)) }));
+  }
+
   const W = 640;
   const H = height;
-  const padL = 34;
+  // 왼쪽 여백 — 가장 긴 눈금 숫자가 잘리지 않게 (9px 글꼴 기준 글자당 약 5.2)
+  const padL = Math.max(34, Math.ceil(Math.max(...ticks.map((t) => t.label.length)) * 5.2) + 8);
   const padR = 12;
   const padT = 14;
   const padB = 26;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
 
-  const max = Math.max(1, ...series.flatMap((s) => s.values));
   const xStep = months.length > 1 ? innerW / (months.length - 1) : innerW / 2;
   const xAt = (i: number) => padL + (months.length > 1 ? i * xStep : innerW / 2);
   const yAt = (v: number) => padT + innerH - (v / max) * innerH;
   const monthLabel = (ym: string) => `${Number(ym.slice(5, 7))}월`;
-
-  const gridTs = [0, 0.25, 0.5, 0.75, 1];
 
   return (
     <div className="relative w-full overflow-x-auto">
@@ -57,13 +85,13 @@ export function CrmMultiLineChart({ months, series, unit = "", height = 240 }: P
         onMouseLeave={() => setHoverIdx(null)}
       >
         {/* 그리드 + y축 */}
-        {gridTs.map((t, gi) => {
-          const gy = padT + innerH * (1 - t);
+        {ticks.map((t, gi) => {
+          const gy = yAt(t.v);
           return (
             <g key={gi}>
               <line x1={padL} x2={W - padR} y1={gy} y2={gy} stroke="currentColor" strokeOpacity={0.16} />
               <text x={padL - 4} y={gy + 3} textAnchor="end" fontSize={9} fill="currentColor">
-                {Math.round(max * t)}
+                {t.label}
               </text>
             </g>
           );
