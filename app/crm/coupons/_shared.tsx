@@ -42,7 +42,7 @@ export function EmptyBox({ children }: { children: React.ReactNode }) {
 
 /** 상태 배지 — 색만으로 구분하지 않도록 항상 글자 포함 */
 const STATUS_STYLE: Record<IssueStatus, string> = {
-  issued: "bg-[#6B7B3A]/12 text-[#4d5a29] dark:bg-[#6B7B3A]/25 dark:text-[#C3D19A]",
+  issued: "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-300",
   used: "bg-[#2a78d6]/10 text-[#1c5cab] dark:bg-[#3987e5]/20 dark:text-[#9ec5f4]",
   revoked: "bg-[#B4442A]/10 text-[#B4442A] dark:bg-red-500/15 dark:text-red-300",
   expired: "bg-[#8C8270]/12 text-[#6B5D47] dark:bg-zinc-700/60 dark:text-zinc-400",
