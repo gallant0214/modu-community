@@ -3691,18 +3691,18 @@ function MemberWorkoutLogsSection({
                       {log.log_date}
                     </span>
                     {canEdit && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => startEdit(log)}
-                          className="px-2 py-0.5 rounded text-[11px] text-[#6B5D47] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                          className="px-3 py-1.5 rounded-lg border border-[#D9CBB5] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
                         >
                           수정
                         </button>
                         <button
                           type="button"
                           onClick={() => remove(log.id)}
-                          className="px-2 py-0.5 rounded text-[11px] text-red-700 hover:bg-red-50"
+                          className="px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-900 bg-white dark:bg-zinc-900 text-[12.5px] font-semibold text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40"
                         >
                           삭제
                         </button>
