@@ -561,7 +561,7 @@ interface SalesListResp {
   items: SalesListItem[];
 }
 
-type SalesPreset = "yesterday" | "today" | "week" | "month" | "custom";
+type SalesPreset = "month" | "week" | "custom";
 
 // KST 기준 오늘 YYYY-MM-DD
 function kstToday(): string {
@@ -575,11 +575,6 @@ function addDaysYmd(ymd: string, delta: number): string {
 // preset → {from, to} (KST YYYY-MM-DD)
 function salesRange(preset: SalesPreset, customFrom: string, customTo: string): { from: string; to: string } {
   const today = kstToday();
-  if (preset === "today") return { from: today, to: today };
-  if (preset === "yesterday") {
-    const y = addDaysYmd(today, -1);
-    return { from: y, to: y };
-  }
   if (preset === "week") {
     // 월요일 시작 ~ 일요일
     const d = new Date(`${today}T00:00:00Z`);
@@ -660,10 +655,8 @@ function SalesListTab() {
   };
 
   const PRESETS: { key: SalesPreset; label: string }[] = [
-    { key: "yesterday", label: "어제" },
-    { key: "today", label: "오늘" },
-    { key: "week", label: "이번주" },
     { key: "month", label: "이번달" },
+    { key: "week", label: "이번주" },
     { key: "custom", label: "직접선택" },
   ];
 
