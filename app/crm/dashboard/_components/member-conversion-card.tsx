@@ -149,6 +149,7 @@ export function MemberConversionCard() {
           series={[{ label: BAR, color: "#6B7B3A", values: curRates }]}
           line={{ label: LINE, color: "#C76C8E", values: prevRates }}
           mode="count"
+          yStep5
           unit="%"
           hoverNote={(i) =>
             `재등록 ${cur.expireConverted[i] ?? 0}명/만료 ${cur.expireCohort[i] ?? 0}명` +
@@ -179,6 +180,7 @@ export function MemberConversionCard() {
           series={[{ label: BAR, color: "#B47B2A", values: curReRates }]}
           line={{ label: LINE, color: "#5A8BB0", values: prevReRates }}
           mode="count"
+          yStep5
           unit="%"
           hoverNote={(i) =>
             `재등록 ${cur.reExpireConverted[i] ?? 0}건/만료 ${cur.reExpireCohort[i] ?? 0}건` +
@@ -212,6 +214,7 @@ export function MemberConversionCard() {
           series={[{ label: BAR, color: "#5A8BB0", values: curNew }]}
           line={{ label: LINE, color: "#C76C8E", values: prevNew }}
           mode="count"
+          yStep5
           unit="명"
           hoverNote={(i) => `${cur.newReg[i] ?? 0}명 · 1년 전 ${prev.newReg[i] ?? 0}명`}
         />

@@ -22,6 +22,18 @@ interface Props {
   line?: { label: string; color: string; values: (number | null)[] };
   /** 값 표기 포맷 (y축·막대 라벨·툴팁 공용). 금액처럼 숫자가 길 때 사용 */
   formatValue?: (v: number) => string;
+  /** y축 눈금을 5의 배수(0·5·10… / 0·10·20… 등)로 — 축 최대값을 그 배수로 올린다 (count 모드만) */
+  yStep5?: boolean;
+}
+
+/** 5의 배수 눈금 간격 — 칸이 5개 이하가 되는 가장 촘촘한 간격 (5, 10, 20, 25, 50, 100, …) */
+function niceStep5(max: number, maxIntervals = 5): number {
+  for (let scale = 1; ; scale *= 10) {
+    for (const s of [5, 10, 20, 25, 50]) {
+      const step = s * scale;
+      if (Math.ceil(max / step) <= maxIntervals) return step;
+    }
+  }
 }
 
 /**
@@ -29,7 +41,7 @@ interface Props {
  * - percent 모드: 각 달을 100%로 채우는 구성 비율 띠그래프
  * - count 모드: 절대값 누적 막대 (단일 시리즈면 일반 막대)
  */
-export function MonthlyStackedBars({ months, series, mode = "count", unit = "명", height = 200, hoverNote, line, formatValue }: Props) {
+export function MonthlyStackedBars({ months, series, mode = "count", unit = "명", height = 200, hoverNote, line, formatValue, yStep5 }: Props) {
   const [hover, setHover] = useState<{ x: number; y: number; idx: number; flip: boolean } | null>(null);
 
   if (months.length === 0 || series.length === 0) {
@@ -56,9 +68,12 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
   const colW = innerW / months.length;
   const barW = Math.min(30, colW * 0.6);
 
-  // y축 눈금
-  const axisMax = mode === "percent" ? 100 : maxTotal;
-  const gridTs = [0, 0.25, 0.5, 0.75, 1];
+  // y축 눈금 — 기본은 최대값 4등분, yStep5 면 5의 배수 간격
+  const step5 = yStep5 && mode === "count" ? niceStep5(maxTotal) : 0;
+  const axisMax = mode === "percent" ? 100 : step5 ? Math.ceil(maxTotal / step5) * step5 : maxTotal;
+  const gridTs = step5
+    ? Array.from({ length: axisMax / step5 + 1 }, (_, k) => (k * step5) / axisMax)
+    : [0, 0.25, 0.5, 0.75, 1];
 
   // 라벨: "YYYY-MM-DD"→"M/D", "YYYY-MM"→"M월", "YYYY"→"YYYY"
   const monthLabel = (k: string) => {
