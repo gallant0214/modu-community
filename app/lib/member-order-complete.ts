@@ -27,6 +27,7 @@ import { finalizeCouponUse, releaseCoupon } from "@/app/lib/crm-coupons-server";
 import { sendLocalizedPushToMember } from "@/app/lib/member-notify";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { fireAutoMessage, fireFirstPurchaseMessage } from "@/app/lib/crm-auto-message";
+import { syncRegistrationType, syncMemberRegistrationDates } from "@/app/lib/crm-registration-type";
 
 export interface OrderRow {
   id: number;
@@ -254,6 +255,14 @@ export async function completeOrder(opts: {
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", order.id);
+
+  /* ── 신규/재등록·등록일 스냅샷 — 직원 발급(POST /api/crm/memberships·passes)과 같은 갱신 ──
+     🚨 예전엔 여기서 안 불러, 앱으로 '3개월(재등록)'을 산 회원이 '신규'로 남았다 (2026-11-14).
+     두 함수 모두 예외를 던지지 않는다 — 결제·발급은 이미 끝났다. */
+  if (purchased.some((p) => p.kind === "membership" || p.kind === "pass")) {
+    await syncRegistrationType(centerId, memberId);
+    await syncMemberRegistrationDates(centerId, memberId);
+  }
 
   /* ── 알림 ─────────────────────────────────────────── */
   const productNames = items.map((i) => i.product_name).join(", ");

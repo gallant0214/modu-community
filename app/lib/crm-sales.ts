@@ -1,4 +1,11 @@
 import { supabase } from "@/app/lib/supabase";
+import { loadFreeMembershipNames } from "@/app/lib/crm-registration-type";
+import {
+  isFreeServiceMembership,
+  isFreeServicePass,
+  isPaidRenewalMembership,
+  isRenewalPlanName,
+} from "@/app/lib/crm-registration-rules";
 
 /**
  * crm_sales = BROJ "매출내역_상품결제단위" 실제 거래(결제) 원장.
@@ -106,6 +113,10 @@ export interface RegistrationClassifier {
  * 대신 실제 구매 이력에서 회원별 최초 구매일을 구해 그 날짜와 비교한다.
  *
  * 원장에 member_id 가 비어 있는 건은 연락처로 회원을 찾아 함께 판정한다.
+ *
+ * 2026-11-14 사용자 결정 (회원 목록·대시보드와 같은 기준 — crm-registration-rules.ts):
+ *   - 무료 서비스(리뷰 보상·체험권·서비스 회원권/PT)는 '첫 구매'로 보지 않는다.
+ *   - 첫 구매일에 이름에 '재등록'이 붙은 회원권만 있으면(신규 상품 없이) 그 날 구매도 재등록.
  */
 export async function buildRegistrationClassifier(
   centerId: number
@@ -125,31 +136,55 @@ export async function buildRegistrationClassifier(
     return out;
   };
 
-  const [members, sales, memberships, passes, rentals] = await Promise.all([
+  const [members, sales, memberships, passes, rentals, freeNames] = await Promise.all([
     page<{ id: number; phone: string | null }>((f, t) =>
       supabase.from("crm_members").select("id, phone").eq("center_id", centerId).range(f, t)
     ),
-    page<{ member_id: number | null; customer_phone: string | null; tx_at: string }>((f, t) =>
+    page<{
+      member_id: number | null;
+      customer_phone: string | null;
+      tx_at: string;
+      product_type: string | null;
+      product_name: string | null;
+    }>((f, t) =>
       supabase
         .from("crm_sales")
-        .select("member_id, customer_phone, tx_at")
+        .select("member_id, customer_phone, tx_at, product_type, product_name")
         .eq("center_id", centerId)
         .gt("amount_won", 0)
         .range(f, t)
     ),
-    page<{ member_id: number | null; start_date: string | null; purchased_at: string | null }>((f, t) =>
+    page<{
+      member_id: number | null;
+      start_date: string | null;
+      purchased_at: string | null;
+      plan_name: string | null;
+      price_won: number | null;
+      status: string | null;
+    }>((f, t) =>
       supabase
         .from("crm_memberships")
-        .select("member_id, start_date, purchased_at")
+        .select("member_id, start_date, purchased_at, plan_name, price_won, status")
         .eq("center_id", centerId)
         .range(f, t)
     ),
-    page<{ member_id: number | null; issued_at: string | null }>((f, t) =>
-      supabase.from("crm_passes").select("member_id, issued_at").eq("center_id", centerId).range(f, t)
+    page<{
+      member_id: number | null;
+      issued_at: string | null;
+      issue_type: string | null;
+      lesson_kind: string | null;
+      price_won: number | null;
+    }>((f, t) =>
+      supabase
+        .from("crm_passes")
+        .select("member_id, issued_at, issue_type, lesson_kind, price_won")
+        .eq("center_id", centerId)
+        .range(f, t)
     ),
     page<{ member_id: number | null; start_date: string | null }>((f, t) =>
       supabase.from("crm_rentals").select("member_id, start_date").eq("center_id", centerId).range(f, t)
     ),
+    loadFreeMembershipNames(centerId),
   ]);
 
   const idByPhone = new Map<string, number>();
@@ -171,10 +206,33 @@ export async function buildRegistrationClassifier(
   const kstYmd = (iso: string) =>
     new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
+  const paidMemberships = memberships.filter(
+    (r) => !isFreeServiceMembership(r.plan_name, r.price_won, freeNames)
+  );
+  const paidPasses = passes.filter((r) => !isFreeServicePass(r.issue_type, r.lesson_kind, r.price_won));
+  // 원장의 0원 건은 select 에서 이미 빠진다(amount_won > 0). 유료라도 무료 서비스 이름이면 제외하지 않는다.
   for (const r of sales) put(resolve(r.member_id, r.customer_phone), kstYmd(r.tx_at));
-  for (const r of memberships) put(resolve(r.member_id, null), r.purchased_at ?? r.start_date);
-  for (const r of passes) put(resolve(r.member_id, null), r.issued_at);
+  for (const r of paidMemberships) put(resolve(r.member_id, null), r.purchased_at ?? r.start_date);
+  for (const r of paidPasses) put(resolve(r.member_id, null), r.issued_at);
   for (const r of rentals) put(resolve(r.member_id, null), r.start_date);
+
+  // 첫 구매일에 산 회원권 종류 — '재등록' 회원권만 있으면 재등록으로 시작한 회원
+  const firstDay = new Map<number, { renewal: boolean; newPlan: boolean }>();
+  const mark = (memberId: number | null, ymd: string | null | undefined, renewal: boolean) => {
+    if (!memberId || !ymd || firstDate.get(memberId) !== ymd.slice(0, 10)) return;
+    const cur = firstDay.get(memberId) ?? { renewal: false, newPlan: false };
+    if (renewal) cur.renewal = true;
+    else cur.newPlan = true;
+    firstDay.set(memberId, cur);
+  };
+  for (const r of sales) {
+    if (r.product_type !== "멤버십") continue;
+    mark(resolve(r.member_id, r.customer_phone), kstYmd(r.tx_at), isRenewalPlanName(r.product_name));
+  }
+  for (const r of paidMemberships) {
+    if (r.status === "refunded" || r.status === "deleted") continue;
+    mark(resolve(r.member_id, null), r.purchased_at ?? r.start_date, isPaidRenewalMembership(r, freeNames));
+  }
 
   return {
     classify(memberId, phone, rowYmd) {
@@ -183,7 +241,9 @@ export async function buildRegistrationClassifier(
       if (!id) return "unknown";
       const first = firstDate.get(id);
       if (!first) return "unknown";
-      return rowYmd.slice(0, 10) <= first ? "new" : "renewal";
+      if (rowYmd.slice(0, 10) > first) return "renewal";
+      const f = firstDay.get(id);
+      return f && f.renewal && !f.newPlan ? "renewal" : "new";
     },
   };
 }

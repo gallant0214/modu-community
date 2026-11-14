@@ -1,4 +1,20 @@
 import { supabase } from "@/app/lib/supabase";
+import {
+  isFreeServiceMembership,
+  isFreeServicePass,
+  isPaidRenewalMembership,
+} from "@/app/lib/crm-registration-rules";
+
+/** 센터 상품 중 0원 회원권 이름 — 무료 서비스 판정용 (지운 상품도 과거 발급분이 있어 포함) */
+export async function loadFreeMembershipNames(centerId: number): Promise<Set<string>> {
+  const { data } = await supabase
+    .from("crm_products")
+    .select("name")
+    .eq("center_id", centerId)
+    .eq("type", "membership")
+    .eq("price_won", 0);
+  return new Set(((data ?? []) as { name: string | null }[]).map((r) => (r.name ?? "").trim()).filter(Boolean));
+}
 
 /**
  * 이용권 구매(온라인 판매) 전용 신규/재등록 판정 (사용자 규칙 2026-10-18):
@@ -7,24 +23,35 @@ import { supabase } from "@/app/lib/supabase";
  * ⚠️ CRM 통계용 registration_type(2회↑=재등록)과 기준이 다르므로 여기서만 쓴다.
  *    (신규 회원이 만료 전에 재등록가로 다시 결제할 수 있어야 하기 때문)
  *    락커·운동복(대여권)은 등록 판정에 넣지 않는다.
+ *    무료 서비스(리뷰 보상·체험권·서비스 세션)만 받은 회원은 결제한 적이 없으므로 신규 (2026-11-14).
  */
 export async function shopRegistrationType(
   centerId: number,
   memberId: number
 ): Promise<"신규" | "재등록"> {
-  const [{ count: ms }, { count: ps }] = await Promise.all([
+  const [{ data: ms }, { data: ps }, freeNames] = await Promise.all([
     supabase
       .from("crm_memberships")
-      .select("id", { count: "exact", head: true })
+      .select("plan_name, price_won")
       .eq("center_id", centerId)
-      .eq("member_id", memberId),
+      .eq("member_id", memberId)
+      .neq("status", "deleted"),
     supabase
       .from("crm_passes")
-      .select("id", { count: "exact", head: true })
+      .select("issue_type, lesson_kind, price_won")
       .eq("center_id", centerId)
-      .eq("member_id", memberId),
+      .eq("member_id", memberId)
+      .neq("status", "deleted"),
+    loadFreeMembershipNames(centerId),
   ]);
-  return (ms ?? 0) + (ps ?? 0) > 0 ? "재등록" : "신규";
+  const paid =
+    ((ms ?? []) as { plan_name: string | null; price_won: number | null }[]).some(
+      (r) => !isFreeServiceMembership(r.plan_name, r.price_won, freeNames)
+    ) ||
+    ((ps ?? []) as { issue_type: string | null; lesson_kind: string | null; price_won: number | null }[]).some(
+      (r) => !isFreeServicePass(r.issue_type, r.lesson_kind, r.price_won)
+    );
+  return paid ? "재등록" : "신규";
 }
 
 /**
@@ -36,7 +63,10 @@ export async function shopRegistrationType(
  *   - 그 뒤에 회원권이든 수강권이든 **따로 한 번 더 사면 재등록**.
  *     예) 수강권만 있다가 수강권 재구매 → 재등록 / 수강권 뒤 회원권 구매 → 재등록
  *   - 락커·운동복 등 대여권은 몇 건을 사도 판정에 넣지 않는다.
- * 회원권·수강권 발급 직후에 호출한다.
+ *   - 무료 서비스(신규 리뷰작성·리뷰 연장·연장쿠폰·체험권·서비스 회원권/PT·O.T)는 횟수에 넣지 않는다 (2026-11-14).
+ *   - 이름에 '재등록'이 붙은 유료 회원권을 샀으면 횟수와 관계없이 재등록 (2026-11-14).
+ *   규칙 본체 → crm-registration-rules.ts
+ * 회원권·수강권 발급 직후(직원 발급 + 앱·홈페이지 결제 완료)에 호출한다.
  *
  * 🚨 '신규 → 재등록' 방향으로만 올린다. 반대로 내리지 않는 이유:
  *    POS(BROJ) 시절 구매 이력이 CRM 테이블에 없는 회원이 있어(수기/임포트 누락),
@@ -57,22 +87,53 @@ export async function syncRegistrationType(centerId: number, memberId: number): 
     const cur = (member as { registration_type?: string | null } | null)?.registration_type ?? null;
     if ((cur ?? "").trim() === "재등록") return; // 이미 재등록이면 건드릴 것 없음
 
-    // 회원권 + 수강권의 발급 시각을 모아 '등록 횟수' 를 센다.
+    // 회원권 + 수강권의 발급 시각을 모아 '등록 횟수' 를 센다 (무료 서비스 제외).
     // 같은 결제(묶음·장바구니)는 시각이 거의 같으므로 3초 이내면 한 번으로 묶는다.
-    const [{ data: ms }, { data: ps }] = await Promise.all([
+    const [{ data: ms }, { data: ps }, freeNames] = await Promise.all([
       supabase
         .from("crm_memberships")
-        .select("created_at")
+        .select("plan_name, price_won, status, created_at")
         .eq("center_id", centerId)
-        .eq("member_id", memberId),
+        .eq("member_id", memberId)
+        .neq("status", "deleted"),
       supabase
         .from("crm_passes")
-        .select("created_at")
+        .select("issue_type, lesson_kind, price_won, created_at")
         .eq("center_id", centerId)
-        .eq("member_id", memberId),
+        .eq("member_id", memberId)
+        .neq("status", "deleted"),
+      loadFreeMembershipNames(centerId),
     ]);
-    const times = [...(ms ?? []), ...(ps ?? [])]
-      .map((r) => Date.parse((r as { created_at: string }).created_at))
+    const memberships = (ms ?? []) as {
+      plan_name: string | null;
+      price_won: number | null;
+      status: string | null;
+      created_at: string;
+    }[];
+    const passes = (ps ?? []) as {
+      issue_type: string | null;
+      lesson_kind: string | null;
+      price_won: number | null;
+      created_at: string;
+    }[];
+
+    const markRenewal = () =>
+      supabase
+        .from("crm_members")
+        .update({ registration_type: "재등록" } as never)
+        .eq("id", memberId)
+        .eq("center_id", centerId);
+
+    if (memberships.some((r) => isPaidRenewalMembership(r, freeNames))) {
+      await markRenewal();
+      return;
+    }
+
+    const times = [
+      ...memberships.filter((r) => !isFreeServiceMembership(r.plan_name, r.price_won, freeNames)),
+      ...passes.filter((r) => !isFreeServicePass(r.issue_type, r.lesson_kind, r.price_won)),
+    ]
+      .map((r) => Date.parse(r.created_at))
       .filter((t) => Number.isFinite(t))
       .sort((a, b) => a - b);
     if (times.length <= 1) return;
@@ -84,11 +145,7 @@ export async function syncRegistrationType(centerId: number, memberId: number): 
     }
     if (events <= 1) return;
 
-    await supabase
-      .from("crm_members")
-      .update({ registration_type: "재등록" } as never)
-      .eq("id", memberId)
-      .eq("center_id", centerId);
+    await markRenewal();
   } catch (e) {
     console.error("[registration-type] sync error", memberId, e);
   }
