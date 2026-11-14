@@ -53,6 +53,8 @@ export async function PATCH(
     product_mileage_used?: number;
     /** 부가세 포함 금액인지 — 상품 레코드의 vat_included (금액은 바꾸지 않는다) */
     product_vat_included?: boolean;
+    /** 판매 직원 (crm_center_members.id). null = 비우기 */
+    product_seller_member_id?: number | null;
   };
   try {
     body = await request.json();
@@ -99,7 +101,8 @@ export async function PATCH(
     body.product_price_won !== undefined ||
     body.product_discount_won !== undefined ||
     body.product_mileage_used !== undefined ||
-    body.product_vat_included !== undefined;
+    body.product_vat_included !== undefined ||
+    body.product_seller_member_id !== undefined;
   if (editsProduct) {
     if (!perms["sales.edit"]) {
       return NextResponse.json({ error: "결제내역 수정 권한이 없습니다" }, { status: 403 });
@@ -126,7 +129,7 @@ export async function PATCH(
     }
     const { data: prodRow } = await supabase
       .from(table)
-      .select("price_won, discount_won, mileage_used, vat_included")
+      .select("price_won, discount_won, mileage_used, vat_included, seller_member_id")
       .eq("id", productId)
       .eq("center_id", ctx.centerId)
       .maybeSingle();
@@ -135,6 +138,7 @@ export async function PATCH(
       discount_won?: number | null;
       mileage_used?: number | null;
       vat_included?: boolean | null;
+      seller_member_id?: number | null;
     };
     const nz = (v: unknown, fallback: number) => {
       if (v === undefined) return fallback;
@@ -146,9 +150,55 @@ export async function PATCH(
     const oldMileage = Math.max(0, Math.floor(Number(prod.mileage_used) || 0));
     const nextMileage = nz(body.product_mileage_used, oldMileage);
     const nextPaid = Math.max(0, nextPrice - nextDiscount - nextMileage);
+    // 금액 항목이 실제로 바뀌었을 때만 결제액을 다시 계산한다.
+    //   🚨 예전엔 판매 직원·메모만 고쳐도 결제액을 '가격−할인−마일리지'로 덮어써서,
+    //      한 상품을 여러 번 나눠 낸 결제(700,000+70,000)의 한 줄이 상품 전액으로 바뀌었다.
+    const amountsChanged =
+      nextPrice !== (Number(prod.price_won) || 0) ||
+      nextDiscount !== (Number(prod.discount_won) || 0) ||
+      nextMileage !== oldMileage;
+    if (amountsChanged) {
+      const linkCol = table === "crm_memberships" ? "membership_id" : table === "crm_passes" ? "pass_id" : "rental_id";
+      const { count: otherPays } = await supabase
+        .from("crm_payments")
+        .select("id", { count: "exact", head: true })
+        .eq("center_id", ctx.centerId)
+        .eq(linkCol, productId)
+        .neq("id", before.id)
+        .neq("status", "refunded");
+      if ((otherPays ?? 0) > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "이 상품은 결제가 여러 건으로 나뉘어 있어 여기서 금액을 바꿀 수 없어요. 판매 직원·부가세·결제수단·메모는 바꿀 수 있어요.",
+          },
+          { status: 400 }
+        );
+      }
+    }
     // 부가세 포함 여부 — 상품에 저장해 두면 매출(부가세 제외)·선수금·커미션·급여가 모두 이 값을 그대로 읽는다
     const nextVat =
       typeof body.product_vat_included === "boolean" ? body.product_vat_included : !!prod.vat_included;
+    // 판매 직원 — 강사 매출(회원권·기타)·매출 목록 '담당'·강사 대시보드가 이 값으로 귀속한다
+    let nextSeller: number | null = prod.seller_member_id ?? null;
+    if (body.product_seller_member_id !== undefined) {
+      const sid = body.product_seller_member_id === null ? null : Math.trunc(Number(body.product_seller_member_id));
+      if (sid !== null) {
+        if (!Number.isFinite(sid) || sid <= 0) {
+          return NextResponse.json({ error: "판매 직원이 올바르지 않아요" }, { status: 400 });
+        }
+        const { data: staffRow } = await supabase
+          .from("crm_center_members")
+          .select("id")
+          .eq("id", sid)
+          .eq("center_id", ctx.centerId)
+          .maybeSingle();
+        if (!staffRow) {
+          return NextResponse.json({ error: "이 센터 직원이 아니에요" }, { status: 400 });
+        }
+      }
+      nextSeller = sid;
+    }
 
     // 마일리지 차액 정산 — 더 썼으면 잔액에서 더 빼고, 덜 썼으면 돌려준다
     const diff = nextMileage - oldMileage;
@@ -182,21 +232,38 @@ export async function PATCH(
     }
 
     const prodPatch: Record<string, unknown> = {
-      price_won: nextPrice,
-      discount_won: nextDiscount,
-      mileage_used: nextMileage,
       vat_included: nextVat,
+      seller_member_id: nextSeller,
       updated_at: new Date().toISOString(),
     };
-    // 회원권·수강권은 미수금도 다시 계산한다(대여권엔 미수금 컬럼이 없다)
-    if (table !== "crm_rentals") {
-      prodPatch.outstanding_won = 0;
-      prodPatch.payment_status = "paid";
+    if (amountsChanged) {
+      prodPatch.price_won = nextPrice;
+      prodPatch.discount_won = nextDiscount;
+      prodPatch.mileage_used = nextMileage;
+      // 회원권·수강권은 미수금도 다시 계산한다(대여권엔 미수금 컬럼이 없다)
+      if (table !== "crm_rentals") {
+        prodPatch.outstanding_won = 0;
+        prodPatch.payment_status = "paid";
+      }
     }
     await supabase.from(table).update(prodPatch as never).eq("id", productId).eq("center_id", ctx.centerId);
 
-    // 결제행 금액은 서버가 계산한 실결제액으로 맞춘다
-    body.amount_won = nextPaid;
+    // 결제행 금액은 서버가 계산한 실결제액으로 맞춘다 (금액을 바꿨을 때만)
+    if (amountsChanged) body.amount_won = nextPaid;
+    else delete body.amount_won;
+
+    // 판매 직원이 바뀌었으면 로그에 이름으로 남긴다
+    const prevSeller = prod.seller_member_id ?? null;
+    const sellerAudit: Record<string, string> = {};
+    if (nextSeller !== prevSeller) {
+      const ids = [nextSeller, prevSeller].filter((v): v is number => !!v);
+      const { data: names } = ids.length
+        ? await supabase.from("crm_center_members").select("id, display_name").eq("center_id", ctx.centerId).in("id", ids)
+        : { data: [] as { id: number; display_name: string }[] };
+      const nameOf = (v: number | null) =>
+        v ? (names ?? []).find((n) => n.id === v)?.display_name ?? `직원 #${v}` : "없음";
+      sellerAudit["판매 직원"] = `${nameOf(prevSeller)}→${nameOf(nextSeller)}`;
+    }
 
     await supabase.from("crm_audit_logs").insert({
       center_id: ctx.centerId,
@@ -204,14 +271,15 @@ export async function PATCH(
       action: "payment.update",
       entity_type: "crm_payments",
       entity_id: before.id,
+      // 로그 탭은 앞 5개 항목만 보여 주므로 바뀐 것(판매 직원·부가세)을 앞에 둔다
       payload: {
+        ...sellerAudit,
+        ...(nextVat !== !!prod.vat_included ? { 부가세: nextVat ? "미포함→포함" : "포함→미포함" } : {}),
         금액: nextPrice,
         할인: nextDiscount,
-        마일리지사용: nextMileage,
         실결제: nextPaid,
-        이전마일리지: oldMileage,
-        부가세포함: nextVat,
-        이전부가세포함: !!prod.vat_included,
+        "마일리지 사용": nextMileage,
+        "이전 마일리지": oldMileage,
       } as never,
     });
   }

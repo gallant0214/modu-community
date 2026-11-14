@@ -176,7 +176,11 @@ export const LOG_FIELD_LABEL: Record<string, string> = {
   product_label: "상품명",
 };
 
-const LOG_MONEY_FIELDS = new Set(["price_won", "amount_won", "discount_won", "total_paid_won"]);
+const LOG_MONEY_FIELDS = new Set([
+  "price_won", "amount_won", "discount_won", "total_paid_won",
+  // 한글 키로 남기는 결제 수정·환불 로그
+  "금액", "할인", "실결제", "환불금액",
+]);
 const LOG_IMAGE_FIELDS = new Set(["face_image_data", "face_image_thumb"]);
 const LOG_ISSUE_TYPE: Record<string, string> = { new: "신규", renewal: "재등록", trial: "체험", service: "서비스" };
 const LOG_PAYMENT_METHOD: Record<string, string> = { card: "카드", cash: "현금", transfer: "계좌이체", etc: "기타" };
@@ -256,7 +260,8 @@ export function summarizeAuditLog(
     .filter(([k]) => !LOG_HIDDEN_FIELDS.has(k))
     .map(([k, v]) => {
       if (LOG_IMAGE_FIELDS.has(k)) return `${LOG_FIELD_LABEL[k] ?? k} ${v ? "변경" : "삭제"}`;
-      const label = LOG_FIELD_LABEL[k];
+      // 한글 키(결제 수정·환불 로그)는 그 자체가 라벨이다
+      const label = LOG_FIELD_LABEL[k] ?? (/[가-힣]/.test(k) ? k : undefined);
       // 라벨이 없는(=내부용) 필드는 노출하지 않는다 (영문 필드명 노출 방지)
       if (!label) return "";
       return `${label} ${fmt(k, v)}`;

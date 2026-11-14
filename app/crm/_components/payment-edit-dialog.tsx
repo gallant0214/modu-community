@@ -19,6 +19,8 @@ export interface PaymentEditValue {
   mileageUsed: number;
   /** 부가세 포함 금액인지 */
   vatIncluded: boolean;
+  /** 판매 직원 id (없으면 null) */
+  sellerMemberId: number | null;
   paidDate: string;
   method: string;
   methodCustom: string;
@@ -30,6 +32,8 @@ export function PaymentEditDialog({
   productName,
   /** 회원이 지금 보유한 마일리지 (추가로 쓸 수 있는 상한 계산용) */
   memberMileage,
+  staffOptions,
+  sellerName,
   initial,
   busy,
   error,
@@ -39,6 +43,10 @@ export function PaymentEditDialog({
   open: boolean;
   productName: string;
   memberMileage: number;
+  /** 판매 직원으로 고를 수 있는 재직 직원 */
+  staffOptions: { id: number; display_name: string }[];
+  /** 지금 판매 직원 이름 — 퇴사자라 목록에 없어도 선택지에 남긴다 */
+  sellerName?: string | null;
   initial: PaymentEditValue;
   busy?: boolean;
   error?: string;
@@ -51,6 +59,8 @@ export function PaymentEditDialog({
     <Body
       productName={productName}
       memberMileage={memberMileage}
+      staffOptions={staffOptions}
+      sellerName={sellerName}
       initial={initial}
       busy={busy}
       error={error}
@@ -66,6 +76,8 @@ const inputCls =
 function Body({
   productName,
   memberMileage,
+  staffOptions,
+  sellerName,
   initial,
   busy,
   error,
@@ -74,6 +86,8 @@ function Body({
 }: {
   productName: string;
   memberMileage: number;
+  staffOptions: { id: number; display_name: string }[];
+  sellerName?: string | null;
   initial: PaymentEditValue;
   busy?: boolean;
   error?: string;
@@ -84,6 +98,12 @@ function Body({
   const [discount, setDiscount] = useState(String(initial.discountWon));
   const [mileage, setMileage] = useState(String(initial.mileageUsed));
   const [vatIncluded, setVatIncluded] = useState(initial.vatIncluded);
+  const [sellerId, setSellerId] = useState<number | null>(initial.sellerMemberId);
+  // 지금 판매 직원이 재직 목록에 없으면(퇴사 등) 그 사람도 선택지에 남겨 그대로 저장되게 한다
+  const sellerChoices =
+    initial.sellerMemberId && !staffOptions.some((s) => s.id === initial.sellerMemberId)
+      ? [{ id: initial.sellerMemberId, display_name: `${sellerName ?? "이전 직원"} (퇴사)` }, ...staffOptions]
+      : staffOptions;
   const [paidDate, setPaidDate] = useState(initial.paidDate);
   const [method, setMethod] = useState(initial.method);
   const [methodCustom, setMethodCustom] = useState(initial.methodCustom);
@@ -144,7 +164,23 @@ function Body({
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <label className="block pt-1 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+            판매 직원
+            <select
+              value={sellerId ?? ""}
+              onChange={(e) => setSellerId(e.target.value ? Number(e.target.value) : null)}
+              className="mt-0.5 w-full px-2 py-1.5 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100"
+            >
+              <option value="">선택 안 함</option>
+              {sellerChoices.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.display_name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid grid-cols-2 gap-2">
             <label className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
               결제일
               <input
@@ -190,7 +226,7 @@ function Body({
           </label>
 
           <p className="text-[11px] text-[#A89B80] leading-relaxed">
-            저장하면 상품의 금액·할인·마일리지·부가세 포함 여부와 회원 마일리지 잔액이 함께 맞춰집니다.
+            저장하면 상품의 금액·할인·마일리지·부가세 포함 여부·판매 직원과 회원 마일리지 잔액이 함께 맞춰집니다.
             부가세 포함 체크는 금액을 바꾸지 않아요.
             상품 종류·기간은 상품 카드에서 수정해 주세요.
           </p>
@@ -219,6 +255,7 @@ function Body({
                 discountWon,
                 mileageUsed,
                 vatIncluded,
+                sellerMemberId: sellerId,
                 paidDate,
                 method,
                 methodCustom,

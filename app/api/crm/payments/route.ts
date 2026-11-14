@@ -456,6 +456,9 @@ export async function GET(request: Request) {
             : // 환불로 상품이 회수된 결제 — 회수 시 남긴 스냅샷, 없으면 주문에 남은 이름
               r.product_label ?? ord?.product_name ?? null,
       handler_name: handlerName,
+      /** 연결 상품의 판매 직원 (결제 수정 창 기본값). 퇴사자여도 이름을 함께 내려 선택지에 남긴다 */
+      product_seller_member_id: sellerId,
+      product_seller_name: sellerId ? staffByIdMap.get(sellerId) ?? null : null,
       /** 온라인 결제면 어디서 결제됐는지. 직원 발급이면 null */
       pg: ord
         ? {

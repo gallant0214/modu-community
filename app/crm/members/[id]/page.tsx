@@ -570,6 +570,7 @@ export default function CrmMemberDetailPage() {
         <MemberPaymentsSection
           memberId={member.id}
           memberMileage={member.mileage ?? 0}
+          staffList={staffList}
           canEdit={canEditSales}
           canRefund={canRefundSales}
           canDelete={canDeleteSales}
@@ -3386,6 +3387,9 @@ interface PaymentRow {
   product_discount_won?: number;
   /** 연결 상품이 부가세 포함 금액인지 (결제 수정 창 기본값) */
   product_vat_included?: boolean;
+  /** 연결 상품의 판매 직원 (결제 수정 창 기본값) */
+  product_seller_member_id?: number | null;
+  product_seller_name?: string | null;
   /** 장바구니로 한 번에 결제한 묶음의 대표 결제 id */
   cart_id?: number;
   /** 그 묶음의 결제 건수 (1이면 단건) */
@@ -3727,6 +3731,7 @@ function MemberWorkoutLogsSection({
 function MemberPaymentsSection({
   memberId,
   memberMileage = 0,
+  staffList = [],
   canEdit = false,
   canRefund = false,
   canDelete = false,
@@ -3738,6 +3743,8 @@ function MemberPaymentsSection({
   memberId: number;
   /** 회원이 보유한 마일리지 — 결제 수정 창에서 추가 사용 한도에 쓴다 */
   memberMileage?: number;
+  /** 재직 직원 — 결제 수정 창의 판매 직원 선택지 */
+  staffList?: { id: number; display_name: string }[];
   canEdit?: boolean;
   canRefund?: boolean;
   canDelete?: boolean;
@@ -3847,6 +3854,10 @@ function MemberPaymentsSection({
           product_discount_won: v.discountWon,
           product_mileage_used: v.mileageUsed,
           product_vat_included: v.vatIncluded,
+          // 판매 직원은 바꿨을 때만 보낸다
+          ...(v.sellerMemberId !== (p.product_seller_member_id ?? null)
+            ? { product_seller_member_id: v.sellerMemberId }
+            : {}),
           method: v.method,
           method_custom: v.method === "etc" ? v.methodCustom : null,
           paid_at: v.paidDate || undefined,
@@ -4284,6 +4295,8 @@ function MemberPaymentsSection({
           open
           productName={editDialogFor.product_name || "결제 건"}
           memberMileage={memberMileage}
+          staffOptions={staffList}
+          sellerName={editDialogFor.product_seller_name}
           busy={busyId === editDialogFor.id}
           error={editDialogError}
           initial={{
@@ -4291,6 +4304,7 @@ function MemberPaymentsSection({
             discountWon: editDialogFor.product_discount_won ?? 0,
             mileageUsed: editDialogFor.mileage_used ?? 0,
             vatIncluded: !!editDialogFor.product_vat_included,
+            sellerMemberId: editDialogFor.product_seller_member_id ?? null,
             paidDate: editDialogFor.paid_at
               ? new Date(new Date(editDialogFor.paid_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
               : "",
