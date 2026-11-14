@@ -203,6 +203,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     items: [
       { key: "settings.edit", label: "센터 설정 변경 — 예약·음성·키오스크·사업자정보", defaults: D_ADMIN },
       { key: "settings.audit_log", label: "활동 로그 보기", defaults: D_ADMIN },
+      // 키 하나로 회원 연락처·매출을 센터 밖으로 꺼낼 수 있어 기본은 대표자만 (관리자에게는 직접 켜 줘야 함)
+      { key: "settings.api_keys", label: "외부 연동 API 키 발급·폐기 — 엑셀·구글 시트·자동화 도구용(조회 전용)", defaults: { owner: true, admin: false, manager: false, trainer: false, fc: false, alba: false } },
       { key: "notices.manage", label: "센터 공지사항 작성·수정·삭제", defaults: D_ADMIN },
     ],
   },

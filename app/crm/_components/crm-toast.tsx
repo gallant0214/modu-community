@@ -108,6 +108,7 @@ function messageFor(method: string, path: string): string {
     return "클래스 수업을 등록했어요";
   if (path.startsWith("/api/crm/reservations") && method === "POST") return "예약이 등록되었어요";
   if (/^\/api\/crm\/members\/\d+\/mileage$/.test(path)) return "마일리지를 조정했어요";
+  if (path.startsWith("/api/crm/api-keys")) return method === "DELETE" ? "API 키를 폐기했어요" : "API 키를 만들었어요";
   return method === "DELETE" ? "삭제되었습니다" : "저장되었습니다";
 }
 

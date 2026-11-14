@@ -120,6 +120,8 @@ export const ACTION_LABEL: Record<string, string> = {
   "coupon.revoke_send": "쿠폰 일괄 회수",
   "coupon.restore_issue": "쿠폰 회수 취소",
   "coupon.unuse": "쿠폰 사용 취소",
+  "api_key.create": "API 키 발급",
+  "api_key.revoke": "API 키 폐기",
   "notice.create": "공지 작성",
   // 상담
   "consultation_template.create": "상담지 양식 추가",
@@ -219,6 +221,10 @@ export function summarizeAuditLog(
     const range = [p.start ?? p.start_date, p.end ?? p.end_date].filter(Boolean).join(" ~ ");
     const days = p.days ?? p.extended_days;
     return [range, days != null ? `${days}일간 홀딩` : ""].filter(Boolean).join(" · ");
+  }
+  if (action === "api_key.create" || action === "api_key.revoke") {
+    const scopes = Array.isArray(p.scope_labels) ? (p.scope_labels as unknown[]).join("·") : "";
+    return [p.name ? `'${p.name}'` : "", scopes, p.key_prefix ? `${p.key_prefix}…` : ""].filter(Boolean).join(" · ");
   }
   if (action === "pause.cancel") {
     const r = Number(p.reverted_days ?? 0);

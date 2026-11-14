@@ -17,6 +17,7 @@ import CrmContractsPage from "../contracts/page";
 import { useCrmTheme } from "../_components/crm-theme";
 import { useCrmToast } from "../_components/crm-toast";
 import { speakMessages, primeSpeech } from "../touch-attendance/_speak";
+import { ApiKeysPanel } from "./_api-keys-panel";
 
 interface Settings {
   center_id: number;
@@ -130,13 +131,14 @@ type SettingsTab =
   | "expenses"
   | "vendors"
   | "display"
+  | "api"
   | "inquiries";
 
 const SETTINGS_TABS: {
   key: SettingsTab;
   label: string;
   desc: string;
-  icon: "calendar" | "bell" | "notice" | "point" | "badge" | "shield" | "card" | "vendor" | "danger" | "log" | "display" | "inquiry";
+  icon: "calendar" | "bell" | "notice" | "point" | "badge" | "shield" | "card" | "vendor" | "danger" | "log" | "display" | "inquiry" | "key";
   danger?: boolean;
 }[] = [
   { key: "center", label: "센터 정보", desc: "주소·연락처·SNS", icon: "notice" },
@@ -152,6 +154,7 @@ const SETTINGS_TABS: {
   { key: "expenses", label: "고정 지출", desc: "월 지출", icon: "card" },
   { key: "vendors", label: "거래처", desc: "업체 관리", icon: "vendor" },
   { key: "logs", label: "활동 로그", desc: "변경 기록", icon: "log" },
+  { key: "api", label: "API 연동", desc: "엑셀·시트 연동 키", icon: "key" },
   { key: "inquiries", label: "문의하기", desc: "관리자에게 문의", icon: "inquiry" },
 ];
 
@@ -793,6 +796,8 @@ export default function CrmSettingsPage() {
       {tab === "expenses" && <FixedExpensesPanel />}
 
       {tab === "vendors" && <VendorsPanel />}
+
+      {tab === "api" && <ApiKeysPanel />}
 
       {tab === "inquiries" && <InquiriesPanel />}
 
@@ -3946,6 +3951,13 @@ function SettingsTabIcon({
     return (
       <svg {...common}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l3 5 6 1-4 4 1 6-6-3-6 3 1-6-4-4 6-1 3-5z" />
+      </svg>
+    );
+  }
+  if (kind === "key") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.7 5.7L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.6a1 1 0 01.3-.7l6-6A6 6 0 1121 9z" />
       </svg>
     );
   }

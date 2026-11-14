@@ -4867,6 +4867,57 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_api_keys: {
+        Row: {
+          id: number
+          center_id: number
+          name: string
+          key_prefix: string
+          key_hash: string
+          scopes: string[]
+          created_by_uid: string
+          created_by_member_id: number | null
+          created_by_email: string | null
+          created_at: string
+          last_used_at: string | null
+          last_used_ip: string | null
+          revoked_at: string | null
+          revoked_by_uid: string | null
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          name: string
+          key_prefix: string
+          key_hash: string
+          scopes: string[]
+          created_by_uid: string
+          created_by_member_id?: number | null
+          created_by_email?: string | null
+          created_at?: string
+          last_used_at?: string | null
+          last_used_ip?: string | null
+          revoked_at?: string | null
+          revoked_by_uid?: string | null
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          name?: string
+          key_prefix?: string
+          key_hash?: string
+          scopes?: string[]
+          created_by_uid?: string
+          created_by_member_id?: number | null
+          created_by_email?: string | null
+          created_at?: string
+          last_used_at?: string | null
+          last_used_ip?: string | null
+          revoked_at?: string | null
+          revoked_by_uid?: string | null
+        }
+        Relationships: []
+      }
       crm_audit_logs: {
         Row: {
           id: number
