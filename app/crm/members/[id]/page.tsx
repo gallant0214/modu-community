@@ -3384,6 +3384,8 @@ interface PaymentRow {
   /** 연결 상품의 금액·할인 (결제 수정 창 기본값) */
   product_price_won?: number;
   product_discount_won?: number;
+  /** 연결 상품이 부가세 포함 금액인지 (결제 수정 창 기본값) */
+  product_vat_included?: boolean;
   /** 장바구니로 한 번에 결제한 묶음의 대표 결제 id */
   cart_id?: number;
   /** 그 묶음의 결제 건수 (1이면 단건) */
@@ -3844,6 +3846,7 @@ function MemberPaymentsSection({
           product_price_won: v.priceWon,
           product_discount_won: v.discountWon,
           product_mileage_used: v.mileageUsed,
+          product_vat_included: v.vatIncluded,
           method: v.method,
           method_custom: v.method === "etc" ? v.methodCustom : null,
           paid_at: v.paidDate || undefined,
@@ -4287,6 +4290,7 @@ function MemberPaymentsSection({
             priceWon: editDialogFor.product_price_won ?? editDialogFor.amount_won ?? 0,
             discountWon: editDialogFor.product_discount_won ?? 0,
             mileageUsed: editDialogFor.mileage_used ?? 0,
+            vatIncluded: !!editDialogFor.product_vat_included,
             paidDate: editDialogFor.paid_at
               ? new Date(new Date(editDialogFor.paid_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
               : "",

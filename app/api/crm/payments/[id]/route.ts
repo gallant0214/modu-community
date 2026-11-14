@@ -51,6 +51,8 @@ export async function PATCH(
     product_discount_won?: number;
     /** 쓴 마일리지 */
     product_mileage_used?: number;
+    /** 부가세 포함 금액인지 — 상품 레코드의 vat_included (금액은 바꾸지 않는다) */
+    product_vat_included?: boolean;
   };
   try {
     body = await request.json();
@@ -96,7 +98,8 @@ export async function PATCH(
   const editsProduct =
     body.product_price_won !== undefined ||
     body.product_discount_won !== undefined ||
-    body.product_mileage_used !== undefined;
+    body.product_mileage_used !== undefined ||
+    body.product_vat_included !== undefined;
   if (editsProduct) {
     if (!perms["sales.edit"]) {
       return NextResponse.json({ error: "결제내역 수정 권한이 없습니다" }, { status: 403 });
@@ -123,11 +126,16 @@ export async function PATCH(
     }
     const { data: prodRow } = await supabase
       .from(table)
-      .select("price_won, discount_won, mileage_used")
+      .select("price_won, discount_won, mileage_used, vat_included")
       .eq("id", productId)
       .eq("center_id", ctx.centerId)
       .maybeSingle();
-    const prod = (prodRow ?? {}) as { price_won?: number | null; discount_won?: number | null; mileage_used?: number | null };
+    const prod = (prodRow ?? {}) as {
+      price_won?: number | null;
+      discount_won?: number | null;
+      mileage_used?: number | null;
+      vat_included?: boolean | null;
+    };
     const nz = (v: unknown, fallback: number) => {
       if (v === undefined) return fallback;
       const n = Math.trunc(Number(v));
@@ -138,6 +146,9 @@ export async function PATCH(
     const oldMileage = Math.max(0, Math.floor(Number(prod.mileage_used) || 0));
     const nextMileage = nz(body.product_mileage_used, oldMileage);
     const nextPaid = Math.max(0, nextPrice - nextDiscount - nextMileage);
+    // 부가세 포함 여부 — 상품에 저장해 두면 매출(부가세 제외)·선수금·커미션·급여가 모두 이 값을 그대로 읽는다
+    const nextVat =
+      typeof body.product_vat_included === "boolean" ? body.product_vat_included : !!prod.vat_included;
 
     // 마일리지 차액 정산 — 더 썼으면 잔액에서 더 빼고, 덜 썼으면 돌려준다
     const diff = nextMileage - oldMileage;
@@ -174,6 +185,7 @@ export async function PATCH(
       price_won: nextPrice,
       discount_won: nextDiscount,
       mileage_used: nextMileage,
+      vat_included: nextVat,
       updated_at: new Date().toISOString(),
     };
     // 회원권·수강권은 미수금도 다시 계산한다(대여권엔 미수금 컬럼이 없다)
@@ -198,6 +210,8 @@ export async function PATCH(
         마일리지사용: nextMileage,
         실결제: nextPaid,
         이전마일리지: oldMileage,
+        부가세포함: nextVat,
+        이전부가세포함: !!prod.vat_included,
       } as never,
     });
   }
@@ -218,11 +232,21 @@ export async function PATCH(
     patch.method_custom = body.method_custom?.trim() || null;
   }
   if (body.paid_at !== undefined && body.paid_at) {
-    // 'YYYY-MM-DD' 면 KST 정오로 저장, 그 외(ISO)는 그대로.
-    const iso = /^\d{4}-\d{2}-\d{2}$/.test(body.paid_at)
-      ? new Date(`${body.paid_at}T12:00:00+09:00`).toISOString()
-      : new Date(body.paid_at).toISOString();
-    patch.paid_at = iso;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(body.paid_at)) {
+      // 날짜만 온 경우 — 원래 결제 시각(KST)은 지킨다.
+      //   🚨 예전엔 KST 정오로 덮어써서, 날짜를 안 바꾸고 저장만 해도 시각이 12:00 이 됐다.
+      //      같은 결제(±3초)로 묶는 장바구니 환불·신규/재등록 판정이 이 시각을 쓴다.
+      const curKst = before.paid_at
+        ? new Date(new Date(before.paid_at).getTime() + 9 * 3600 * 1000).toISOString()
+        : null;
+      if (!curKst) {
+        patch.paid_at = new Date(`${body.paid_at}T12:00:00+09:00`).toISOString();
+      } else if (body.paid_at !== curKst.slice(0, 10)) {
+        patch.paid_at = new Date(`${body.paid_at}T${curKst.slice(11, 23)}+09:00`).toISOString();
+      }
+    } else {
+      patch.paid_at = new Date(body.paid_at).toISOString();
+    }
   }
   if (body.note !== undefined) patch.note = body.note?.trim() || null;
   if (body.status !== undefined) patch.status = body.status;

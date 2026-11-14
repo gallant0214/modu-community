@@ -7,13 +7,18 @@ import { useState } from "react";
  *   상품 금액 → 할인 금액 → 마일리지 사용 → 최종 결제 금액
  *
  * 🚨 예전엔 결제행 금액만 고칠 수 있어 마일리지를 잘못 넣으면 손댈 방법이 없었다.
- *    저장하면 서버가 상품 레코드(금액·할인·마일리지)와 회원 마일리지 잔액·원장까지
+ *    저장하면 서버가 상품 레코드(금액·할인·마일리지·부가세 포함)와 회원 마일리지 잔액·원장까지
  *    함께 맞춘다. 상품 종류·기간은 여기서 바꾸지 않는다(그건 상품 상세에서).
+ *
+ * 부가세 포함 체크는 상품 수정 창과 같이 '표시만' 바꾼다 — 발급창처럼 금액을 ×1.1/÷1.1 환산하지 않는다.
+ *   이미 받은 결제를 고치는 창이라 금액이 몰래 바뀌면 안 된다.
  */
 export interface PaymentEditValue {
   priceWon: number;
   discountWon: number;
   mileageUsed: number;
+  /** 부가세 포함 금액인지 */
+  vatIncluded: boolean;
   paidDate: string;
   method: string;
   methodCustom: string;
@@ -78,6 +83,7 @@ function Body({
   const [price, setPrice] = useState(String(initial.priceWon));
   const [discount, setDiscount] = useState(String(initial.discountWon));
   const [mileage, setMileage] = useState(String(initial.mileageUsed));
+  const [vatIncluded, setVatIncluded] = useState(initial.vatIncluded);
   const [paidDate, setPaidDate] = useState(initial.paidDate);
   const [method, setMethod] = useState(initial.method);
   const [methodCustom, setMethodCustom] = useState(initial.methodCustom);
@@ -108,6 +114,15 @@ function Body({
           <Field label="할인 금액" suffix="원">
             <input inputMode="numeric" value={discountWon.toLocaleString()} onChange={(e) => setDiscount(e.target.value)} className={inputCls} />
           </Field>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={vatIncluded}
+              onChange={(e) => setVatIncluded(e.target.checked)}
+              className="w-4 h-4 accent-[#6B7B3A]"
+            />
+            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">부가세 포함 금액</span>
+          </label>
           <Field label="마일리지 사용" suffix="P" hint={`보유 ${memberMileage.toLocaleString()}P`}>
             <input inputMode="numeric" value={mileageUsed.toLocaleString()} onChange={(e) => setMileage(e.target.value)} className={inputCls} />
           </Field>
@@ -175,7 +190,8 @@ function Body({
           </label>
 
           <p className="text-[11px] text-[#A89B80] leading-relaxed">
-            저장하면 상품의 금액·할인·마일리지와 회원 마일리지 잔액이 함께 맞춰집니다.
+            저장하면 상품의 금액·할인·마일리지·부가세 포함 여부와 회원 마일리지 잔액이 함께 맞춰집니다.
+            부가세 포함 체크는 금액을 바꾸지 않아요.
             상품 종류·기간은 상품 카드에서 수정해 주세요.
           </p>
 
@@ -202,6 +218,7 @@ function Body({
                 priceWon,
                 discountWon,
                 mileageUsed,
+                vatIncluded,
                 paidDate,
                 method,
                 methodCustom,

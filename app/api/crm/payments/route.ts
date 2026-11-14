@@ -133,14 +133,14 @@ export async function GET(request: Request) {
   const rentalNameMap = new Map<number, string>();
   // 상품을 결제 받은 판매 직원(seller_member_id) 매핑
   // 상품별 마일리지(사용/적립) — 키는 `m{id}`/`p{id}`/`r{id}`
-  const productMileage = new Map<string, { used: number; earned: number; price: number; discount: number }>();
+  const productMileage = new Map<string, { used: number; earned: number; price: number; discount: number; vat: boolean }>();
   const passSellerMap = new Map<number, number | null>();
   const membershipSellerMap = new Map<number, number | null>();
   const rentalSellerMap = new Map<number, number | null>();
   if (passIds.length > 0) {
     const { data: passes } = await supabase
       .from("crm_passes")
-      .select("id, lesson_kind, seller_member_id, mileage_used, mileage_earned, price_won, discount_won")
+      .select("id, lesson_kind, seller_member_id, mileage_used, mileage_earned, price_won, discount_won, vat_included")
       .eq("center_id", ctx.centerId)
       .in("id", passIds);
     for (const p of passes ?? []) {
@@ -151,13 +151,14 @@ export async function GET(request: Request) {
         earned: Number(p.mileage_earned) || 0,
         price: Number(p.price_won) || 0,
         discount: Number(p.discount_won) || 0,
+        vat: !!p.vat_included,
       });
     }
   }
   if (membershipIds.length > 0) {
     const { data: memberships } = await supabase
       .from("crm_memberships")
-      .select("id, plan_name, seller_member_id, mileage_used, mileage_earned, price_won, discount_won")
+      .select("id, plan_name, seller_member_id, mileage_used, mileage_earned, price_won, discount_won, vat_included")
       .eq("center_id", ctx.centerId)
       .in("id", membershipIds);
     for (const m of memberships ?? []) {
@@ -168,13 +169,14 @@ export async function GET(request: Request) {
         earned: Number(m.mileage_earned) || 0,
         price: Number(m.price_won) || 0,
         discount: Number(m.discount_won) || 0,
+        vat: !!m.vat_included,
       });
     }
   }
   if (rentalIds.length > 0) {
     const { data: rentals } = await supabase
       .from("crm_rentals")
-      .select("id, item_name, seller_member_id, mileage_used, mileage_earned, price_won, discount_won")
+      .select("id, item_name, seller_member_id, mileage_used, mileage_earned, price_won, discount_won, vat_included")
       .eq("center_id", ctx.centerId)
       .in("id", rentalIds);
     for (const r of rentals ?? []) {
@@ -185,6 +187,7 @@ export async function GET(request: Request) {
         earned: Number(r.mileage_earned) || 0,
         price: Number(r.price_won) || 0,
         discount: Number(r.discount_won) || 0,
+        vat: !!r.vat_included,
       });
     }
   }
@@ -470,6 +473,7 @@ export async function GET(request: Request) {
       /** 연결 상품의 금액·할인 (결제 수정 창 기본값) */
       product_price_won: milOf(r)?.price ?? 0,
       product_discount_won: milOf(r)?.discount ?? 0,
+      product_vat_included: milOf(r)?.vat ?? false,
       /** 장바구니로 한 번에 결제한 묶음의 대표 결제 id (단건이면 자기 id) */
       cart_id: cartIdOf.get(r.id) ?? r.id,
       /** 그 묶음에 들어 있는 결제 건수 (1이면 단건) */
