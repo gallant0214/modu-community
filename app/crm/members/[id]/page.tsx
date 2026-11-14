@@ -308,41 +308,13 @@ export default function CrmMemberDetailPage() {
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
   // 오늘(KST) 기준. UTC 로 하면 한국 자정~오전9시 사이 만료 판정이 하루 어긋난다.
   const holdToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-  // 만료 임박 기준: 오늘로부터 7일 이내(=7일 남음 이하)
-  const hold7d = new Date(Date.now() + 9 * 3600 * 1000 + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  // 상품별 홀딩 상태(crm_pauses 기준): 오늘이 홀딩 기간 내면 "hold", 시작 전이면 "hold_scheduled".
-  // is_paused 플래그가 아니라 실제 홀딩 기간으로 판정한다.
-  const holdStateFor = (
-    kind: "membership" | "pass" | "rental",
-    id: number | null | undefined
-  ): "hold" | "hold_scheduled" | null => {
-    if (!id) return null;
-    const field = kind === "membership" ? "membership_id" : kind === "pass" ? "pass_id" : "rental_id";
-    const ps = pauses.filter((p) => p.status === "active" && p[field] === id);
-    if (ps.length === 0) return null;
-    if (ps.some((p) => p.start_date <= holdToday && holdToday <= p.end_date)) return "hold";
-    if (ps.some((p) => p.start_date > holdToday)) return "hold_scheduled";
-    return null;
-  };
-  // 카드 칩 상태:
-  //  - hold           = 지금 홀딩 기간 → [홀딩]
-  //  - hold_scheduled = 홀딩이 잡혀 있으나 아직 시작 전 → [홀딩예정]
-  //  - scheduled      = 홀딩과 무관하게 '아직 시작 안 한(사용 전) 상품' → [예정]
+  // 카드 칩([홀딩]·[홀딩예정]·[예정]·[임박]) — 아래 '회원권 · 대여권 · 락커' 목록과 같은 판정 함수
   const chipStateFor = (
     kind: "membership" | "pass" | "rental",
     id: number | null | undefined,
     startDate: string | null | undefined,
     expiresAt?: string | null
-  ): "hold" | "hold_scheduled" | "scheduled" | "imminent" | null => {
-    const hs = holdStateFor(kind, id);
-    if (hs === "hold") return "hold";
-    if (hs === "hold_scheduled") return "hold_scheduled";
-    if (startDate && startDate > holdToday) return "scheduled"; // 아직 시작 전 = 예정
-    // 사용 중(시작됨·홀딩 아님)인데 7일 이내 만료 → 임박. 무기한(9999-12-31)은 제외.
-    if (expiresAt && expiresAt !== "9999-12-31" && expiresAt >= holdToday && expiresAt <= hold7d)
-      return "imminent";
-    return null;
-  };
+  ) => holdingChipState(pauses, kind, id, startDate, expiresAt);
   const validHoldMs = holdMs.filter((m) => m.status === "valid" && m.expires_at >= holdToday);
   const validHoldRs = holdRs.filter((r) => r.status === "valid" && r.expires_at >= holdToday);
   // 배정된 락커 중 유효기간이 남은 것 (만료 락커는 현재 보유에 제외 — 회원권·대여권과 동일 기준)
@@ -5181,6 +5153,46 @@ function ScheduledLast({ children, className }: { children: React.ReactNode; cla
   );
 }
 
+type HoldingChipState = "hold" | "hold_scheduled" | "scheduled" | "imminent" | null;
+type HoldPause = {
+  pass_id: number | null;
+  membership_id: number | null;
+  rental_id: number | null;
+  start_date: string;
+  end_date: string;
+  status: string;
+};
+
+/**
+ * 회원 상세 상품 카드 칩 판정 — 상단 '현재 보유'(SnapHoldingCard)와
+ * 아래 '회원권 · 대여권 · 락커' 목록(UsageCard)이 함께 쓴다.
+ * 🚨 두 곳이 따로 판정하다 [임박] 이 위쪽 회원권에만 붙었던 적이 있어 한 함수로 모았다.
+ *  - hold           = 오늘(KST)이 홀딩 기간 안 → [홀딩]  (is_paused 플래그가 아니라 crm_pauses 기간 기준)
+ *  - hold_scheduled = 홀딩이 잡혀 있으나 아직 시작 전 → [홀딩예정]
+ *  - scheduled      = 홀딩과 무관하게 상품 자체가 아직 시작 전 → [예정]
+ *  - imminent       = 사용 중인데 7일 이내 만료 → [임박]. 무기한(9999-12-31) 제외
+ */
+function holdingChipState(
+  pauses: HoldPause[],
+  kind: "membership" | "pass" | "rental",
+  id: number | null | undefined,
+  startDate: string | null | undefined,
+  expiresAt?: string | null
+): HoldingChipState {
+  // 오늘(KST) 기준. UTC 로 하면 한국 자정~오전9시 사이 판정이 하루 어긋난다.
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const in7d = new Date(Date.now() + 9 * 3600 * 1000 + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  if (id) {
+    const field = kind === "membership" ? "membership_id" : kind === "pass" ? "pass_id" : "rental_id";
+    const ps = pauses.filter((p) => p.status === "active" && p[field] === id);
+    if (ps.some((p) => p.start_date <= today && today <= p.end_date)) return "hold";
+    if (ps.some((p) => p.start_date > today)) return "hold_scheduled";
+  }
+  if (startDate && startDate > today) return "scheduled";
+  if (expiresAt && expiresAt !== "9999-12-31" && expiresAt >= today && expiresAt <= in7d) return "imminent";
+  return null;
+}
+
 function SnapHoldingCard({
   tag,
   name,
@@ -5194,7 +5206,7 @@ function SnapHoldingCard({
   period: string | null;
   lockerUnassigned?: boolean;
   // 홀딩 칩: hold=현재 홀딩([홀딩]빨강) / hold_scheduled=홀딩 시작 전([홀딩예정]주황) / scheduled=상품 미시작([예정]파랑) / imminent=7일 이내 만료([임박]빨강)
-  holdState?: "hold" | "hold_scheduled" | "scheduled" | "imminent" | null;
+  holdState?: HoldingChipState;
   onClick?: () => void;
 }) {
   return (
@@ -6045,34 +6057,17 @@ function UsageSection({
   }, [memberId, reloadKey, getIdToken]);
 
   const refundMap = useRefundMap(memberId, reloadKey);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // 오늘(KST) 기준 — 위 '현재 보유' 와 같은 날짜로 유효/종료를 가른다
+  const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const isValid = (s: string, exp: string) => s === "valid" && exp >= todayStr;
-  // 상품별 홀딩 상태(crm_pauses 기준): 홀딩 기간 내=hold / 시작 전=hold_scheduled.
-  const holdTodayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-  const holdStateFor = (
-    kind: "membership" | "rental",
-    id: number | null | undefined
-  ): "hold" | "hold_scheduled" | null => {
-    if (!id) return null;
-    const field = kind === "membership" ? "membership_id" : "rental_id";
-    const ps = pauses.filter((p) => p.status === "active" && p[field] === id);
-    if (ps.length === 0) return null;
-    if (ps.some((p) => p.start_date <= holdTodayKst && holdTodayKst <= p.end_date)) return "hold";
-    if (ps.some((p) => p.start_date > holdTodayKst)) return "hold_scheduled";
-    return null;
-  };
-  // hold=현재 홀딩 / hold_scheduled=홀딩 시작 전 / scheduled=상품 미시작(사용 전).
+  // 카드 칩 — 위 '현재 보유' 와 같은 판정 함수. [임박]은 유효한 카드에만(종료·환불 카드엔 안 붙임)
   const chipStateFor = (
     kind: "membership" | "rental",
     id: number | null | undefined,
-    startDate: string | null | undefined
-  ): "hold" | "hold_scheduled" | "scheduled" | null => {
-    const hs = holdStateFor(kind, id);
-    if (hs === "hold") return "hold";
-    if (hs === "hold_scheduled") return "hold_scheduled";
-    if (startDate && startDate > holdTodayKst) return "scheduled";
-    return null;
-  };
+    startDate: string | null | undefined,
+    expiresAt: string | null | undefined,
+    valid: boolean
+  ) => holdingChipState(pauses, kind, id, startDate, valid ? expiresAt : null);
   const sellerName = (id: number | null) =>
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
 
@@ -6095,7 +6090,7 @@ function UsageSection({
           valid={isValid(m.status, m.expires_at)}
           status={m.status}
           refund={refundMap[`m${m.id}`] ?? null}
-          holdState={chipStateFor("membership", m.id, m.start_date)}
+          holdState={chipStateFor("membership", m.id, m.start_date, m.expires_at, isValid(m.status, m.expires_at))}
           onClick={() => onOpenDetail(membershipToDetail(m, sellerName))}
         />
       ),
@@ -6112,7 +6107,7 @@ function UsageSection({
           valid={isValid(r.status, r.expires_at)}
           status={r.status}
           refund={refundMap[`r${r.id}`] ?? null}
-          holdState={chipStateFor("rental", r.id, r.start_date)}
+          holdState={chipStateFor("rental", r.id, r.start_date, r.expires_at, isValid(r.status, r.expires_at))}
           onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}
         />
       ),
@@ -6140,7 +6135,7 @@ function UsageSection({
             valid={valid}
             status={c.rental?.status}
             refund={c.rental ? refundMap[`r${c.rental.id}`] ?? null : null}
-            holdState={chipStateFor("rental", c.rental?.id, c.start)}
+            holdState={chipStateFor("rental", c.rental?.id, effStart, effExp, valid)}
             lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
             onClick={
               c.rental
@@ -6226,8 +6221,8 @@ function UsageCard({
   status?: string | null;
   /** 환불 요약 (있으면 상세 줄을 함께 보여준다) */
   refund?: RefundInfo | null;
-  // 홀딩 칩: hold=현재 홀딩([홀딩]) / hold_scheduled=홀딩 시작 전([홀딩예정]) / scheduled=상품 미시작([예정])
-  holdState?: "hold" | "hold_scheduled" | "scheduled" | null;
+  // 홀딩 칩: hold=현재 홀딩([홀딩]) / hold_scheduled=홀딩 시작 전([홀딩예정]) / scheduled=상품 미시작([예정]) / imminent=7일 이내 만료([임박])
+  holdState?: HoldingChipState;
   // 락커 배정 상태 칩: 배정됨(구역·번호) / "unassigned"(미배정) / 없음
   lockerAssign?: { zone_name: string; number: number } | "unassigned";
   onClick: () => void;
@@ -6259,6 +6254,11 @@ function UsageCard({
             {holdState === "scheduled" && (
               <span className="px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 text-[10px] font-bold">
                 예정
+              </span>
+            )}
+            {holdState === "imminent" && (
+              <span className="px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-bold">
+                임박
               </span>
             )}
             <span className={`text-[10.5px] font-bold ${tone}`}>{tag}</span>
