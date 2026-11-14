@@ -4,6 +4,12 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { requirePermission } from "@/app/lib/crm-permissions";
 import { cached, crmCacheKey } from "@/app/lib/cache";
+import { loadFreeMembershipNames } from "@/app/lib/crm-registration-type";
+import {
+  isFreeServiceMembership,
+  isFreeServicePass,
+  isPaidRenewalMembership,
+} from "@/app/lib/crm-registration-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -137,24 +143,50 @@ export async function GET(request: Request) {
     const memberMap = new Map(members.map((m) => [m.id, m]));
 
     // 회원권 + 수강권 (윈도우와 겹치는 것 전부)
-    const [memberships, passes] = await Promise.all([
-      paginateAll<{ member_id: number; start_date: string | null; expires_at: string | null }>((f, t) =>
+    const [memberships, passes, freeNames] = await Promise.all([
+      paginateAll<{
+        member_id: number;
+        start_date: string | null;
+        expires_at: string | null;
+        plan_name: string | null;
+        price_won: number | null;
+        status: string | null;
+      }>((f, t) =>
         supabase
           .from("crm_memberships")
-          .select("member_id, start_date, expires_at")
+          .select("member_id, start_date, expires_at, plan_name, price_won, status")
           .eq("center_id", ctx.centerId)
           .neq("status", "deleted")
           .range(f, t)
       ),
-      paginateAll<{ member_id: number; start_date: string | null; issued_at: string | null; expires_at: string | null }>((f, t) =>
+      paginateAll<{
+        member_id: number;
+        start_date: string | null;
+        issued_at: string | null;
+        expires_at: string | null;
+        issue_type: string | null;
+        lesson_kind: string | null;
+        price_won: number | null;
+      }>((f, t) =>
         supabase
           .from("crm_passes")
-          .select("member_id, start_date, issued_at, expires_at")
+          .select("member_id, start_date, issued_at, expires_at, issue_type, lesson_kind, price_won")
           .eq("center_id", ctx.centerId)
           .neq("status", "deleted")
           .range(f, t)
       ),
+      loadFreeMembershipNames(ctx.centerId),
     ]);
+    // 🚨 신규/재등록 판정에는 **유료 상품만** 쓴다 (사용자 결정 2026-11-14).
+    //    신규 리뷰작성·연장쿠폰·체험권·서비스 회원권/PT 같은 무료 상품은 '등록'이 아니다
+    //    → 신규 회원이 무료 상품만 받으면 신규 그대로, 유료 상품을 또 등록해야 재등록 전환.
+    //    (유효 고객·이탈 집계는 무료 기간도 '이용 중'이라 전체 행을 그대로 쓴다)
+    const paidMemberships = memberships.filter(
+      (m) => !isFreeServiceMembership(m.plan_name, m.price_won, freeNames)
+    );
+    const paidPasses = passes.filter((p) => !isFreeServicePass(p.issue_type, p.lesson_kind, p.price_won));
+    // 이름에 '재등록'이 붙은 유료 회원권 — 첫 기록이어도 신규가 아니다(이관 때 첫 신규 기록이 빠진 회원 등)
+    const isRenewalRow = (m: (typeof memberships)[number]) => isPaidRenewalMembership(m, freeNames);
 
     // 방문(출석) — 윈도우 내
     const attends = await paginateAll<{ member_id: number; checked_in_at: string }>((f, t) =>
@@ -196,14 +228,14 @@ export async function GET(request: Request) {
     };
     // 회원별 상품별 최초 발급일
     const mbFirst = new Map<number, string>();
-    for (const m of memberships) {
+    for (const m of paidMemberships) {
       if (!m.start_date) continue;
       const s = m.start_date.slice(0, 10);
       const prev = mbFirst.get(m.member_id);
       if (!prev || s < prev) mbFirst.set(m.member_id, s);
     }
     const passFirst = new Map<number, string>();
-    for (const p of passes) {
+    for (const p of paidPasses) {
       const s = (p.start_date ?? p.issued_at)?.slice(0, 10);
       if (!s) continue;
       const prev = passFirst.get(p.member_id);
@@ -213,14 +245,14 @@ export async function GET(request: Request) {
     const reMembershipSets = months.map(() => new Set<number>());
     const newPassSets = months.map(() => new Set<number>());
     const rePassSets = months.map(() => new Set<number>());
-    for (const m of memberships) {
+    for (const m of paidMemberships) {
       const idx = inMonth(m.start_date);
       if (idx < 0) continue;
       const s = m.start_date!.slice(0, 10);
-      if (mbFirst.get(m.member_id) === s) newMembershipSets[idx].add(m.member_id);
+      if (mbFirst.get(m.member_id) === s && !isRenewalRow(m)) newMembershipSets[idx].add(m.member_id);
       else reMembershipSets[idx].add(m.member_id);
     }
-    for (const p of passes) {
+    for (const p of paidPasses) {
       const raw = p.start_date ?? p.issued_at;
       const idx = inMonth(raw);
       if (idx < 0) continue;
@@ -230,22 +262,35 @@ export async function GET(request: Request) {
     }
 
     // 신규 vs 재등록 (발급 기준): 회원의 최초 발급 = 신규, 이후 발급 = 재등록
-    const allIssues: { member_id: number; start: string; expires: string | null }[] = [];
-    for (const m of memberships) {
-      if (m.start_date)
+    // renewal = 유료 '재등록' 회원권, newPlan = 그 외 회원권 (수강권은 둘 다 아님)
+    const allIssues: {
+      member_id: number;
+      start: string;
+      expires: string | null;
+      renewal: boolean;
+      newPlan: boolean;
+    }[] = [];
+    for (const m of paidMemberships) {
+      if (m.start_date) {
+        const renewal = isRenewalRow(m);
         allIssues.push({
           member_id: m.member_id,
           start: m.start_date.slice(0, 10),
           expires: m.expires_at ? m.expires_at.slice(0, 10) : null,
+          renewal,
+          newPlan: !renewal,
         });
+      }
     }
-    for (const p of passes) {
+    for (const p of paidPasses) {
       const s = p.start_date ?? p.issued_at;
       if (s)
         allIssues.push({
           member_id: p.member_id,
           start: s.slice(0, 10),
           expires: p.expires_at ? p.expires_at.slice(0, 10) : null,
+          renewal: false,
+          newPlan: false,
         });
     }
     // 회원별 '첫 발급(신규)' 의 시작일 + 만료일
@@ -254,12 +299,26 @@ export async function GET(request: Request) {
       const prev = memberFirst.get(it.member_id);
       if (!prev || it.start < prev.start) memberFirst.set(it.member_id, { start: it.start, expires: it.expires });
     }
+    // 첫 등록일에 유료 '재등록' 회원권만 있고 다른 회원권이 없으면 신규가 아니다(재등록으로 시작).
+    // 같은 날 '2개월 (신규)' + '3개월(재등록)' 을 함께 산 회원은 신규로 본다.
+    const firstDayRenewal = new Map<number, { renewal: boolean; newPlan: boolean }>();
+    for (const it of allIssues) {
+      if (memberFirst.get(it.member_id)?.start !== it.start) continue;
+      const cur = firstDayRenewal.get(it.member_id) ?? { renewal: false, newPlan: false };
+      cur.renewal ||= it.renewal;
+      cur.newPlan ||= it.newPlan;
+      firstDayRenewal.set(it.member_id, cur);
+    }
+    const startsAsRenewal = (memberId: number) => {
+      const f = firstDayRenewal.get(memberId);
+      return !!f && f.renewal && !f.newPlan;
+    };
     const newReg = months.map(() => 0);
     const reReg = months.map(() => 0);
     for (const it of allIssues) {
       const idx = months.findIndex((mm) => it.start >= mm.start && it.start < mm.endExcl);
       if (idx < 0) continue;
-      if (memberFirst.get(it.member_id)?.start === it.start) newReg[idx] += 1;
+      if (memberFirst.get(it.member_id)?.start === it.start && !startsAsRenewal(it.member_id)) newReg[idx] += 1;
       else reReg[idx] += 1;
     }
 
@@ -294,6 +353,7 @@ export async function GET(request: Request) {
     const expireConverted = months.map(() => 0);
     for (const [mid, f] of memberFirst) {
       if (!f.expires) continue;
+      if (startsAsRenewal(mid)) continue; // 재등록 상품으로 시작한 회원은 신규 분모에서 뺀다
       const idx = expiryBucket(f.expires);
       if (idx < 0) continue;
       expireCohort[idx] += 1;
@@ -305,6 +365,7 @@ export async function GET(request: Request) {
     //  - reExpireCohort[M] = 재등록 만료월이 M 인 재등록 건수 (분모)
     //  - reExpireConverted[M] = 그 재등록 이후 또 발급이 있는 건수 (분자)
     const issuesByMember = new Map<number, { start: string; expires: string | null }[]>();
+    // 재등록 상품으로 시작한 회원은 첫 발급(index 0)부터 재등록 건으로 센다
     for (const it of allIssues) {
       const arr = issuesByMember.get(it.member_id) ?? [];
       arr.push({ start: it.start, expires: it.expires });
@@ -312,9 +373,9 @@ export async function GET(request: Request) {
     }
     const reExpireCohort = months.map(() => 0);
     const reExpireConverted = months.map(() => 0);
-    for (const [, arr] of issuesByMember) {
+    for (const [mid, arr] of issuesByMember) {
       arr.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
-      for (let i = 1; i < arr.length; i++) {
+      for (let i = startsAsRenewal(mid) ? 0 : 1; i < arr.length; i++) {
         const e = arr[i].expires;
         if (!e) continue;
         const idx = expiryBucket(e);
