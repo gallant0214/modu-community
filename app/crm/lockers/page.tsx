@@ -1906,8 +1906,6 @@ interface ReturnHistory {
   start_date: string | null;
   expires_at: string | null;
   note: string | null;
-  /** 회수 당시 락커 비밀번호 (비고에 표시, 모르면 null) */
-  return_password: string | null;
   actor_uid: string;
   actor_name: string;
   created_at: string;
@@ -2016,24 +2014,16 @@ function ReturnsTab({ zone, zoneLabel }: { zone: number; zoneLabel: (n: number) 
                   </Td>
                   <Td className="text-[#8C8270] dark:text-zinc-500 tabular-nums">{formatDateTimeKST(h.created_at)}</Td>
                   <Td className="text-[#6B5D47] dark:text-zinc-400">{h.actor_name}</Td>
-                  {/* 비고 = 회수 당시 설정 비밀번호 (+ 회수 메모가 있으면 함께) */}
+                  {/* 비고 = 만료일과 회수일 차이 ("만료 후 N일 뒤 회수 완료"). 회수 메모가 있으면 뒤에 덧붙임 */}
                   <Td className="text-[#6B5D47] dark:text-zinc-400 max-w-[260px]">
-                    {h.return_password || h.note ? (
-                      <span
-                        className="block truncate"
-                        title={[h.return_password ? `비밀번호 ${h.return_password}` : "", h.note ?? ""].filter(Boolean).join(" · ")}
-                      >
-                        {h.return_password && (
-                          <span className="text-[#2A251D] dark:text-zinc-100">
-                            비밀번호 <b className="font-semibold tabular-nums">{h.return_password}</b>
-                          </span>
-                        )}
-                        {h.return_password && h.note && " · "}
-                        {h.note}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
+                    {(() => {
+                      const text = [returnTimingText(h.expires_at, h.created_at), h.note].filter(Boolean).join(" · ");
+                      return (
+                        <span className="block truncate" title={text}>
+                          {text || "—"}
+                        </span>
+                      );
+                    })()}
                   </Td>
                 </tr>
               ))}
@@ -2043,6 +2033,22 @@ function ReturnsTab({ zone, zoneLabel }: { zone: number; zoneLabel: (n: number) 
       )}
     </section>
   );
+}
+
+/**
+ * 회수 기록 비고 — 만료일과 회수일(KST) 차이.
+ * 만료 후 회수 = "만료 후 N일 뒤 회수 완료", 만료일 당일 = "만료 당일 회수 완료",
+ * 만료 전에 미리 회수 = "만료 N일 전 회수 완료". 만료일을 모르면 빈 문자열.
+ */
+function returnTimingText(expiresAt: string | null, returnedAtIso: string): string {
+  if (!expiresAt || expiresAt === "9999-12-31") return "";
+  const returned = new Date(new Date(returnedAtIso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const days = Math.round(
+    (new Date(`${returned}T00:00:00Z`).getTime() - new Date(`${expiresAt}T00:00:00Z`).getTime()) / (24 * 3600 * 1000)
+  );
+  if (days > 0) return `만료 후 ${days}일 뒤 회수 완료`;
+  if (days === 0) return "만료 당일 회수 완료";
+  return `만료 ${-days}일 전 회수 완료`;
 }
 
 function formatDateTimeKST(iso: string) {
@@ -2940,18 +2946,11 @@ function HistoryChanges({
           <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A] font-medium">
             {CHANGE_FIELD_KO[key] ?? key}
           </span>
-          {/* 바뀌지 않은 값(회수 기록의 '회수 당시 비밀번호' 등)은 화살표 없이 값만 */}
-          {val.from === val.to ? (
-            <span className="text-[#2A251D] dark:text-zinc-100 font-medium">{formatChangeValue(key, val.to)}</span>
-          ) : (
-            <>
-              <span className="text-[#8C8270]">{formatChangeValue(key, val.from)}</span>
-              <span className="text-[#B47B2A] dark:text-amber-300">→</span>
-              <span className="text-[#2A251D] dark:text-zinc-100 font-medium">
-                {formatChangeValue(key, val.to)}
-              </span>
-            </>
-          )}
+          <span className="text-[#8C8270]">{formatChangeValue(key, val.from)}</span>
+          <span className="text-[#B47B2A] dark:text-amber-300">→</span>
+          <span className="text-[#2A251D] dark:text-zinc-100 font-medium">
+            {formatChangeValue(key, val.to)}
+          </span>
         </li>
       ))}
     </ul>

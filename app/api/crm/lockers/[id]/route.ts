@@ -193,8 +193,6 @@ export async function PATCH(
     // 회수 기록 '만료된 날짜'용 — 회수하면 락커의 기간이 지워지므로 회수 직전 기간을 남긴다
     history.start_date = locker.start_date ?? null;
     history.expires_at = locker.expires_at ?? null;
-    // 회수 기록 '비고'용 — 회수 당시 비밀번호. 자리에 그대로 남으므로 from=to (예전엔 지워서 to=null 이었다)
-    if (locker.password) history.changes = { password: { from: locker.password, to: locker.password } };
     history.note = body.note ?? null;
   } else if (action === "update") {
     const changes: Record<string, { from: unknown; to: unknown }> = {};
