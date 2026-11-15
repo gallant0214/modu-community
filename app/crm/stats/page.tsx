@@ -1743,9 +1743,9 @@ function SettlementTab({
         </>
       )}
 
-      {/* 추가 지출 관리 */}
+      {/* 추가 지출 내역 */}
       <div className="mb-2 flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">추가 지출 관리</span>
+        <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">추가 지출 내역</span>
         <span className="text-[11.5px] text-[#A89B80]">
           {ledgerRangeText}
           {multiMonthLedger && ` · 새 항목은 ${entryYm}에 등록`}
@@ -1875,10 +1875,10 @@ function SettlementTab({
         </div>
       </section>
 
-      {/* 추가 수입 관리 */}
+      {/* 추가 수입 내역 */}
       <AdditionalLedgerPanel
         endpoint="additional-incomes"
-        title="추가 수입 관리"
+        title="추가 수입 내역"
         placeholder="내용 (예: 자판기 수익, 협찬)"
         footnote="여기서 등록한 추가 수입은 해당 월이 정산 기간에 포함될 때 순이익에 더해져요."
         emptyText="에 등록된 추가 수입이 없어요."
