@@ -86,7 +86,18 @@ const STATE_CHIP_CLS: Record<DisplayState, string> = {
 
 export default function CrmLockersPage() {
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<Tab>("assigned");
+  // 탭은 URL(?tab=)에도 남긴다 — 미배정자 목록에서 회원 상세로 갔다가 뒤로 오면 같은 탭으로 돌아오게
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === "undefined") return "assigned";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "unassigned" || t === "returns" || t === "settings" ? t : "assigned";
+  });
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("tab") === tab) return;
+    url.searchParams.set("tab", tab);
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, [tab]);
   const [zone, setZone] = useState<number>(1);
   const [zones, setZones] = useState<Zone[]>([]);
   const [lockers, setLockers] = useState<Locker[]>([]);
@@ -1212,6 +1223,83 @@ function expireSubtitle(expires: string, today: string): string {
   return `${-d}일째 만료`;
 }
 
+/**
+ * 회원 얼굴 썸네일 — 목록 응답엔 사진을 싣지 않고 보이는 회원 것만 따로 불러온다(쿠폰 발급내역과 같은 방식).
+ * 반환: member_id → 썸네일(사진 없으면 "")
+ */
+function useMemberThumbs(memberIds: number[]): Record<number, string> {
+  const { getIdToken } = useAuth();
+  const [thumbs, setThumbs] = useState<Record<number, string>>({});
+  const key = Array.from(new Set(memberIds)).sort((a, b) => a - b).join(",");
+  useEffect(() => {
+    const need = key ? key.split(",").map(Number).filter((id) => !(id in thumbs)) : [];
+    if (need.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const merged: Record<number, string> = {};
+      // thumbs API 는 한 번에 200명까지
+      for (let i = 0; i < need.length; i += 200) {
+        const ids = need.slice(i, i + 200);
+        const res = await fetch("/api/crm/members/thumbs", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ ids }),
+        });
+        if (!res.ok) break;
+        const got = ((await res.json()).thumbs ?? {}) as Record<number, string>;
+        // 사진 없는 회원은 빈 문자열로 남겨 다시 묻지 않는다
+        for (const id of ids) merged[id] = got[id] ?? "";
+      }
+      if (!cancelled && Object.keys(merged).length > 0) setThumbs((prev) => ({ ...prev, ...merged }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [key, thumbs, getIdToken]);
+  return thumbs;
+}
+
+/** 얼굴 + 이름 — 누르면 회원 상세로. 회원 id 가 없으면(삭제된 회원 등) 링크 없이 이름만 */
+function MemberFaceLink({
+  id,
+  name,
+  thumb,
+}: {
+  id: number | null;
+  name: string | null;
+  thumb?: string;
+}) {
+  const face = thumb ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={thumb}
+      alt=""
+      className="w-9 h-9 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
+    />
+  ) : (
+    <span className="w-9 h-9 rounded-full flex items-center justify-center bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 text-[#A89B80] text-[13px] font-semibold shrink-0">
+      {name?.slice(0, 1) || "—"}
+    </span>
+  );
+  if (!name) return <span className="text-[#A89B80]">—</span>;
+  if (!id) {
+    return (
+      <span className="flex items-center gap-2.5">
+        {face}
+        <span className="font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
+      </span>
+    );
+  }
+  return (
+    <Link href={`/crm/members/${id}`} className="group flex items-center gap-2.5">
+      {face}
+      <span className="font-semibold text-[#2A251D] dark:text-zinc-100 group-hover:underline">{name}</span>
+    </Link>
+  );
+}
+
 /* ─── 미배정자 탭 ────────────────────────────── */
 
 interface UnassignedMember {
@@ -1223,7 +1311,8 @@ interface UnassignedMember {
   member_type: string;
   created_at: string;
   linked_firebase_uid: string | null;
-  last_pass: { lesson_kind: string; issued_at: string; paid_at: string } | null;
+  /** 아직 자리를 못 받은 락커 이용권 (구매 상품·결제 일시·락커 시작일·만료일) */
+  locker_rentals: { id: number; item_name: string; start_date: string; expires_at: string; paid_at: string | null }[];
 }
 
 const MEMBER_TYPE_KO: Record<string, string> = {
@@ -1282,6 +1371,8 @@ function UnassignedTab({ onAssigned }: { zone: number; zoneLabel: (n: number) =>
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
   }, [load]);
+
+  const thumbs = useMemberThumbs(list.map((m) => m.id));
 
   return (
     <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
@@ -1366,21 +1457,40 @@ function UnassignedTab({ onAssigned }: { zone: number; zoneLabel: (n: number) =>
                       aria-label={`${m.name} 선택`}
                     />
                   </Td>
-                  <Td><span className="font-semibold text-[#2A251D] dark:text-zinc-100">{m.name}</span></Td>
-                  <Td className="text-[#6B5D47] dark:text-zinc-400">
+                  <Td className="whitespace-nowrap">
+                    <MemberFaceLink id={m.id} name={m.name} thumb={thumbs[m.id]} />
+                  </Td>
+                  <Td className="text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">
                     {MEMBER_TYPE_KO[m.member_type] ?? m.member_type}
                   </Td>
-                  <Td className="text-[#6B5D47] dark:text-zinc-400">
+                  <Td className="text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap tabular-nums">
                     {m.phone ? formatPhone(m.phone) : "—"}
                   </Td>
-                  <Td className="text-[#6B5D47] dark:text-zinc-400">
-                    {m.last_pass?.lesson_kind ?? "—"}
+                  {/* 구매 상품 = 자리를 못 받은 락커 이용권(회원권 아님). 2장이면 줄을 맞춰 한 줄씩 */}
+                  <Td className="text-[#2A251D] dark:text-zinc-100">
+                    {m.locker_rentals.length > 0
+                      ? m.locker_rentals.map((r) => <div key={r.id}>{r.item_name}</div>)
+                      : "—"}
                   </Td>
-                  <Td className="text-[#8C8270] dark:text-zinc-500">
-                    {m.last_pass ? formatDateTimeKST(m.last_pass.paid_at) : "—"}
+                  <Td className="text-[#8C8270] dark:text-zinc-500 whitespace-nowrap tabular-nums">
+                    {m.locker_rentals.length > 0
+                      ? m.locker_rentals.map((r) => (
+                          <div key={r.id}>{r.paid_at ? formatDateTimeKST(r.paid_at) : "—"}</div>
+                        ))
+                      : "—"}
                   </Td>
-                  <Td className="text-[#A89B80]">—</Td>
-                  <Td className="text-[#A89B80]">—</Td>
+                  <Td className="text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap tabular-nums">
+                    {m.locker_rentals.length > 0
+                      ? m.locker_rentals.map((r) => <div key={r.id}>{r.start_date}</div>)
+                      : "—"}
+                  </Td>
+                  <Td className="text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap tabular-nums">
+                    {m.locker_rentals.length > 0
+                      ? m.locker_rentals.map((r) => (
+                          <div key={r.id}>{r.expires_at === "9999-12-31" ? "무기한" : r.expires_at}</div>
+                        ))
+                      : "—"}
+                  </Td>
                   <Td className="text-right pr-3">
                     <button
                       onClick={() => setPickedForAssign(m)}
@@ -1833,6 +1943,8 @@ function ReturnsTab({ zone, zoneLabel }: { zone: number; zoneLabel: (n: number) 
     load();
   }, [load]);
 
+  const thumbs = useMemberThumbs(list.flatMap((h) => (h.member_id ? [h.member_id] : [])));
+
   return (
     <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -1881,7 +1993,8 @@ function ReturnsTab({ zone, zoneLabel }: { zone: number; zoneLabel: (n: number) 
                 <Th>이름</Th>
                 <Th>락커 구역</Th>
                 <Th>회수 전 락커 번호</Th>
-                <Th>회수일</Th>
+                <Th>만료된 날짜</Th>
+                <Th>회수된 날짜</Th>
                 <Th>처리자</Th>
                 <Th>비고</Th>
               </tr>
@@ -1889,26 +2002,17 @@ function ReturnsTab({ zone, zoneLabel }: { zone: number; zoneLabel: (n: number) 
             <tbody>
               {list.map((h) => (
                 <tr key={h.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                  {/* 얼굴 + 이름 — 클릭하면 회원 상세 페이지 */}
                   <Td>
-                    {h.member_name ? (
-                      h.member_id ? (
-                        /* 이름 클릭 → 회원 상세 페이지 */
-                        <Link
-                          href={`/crm/members/${h.member_id}`}
-                          className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A] underline decoration-dotted underline-offset-2 hover:decoration-solid"
-                        >
-                          {h.member_name}
-                        </Link>
-                      ) : (
-                        <span className="font-semibold text-[#2A251D] dark:text-zinc-100">{h.member_name}</span>
-                      )
-                    ) : (
-                      <span className="text-[#A89B80]">—</span>
-                    )}
+                    <MemberFaceLink id={h.member_id} name={h.member_name} thumb={h.member_id ? thumbs[h.member_id] : undefined} />
                   </Td>
                   <Td className="text-[#6B5D47] dark:text-zinc-400">{h.zone_name}</Td>
                   <Td className="font-medium">{h.number}</Td>
-                  <Td className="text-[#8C8270] dark:text-zinc-500">{formatDateTimeKST(h.created_at)}</Td>
+                  {/* 회수 직전 락커 만료일 — 만료 전에 미리 회수한 건 미래 날짜일 수 있다 */}
+                  <Td className="text-[#6B5D47] dark:text-zinc-400 tabular-nums">
+                    {h.expires_at ? (h.expires_at === "9999-12-31" ? "무기한" : h.expires_at) : "—"}
+                  </Td>
+                  <Td className="text-[#8C8270] dark:text-zinc-500 tabular-nums">{formatDateTimeKST(h.created_at)}</Td>
                   <Td className="text-[#6B5D47] dark:text-zinc-400">{h.actor_name}</Td>
                   <Td className="text-[#6B5D47] dark:text-zinc-400 max-w-[260px]">
                     <span className="block truncate" title={h.note || ""}>

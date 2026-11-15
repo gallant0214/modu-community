@@ -190,6 +190,9 @@ export async function PATCH(
     history.action = "return";
     history.member_id = locker.assigned_member_id;
     history.member_name = memberName;
+    // 회수 기록 '만료된 날짜'용 — 회수하면 락커의 기간이 지워지므로 회수 직전 기간을 남긴다
+    history.start_date = locker.start_date ?? null;
+    history.expires_at = locker.expires_at ?? null;
     history.note = body.note ?? null;
   } else if (action === "update") {
     const changes: Record<string, { from: unknown; to: unknown }> = {};

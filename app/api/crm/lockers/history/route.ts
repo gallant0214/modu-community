@@ -66,21 +66,88 @@ export async function GET(request: Request) {
     : { data: [] };
   const zoneMap = new Map((zones ?? []).map((z) => [z.id, z]));
 
-  // 처리자 닉네임 매핑
+  // 처리자 = 이 센터 직원 이름(직원 목록 display_name). 커뮤니티 닉네임('멋진감자' 등)이 아니라.
+  //   직원 기록이 없는 uid(예전 테스트 계정 등)만 닉네임으로 대신한다.
   const uids = Array.from(new Set((data ?? []).map((d) => d.actor_uid)));
-  const { data: nicks } = uids.length
-    ? await supabase.from("nicknames").select("firebase_uid, name").in("firebase_uid", uids)
-    : { data: [] };
+  const [{ data: staff }, { data: nicks }] = uids.length
+    ? await Promise.all([
+        supabase
+          .from("crm_center_members")
+          .select("firebase_uid, display_name")
+          .eq("center_id", ctx.centerId)
+          .in("firebase_uid", uids),
+        supabase.from("nicknames").select("firebase_uid, name").in("firebase_uid", uids),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const staffMap = new Map(
+    ((staff ?? []) as { firebase_uid: string; display_name: string | null }[])
+      .filter((s) => s.display_name)
+      .map((s) => [s.firebase_uid, s.display_name as string])
+  );
   const nickMap = new Map((nicks ?? []).map((n) => [n.firebase_uid, n.name]));
 
-  // 락커별 비밀번호 매핑 (회수 기록의 경우 회수 직전 비밀번호)
-  // 비밀번호는 회수 시 락커에서 NULL 되니 history.note 가 없으면 빈 값.
+  // 회원 이름이 비어 있는 기록(결제 삭제·환불로 자동 회수된 건)은 회원 이름을 채운다
+  const nameless = Array.from(
+    new Set((data ?? []).filter((d) => d.member_id && !d.member_name).map((d) => d.member_id as number))
+  );
+  const { data: memberRows } = nameless.length
+    ? await supabase.from("crm_members").select("id, name").eq("center_id", ctx.centerId).in("id", nameless)
+    : { data: [] };
+  const memberName = new Map(((memberRows ?? []) as { id: number; name: string }[]).map((m) => [m.id, m.name]));
+
+  // 🚨 회수 기록의 '만료된 날짜' — 2026-11-15 전 회수 기록은 만료일을 저장하지 않았다.
+  //    그 락커의 회수 직전 기록(배정 기간·만료일 변경)에서 마지막으로 알려진 기간을 찾아 채운다(표시만, DB 는 그대로).
+  const needPeriod = (data ?? []).filter((d) => d.action === "return" && !d.expires_at && d.locker_id);
+  const periodById = new Map<number, { start_date: string | null; expires_at: string | null }>();
+  if (needPeriod.length > 0) {
+    const lockerIds = Array.from(new Set(needPeriod.map((d) => d.locker_id as number)));
+    type H = {
+      locker_id: number;
+      created_at: string;
+      start_date: string | null;
+      expires_at: string | null;
+      changes: Record<string, { from?: unknown; to?: unknown }> | null;
+    };
+    const prior: H[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data: page } = await supabase
+        .from("crm_locker_history")
+        .select("locker_id, created_at, start_date, expires_at, changes")
+        .eq("center_id", ctx.centerId)
+        .in("locker_id", lockerIds)
+        .neq("action", "return")
+        .order("created_at", { ascending: false })
+        .range(from, from + 999);
+      prior.push(...((page ?? []) as H[]));
+      if (!page || page.length < 1000) break;
+    }
+    for (const r of needPeriod) {
+      let start: string | null = null;
+      let exp: string | null = null;
+      // 최근 → 과거 순. 만료일·시작일을 각각 처음 만나는 값으로
+      for (const h of prior) {
+        if (h.locker_id !== r.locker_id || h.created_at >= r.created_at) continue;
+        const e = h.expires_at ?? (typeof h.changes?.expires_at?.to === "string" ? (h.changes.expires_at.to as string) : null);
+        const s = h.start_date ?? (typeof h.changes?.start_date?.to === "string" ? (h.changes.start_date.to as string) : null);
+        if (!exp && e) exp = e;
+        if (!start && s) start = s;
+        if (exp && start) break;
+      }
+      if (exp || start) periodById.set(r.id, { start_date: start, expires_at: exp });
+    }
+  }
 
   return NextResponse.json({
-    history: (data ?? []).map((d) => ({
-      ...d,
-      zone_name: zoneMap.get(d.zone_id)?.name ?? `구역 ${zoneMap.get(d.zone_id)?.zone_number ?? "?"}`,
-      actor_name: nickMap.get(d.actor_uid) ?? "—",
-    })),
+    history: (data ?? []).map((d) => {
+      const p = periodById.get(d.id);
+      return {
+        ...d,
+        member_name: d.member_name ?? (d.member_id ? memberName.get(d.member_id) ?? null : null),
+        start_date: d.start_date ?? p?.start_date ?? null,
+        expires_at: d.expires_at ?? p?.expires_at ?? null,
+        zone_name: zoneMap.get(d.zone_id)?.name ?? `구역 ${zoneMap.get(d.zone_id)?.zone_number ?? "?"}`,
+        actor_name: staffMap.get(d.actor_uid) ?? nickMap.get(d.actor_uid) ?? "—",
+      };
+    }),
   });
 }

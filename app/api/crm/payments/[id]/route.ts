@@ -599,7 +599,7 @@ export async function DELETE(
           .maybeSingle();
         const { data: lk } = await supabase
           .from("crm_lockers")
-          .select("zone_id, number")
+          .select("zone_id, number, start_date, expires_at")
           .eq("id", lid)
           .eq("center_id", ctx.centerId)
           .maybeSingle();
@@ -632,6 +632,9 @@ export async function DELETE(
               center_id: ctx.centerId, locker_id: lid,
               zone_id: (lk as { zone_id: number }).zone_id, number: (lk as { number: number }).number,
               action: "return", member_id: memberId, actor_uid: ctx.uid,
+              // 회수 기록 '만료된 날짜'용 — 회수 직전 기간
+              start_date: (lk as { start_date: string | null }).start_date,
+              expires_at: (lk as { expires_at: string | null }).expires_at,
             } as never);
           }
           removed.counts.lockers_returned++;
