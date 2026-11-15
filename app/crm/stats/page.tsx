@@ -9,6 +9,7 @@ import { ROLE_LABEL, formatWon, parseWon } from "../_components/crm-labels";
 import { TrainerSessionsChart, TrainerRevenueChart } from "./_components/trainer-sessions-chart";
 import { MarketTrend } from "./_components/market-trend";
 import { BusinessSummary } from "./_components/business-summary";
+import { ProfitDonut } from "./_components/profit-donut";
 import { PayrollList } from "../payroll/_payroll-list";
 
 interface MonthlyResp {
@@ -1441,6 +1442,7 @@ interface SettlementResp {
   fixed_monthly: number;
   fixed_total: number;
   salary_total: number;
+  total_expense?: number;
   staff_breakdown: { id: number; name: string; base: number; commission: number; bonus?: number; cash?: number; total: number }[];
   additional_total: number;
   additional_income_total?: number;
@@ -1627,27 +1629,48 @@ function SettlementTab({
 
   const multiMonth = (data?.months_in_period ?? 1) > 1;
   const net = data?.net_profit ?? 0;
+  // 원그래프는 매출이 있고 순이익이 양수일 때만 (음수는 원의 조각으로 나타낼 수 없다)
+  const showDonut =
+    !!data &&
+    data.total_revenue > 0 &&
+    (data.net_margin ?? 0) > 0 &&
+    data.expense_ratio != null &&
+    data.labor_ratio != null;
 
   return (
     <>
-      {/* 순이익 카드 */}
+      {/* 순이익 카드 — 오른쪽 원그래프(순이익·인건비·그 외 지출). 순이익이 0 이하면 원그래프 대신 비율 칩 */}
       <section className="mb-4 px-5 py-5 rounded-2xl border-2 border-[#6B7B3A]/40 bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/10">
-        <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">순이익</div>
-        <div className={`mt-1 text-[26px] font-bold tabular-nums ${net < 0 ? "text-red-600 dark:text-red-400" : "text-[#3A342A] dark:text-zinc-100"}`}>
-          {formatWon(net)}원
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">순이익</div>
+            <div className={`mt-1 text-[26px] font-bold tabular-nums ${net < 0 ? "text-red-600 dark:text-red-400" : "text-[#3A342A] dark:text-zinc-100"}`}>
+              {formatWon(net)}원
+            </div>
+            {multiMonth && (
+              <div className="mt-1 text-[11.5px] text-[#A89B80]">
+                선택 기간 {data?.months_in_period}개월 합산 (고정지출·직원 고정급은 개월수만큼 반영)
+              </div>
+            )}
+            {data && data.total_revenue > 0 && !showDonut && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <RatioChip label="순이익률" value={data.net_margin} />
+                <RatioChip label="매출 대비 지출" value={data.expense_ratio} />
+                <RatioChip label="인건비 비중" value={data.labor_ratio} />
+              </div>
+            )}
+          </div>
+          {data && showDonut && (
+            <ProfitDonut
+              netMargin={data.net_margin ?? 0}
+              expenseRatio={data.expense_ratio ?? 0}
+              laborRatio={data.labor_ratio ?? 0}
+              netProfitWon={net}
+              laborWon={data.salary_total}
+              otherExpenseWon={Math.max(0, (data.total_expense ?? 0) - data.salary_total)}
+            />
+          )}
         </div>
-        {multiMonth && (
-          <div className="mt-1 text-[11.5px] text-[#A89B80]">
-            선택 기간 {data?.months_in_period}개월 합산 (고정지출·직원 고정급은 개월수만큼 반영)
-          </div>
-        )}
-        {data && data.total_revenue > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <RatioChip label="순이익률" value={data.net_margin} />
-            <RatioChip label="매출 대비 지출" value={data.expense_ratio} />
-            <RatioChip label="인건비 비중" value={data.labor_ratio} />
-          </div>
-        )}
       </section>
 
       {/* 계산 상세 */}
