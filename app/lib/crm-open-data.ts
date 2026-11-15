@@ -389,6 +389,25 @@ export type OpenSaleRow = {
   amount_won: number;
   payment_method: string | null;
   registration_type: string | null;
+  /** 결제자 = 결제한 회원 */
+  payer_name: string | null;
+  /** 판매 경로: 현장 / 회원앱 / 홈페이지 */
+  sales_channel: string | null;
+  /** 처리 직원 (현장 결제). 온라인 결제는 비어 있음 */
+  staff_name: string | null;
+  /* ── 온라인(PG) 결제만 채워짐 — 토스 / KG이니시스 ── */
+  pg: string | null;
+  pg_method: string | null;
+  card_company: string | null;
+  easy_pay: string | null;
+  card_type: string | null;
+  installment_months: number | null;
+  approval_no: string | null;
+  pg_approved_at: string | null;
+  order_no: string | null;
+  pg_tx_id: string | null;
+  pg_buyer_name: string | null;
+  receipt_url: string | null;
 };
 
 export const OPEN_SALE_COLUMNS: CsvColumn<OpenSaleRow>[] = [
@@ -400,6 +419,21 @@ export const OPEN_SALE_COLUMNS: CsvColumn<OpenSaleRow>[] = [
   { key: "amount_won", label: "금액" },
   { key: "payment_method", label: "결제 방법" },
   { key: "registration_type", label: "신규/재등록" },
+  { key: "payer_name", label: "결제자" },
+  { key: "sales_channel", label: "판매 경로" },
+  { key: "staff_name", label: "처리 직원" },
+  { key: "pg", label: "PG사" },
+  { key: "pg_method", label: "PG 결제수단" },
+  { key: "card_company", label: "카드사" },
+  { key: "easy_pay", label: "간편결제" },
+  { key: "card_type", label: "카드 종류" },
+  { key: "installment_months", label: "할부(개월)" },
+  { key: "approval_no", label: "승인번호" },
+  { key: "pg_approved_at", label: "PG 승인 일시" },
+  { key: "order_no", label: "주문번호" },
+  { key: "pg_tx_id", label: "PG 거래번호" },
+  { key: "pg_buyer_name", label: "PG 구매자명" },
+  { key: "receipt_url", label: "영수증" },
 ];
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -455,6 +489,21 @@ export async function loadOpenSales(centerId: number, fromYmd: string, toYmd: st
     amount_won: it.amount_won,
     payment_method: it.payment_method,
     registration_type: it.registration_type,
+    payer_name: it.payer_name,
+    sales_channel: it.sales_channel,
+    staff_name: it.staff_name,
+    pg: it.pg?.pg ?? null,
+    pg_method: it.pg?.pg_method ?? null,
+    card_company: it.pg?.card_company ?? null,
+    easy_pay: it.pg?.easy_pay ?? null,
+    card_type: it.pg?.card_type ?? null,
+    installment_months: it.pg?.installment_months ?? null,
+    approval_no: it.pg?.approval_no ?? null,
+    pg_approved_at: it.pg?.approved_at ? kstYmdHm(it.pg.approved_at) : null,
+    order_no: it.pg?.order_no ?? null,
+    pg_tx_id: it.pg?.pg_tx_id ?? null,
+    pg_buyer_name: it.pg?.pg_buyer_name ?? null,
+    receipt_url: it.pg?.receipt_url ?? null,
   }));
 }
 

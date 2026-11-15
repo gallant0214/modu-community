@@ -1,6 +1,7 @@
 import "server-only";
 import { supabase } from "./supabase";
 import { saleCategory } from "./crm-sales";
+import { PG_ORDER_SELECT, pgDetailFromOrder, type PgDetail, type PgOrderFields } from "./crm-pg-detail";
 
 /**
  * 기간 매출 라인아이템 — 통계 '매출 리스트'(/api/crm/stats/sales-list)와 외부 연동 API(/api/open/v1/sales) 공용.
@@ -21,6 +22,14 @@ export type SalesListItem = {
   payment_method: string | null; // 현금 / 카드 / 문화상품권 / 계좌이체·기타
   registration_type: string | null; // 신규 / 재등록
   source: "ledger" | "issuance";
+  /** 판매 경로: 현장 / 회원앱 / 홈페이지 */
+  sales_channel: string | null;
+  /** 결제자 = 결제한 회원 (원장은 고객명) */
+  payer_name: string | null;
+  /** 처리 직원 — 현장 결제를 등록한 직원(원장은 판매자). 온라인 결제는 null */
+  staff_name: string | null;
+  /** 온라인(PG) 결제 상세 — 토스·KG이니시스. 현장 결제는 null */
+  pg: PgDetail | null;
 };
 
 /** KST 날짜 [startYmd, endExclYmd) 의 매출 라인아이템(최신순) */
@@ -82,12 +91,13 @@ export async function loadSalesListItems(
       culture_won: number;
       payment_channel: string | null;
       registration_type: string | null;
+      seller_name: string | null;
     };
     const rows = await paginateAll<Row>((f, t) =>
       supabase
         .from("crm_sales")
         .select(
-          "tx_at, amount_won, product_type, product_name, member_id, customer_name, cash_won, card_won, culture_won, payment_channel, registration_type"
+          "tx_at, amount_won, product_type, product_name, member_id, customer_name, cash_won, card_won, culture_won, payment_channel, registration_type, seller_name"
         )
         .eq("center_id", centerId)
         .gte("tx_at", `${startYmd}T00:00:00+09:00`)
@@ -102,16 +112,21 @@ export async function loadSalesListItems(
     const nameMap = await fetchMemberNames(centerId, missingIds);
     for (const r of rows) {
       const cat = saleCategory(r.product_type);
+      const memberName = r.customer_name ?? (r.member_id ? nameMap.get(r.member_id) ?? null : null);
       items.push({
         date: r.tx_at,
         member_id: r.member_id,
-        member_name: r.customer_name ?? (r.member_id ? nameMap.get(r.member_id) ?? null : null),
+        member_name: memberName,
         product_name: r.product_name ?? CAT_KO[cat] ?? "상품",
         category: CAT_KO[cat] ?? "기타",
         amount_won: r.amount_won ?? 0,
         payment_method: salePayMethod(r.payment_channel, r.cash_won ?? 0, r.card_won ?? 0, r.amount_won ?? 0),
         registration_type: (r.registration_type ?? "").trim() || null,
         source: "ledger",
+        sales_channel: "현장",
+        payer_name: memberName,
+        staff_name: (r.seller_name ?? "").trim() || null,
+        pg: null,
       });
     }
   }
@@ -132,10 +147,15 @@ export async function loadSalesListItems(
       membership_id: number | null;
       rental_id: number | null;
       status: string | null;
+      order_id: number | null;
+      source: string | null;
+      recorded_by_uid: string | null;
     }>((f, t) =>
       supabase
         .from("crm_payments")
-        .select("id, member_id, amount_won, paid_at, method, pass_id, membership_id, rental_id, status")
+        .select(
+          "id, member_id, amount_won, paid_at, method, pass_id, membership_id, rental_id, status, order_id, source, recorded_by_uid"
+        )
         .eq("center_id", centerId)
         .gte("paid_at", `${issuanceStart}T00:00:00+09:00`)
         .lt("paid_at", `${endExclYmd}T00:00:00+09:00`)
@@ -148,8 +168,10 @@ export async function loadSalesListItems(
     const msIds = Array.from(new Set(pays.map((p) => p.membership_id).filter(Boolean))) as number[];
     const rnIds = Array.from(new Set(pays.map((p) => p.rental_id).filter(Boolean))) as number[];
     const memberIds = Array.from(new Set(pays.map((p) => p.member_id).filter(Boolean))) as number[];
+    const orderIds = Array.from(new Set(pays.map((p) => p.order_id).filter(Boolean))) as number[];
+    const staffUids = Array.from(new Set(pays.map((p) => p.recorded_by_uid).filter(Boolean))) as string[];
 
-    const [passRes, msRes, rnRes, nameMap] = await Promise.all([
+    const [passRes, msRes, rnRes, nameMap, orderRes, staffRes] = await Promise.all([
       passIds.length
         ? supabase.from("crm_passes").select("id, lesson_kind").in("id", passIds)
         : Promise.resolve({ data: [] as { id: number; lesson_kind: string | null }[] }),
@@ -160,7 +182,26 @@ export async function loadSalesListItems(
         ? supabase.from("crm_rentals").select("id, item_name").in("id", rnIds)
         : Promise.resolve({ data: [] as { id: number; item_name: string | null }[] }),
       fetchMemberNames(centerId, memberIds),
+      // 🚨 pg_raw 는 경로별로만 읽는다(토스 응답의 결제별 secret 을 끌어오지 않게) — crm-pg-detail.ts
+      orderIds.length
+        ? supabase.from("crm_orders").select(PG_ORDER_SELECT).eq("center_id", centerId).in("id", orderIds)
+        : Promise.resolve({ data: [] as unknown[] }),
+      staffUids.length
+        ? supabase
+            .from("crm_center_members")
+            .select("firebase_uid, display_name")
+            .eq("center_id", centerId)
+            .in("firebase_uid", staffUids)
+        : Promise.resolve({ data: [] as { firebase_uid: string | null; display_name: string | null }[] }),
     ]);
+    const pgByOrder = new Map(
+      ((orderRes.data ?? []) as unknown as PgOrderFields[]).map((o) => [o.id, pgDetailFromOrder(o)])
+    );
+    const staffName = new Map(
+      ((staffRes.data ?? []) as { firebase_uid: string | null; display_name: string | null }[])
+        .filter((r) => r.firebase_uid)
+        .map((r) => [r.firebase_uid as string, (r.display_name ?? "").trim() || null])
+    );
     const passName = new Map((passRes.data ?? []).map((p) => [p.id, p.lesson_kind ?? "수강권"]));
     const msName = new Map((msRes.data ?? []).map((m) => [m.id, m.plan_name ?? "회원권"]));
     const rnName = new Map((rnRes.data ?? []).map((r) => [r.id, r.item_name ?? "운동복"]));
@@ -171,16 +212,22 @@ export async function loadSalesListItems(
       if (p.pass_id) { productName = passName.get(p.pass_id) ?? "수강권"; category = "수강권"; }
       else if (p.membership_id) { productName = msName.get(p.membership_id) ?? "회원권"; category = "회원권"; }
       else if (p.rental_id) { productName = rnName.get(p.rental_id) ?? "운동복"; category = "운동복"; }
+      const pg = p.order_id ? pgByOrder.get(p.order_id) ?? null : null;
+      const memberName = p.member_id ? nameMap.get(p.member_id) ?? null : null;
       items.push({
         date: p.paid_at ?? `${issuanceStart}T00:00:00+09:00`,
         member_id: p.member_id,
-        member_name: p.member_id ? nameMap.get(p.member_id) ?? null : null,
+        member_name: memberName,
         product_name: productName,
         category,
         amount_won: p.amount_won ?? 0,
         payment_method: methodKo(p.method),
         registration_type: null,
         source: "issuance",
+        sales_channel: pg ? pg.channel : p.source === "member_app" ? "회원앱" : "현장",
+        payer_name: memberName,
+        staff_name: p.recorded_by_uid ? staffName.get(p.recorded_by_uid) ?? null : null,
+        pg,
       });
     }
   }

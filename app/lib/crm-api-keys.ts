@@ -100,6 +100,6 @@ export const OPEN_API_ENDPOINTS: {
   { path: "/api/open/v1/members", scope: "members", label: "회원 목록", desc: "상태·이용 중 상품·만료일·남은 횟수·최근 출석·누적 결제" },
   { path: "/api/open/v1/memberships", scope: "members", label: "회원권 목록", desc: "회원권별 시작·만료일, 상태, 금액 — ?only=active 면 이용 중·예정만" },
   { path: "/api/open/v1/passes", scope: "members", label: "수강권 목록", desc: "수강권별 총·남은 횟수, 담당 강사, 만료일 — ?only=active 면 이용 중·예정만" },
-  { path: "/api/open/v1/sales", scope: "sales", label: "결제 내역", desc: "기간 결제 한 건씩 (통계 매출 리스트와 같은 값)", example: "?from=2026-11-01&to=2026-11-30" },
+  { path: "/api/open/v1/sales", scope: "sales", label: "결제 내역", desc: "기간 결제 한 건씩 (통계 매출 리스트와 같은 값) — 결제자·판매 경로, 온라인 결제는 PG사(토스·KG이니시스)·카드사·간편결제·승인번호", example: "?from=2026-11-01&to=2026-11-30" },
   { path: "/api/open/v1/sales/monthly", scope: "sales", label: "월별 매출", desc: "달마다 합계와 회원권·수강권·운동복·락커·기타", example: "?from=2026-01&to=2026-12" },
 ];
