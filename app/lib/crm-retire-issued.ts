@@ -87,12 +87,12 @@ async function revertLockers(opts: {
       .maybeSingle();
     const { data: lk } = await supabase
       .from("crm_lockers")
-      .select("zone_id, number, start_date, expires_at")
+      .select("zone_id, number, start_date, expires_at, password")
       .eq("id", lid)
       .eq("center_id", opts.centerId)
       .maybeSingle();
     const prevRow = prev as { action: string; start_date: string | null; expires_at: string | null } | null;
-    const lock = lk as { zone_id: number; number: number; start_date: string | null; expires_at: string | null } | null;
+    const lock = lk as { zone_id: number; number: number; start_date: string | null; expires_at: string | null; password: string | null } | null;
 
     if (prevRow && prevRow.action === "assign") {
       // 연장 전 기간으로 되돌린다
@@ -126,6 +126,8 @@ async function revertLockers(opts: {
           action: "return", member_id: opts.memberId, actor_uid: opts.actorUid,
           // 회수 기록 '만료된 날짜'용 — 회수 직전 기간
           start_date: lock.start_date, expires_at: lock.expires_at,
+          // 회수 기록 '비고'용 — 회수 당시 비밀번호(자리에 그대로 남음)
+          ...(lock.password ? { changes: { password: { from: lock.password, to: lock.password } } } : {}),
         } as never);
       }
       out.returned++;

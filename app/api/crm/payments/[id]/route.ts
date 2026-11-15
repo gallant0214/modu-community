@@ -599,7 +599,7 @@ export async function DELETE(
           .maybeSingle();
         const { data: lk } = await supabase
           .from("crm_lockers")
-          .select("zone_id, number, start_date, expires_at")
+          .select("zone_id, number, start_date, expires_at, password")
           .eq("id", lid)
           .eq("center_id", ctx.centerId)
           .maybeSingle();
@@ -635,6 +635,10 @@ export async function DELETE(
               // 회수 기록 '만료된 날짜'용 — 회수 직전 기간
               start_date: (lk as { start_date: string | null }).start_date,
               expires_at: (lk as { expires_at: string | null }).expires_at,
+              // 회수 기록 '비고'용 — 회수 당시 비밀번호(자리에 그대로 남음)
+              ...((lk as { password: string | null }).password
+                ? { changes: { password: { from: (lk as { password: string }).password, to: (lk as { password: string }).password } } }
+                : {}),
             } as never);
           }
           removed.counts.lockers_returned++;

@@ -95,10 +95,22 @@ export async function GET(request: Request) {
     : { data: [] };
   const memberName = new Map(((memberRows ?? []) as { id: number; name: string }[]).map((m) => [m.id, m.name]));
 
-  // 🚨 회수 기록의 '만료된 날짜' — 2026-11-15 전 회수 기록은 만료일을 저장하지 않았다.
-  //    그 락커의 회수 직전 기록(배정 기간·만료일 변경)에서 마지막으로 알려진 기간을 찾아 채운다(표시만, DB 는 그대로).
-  const needPeriod = (data ?? []).filter((d) => d.action === "return" && !d.expires_at && d.locker_id);
+  // 회수 당시 비밀번호(회수 기록 '비고'에 표시). 회수 기록 changes.password.from 에 남는다
+  //   — 10월 말까지는 회수하며 비밀번호를 지워서 from=회수 전 값·to=null, 지금은 유지해서 from=to.
+  type Changes = Record<string, { from?: unknown; to?: unknown }> | null;
+  const pwOf = (c: Changes, side: "from" | "to"): string | null => {
+    const v = c?.password?.[side];
+    return typeof v === "string" && v ? v : null;
+  };
+
+  // 🚨 회수 기록의 '만료된 날짜'·비밀번호 — 2026-11-15 전 회수 기록은 기간을 저장하지 않았고,
+  //    10월 말~11-15 회수 기록은 비밀번호도 남기지 않았다.
+  //    그 락커의 회수 직전 기록(배정 기간·만료일·비밀번호 변경)에서 마지막으로 알려진 값을 찾아 채운다(표시만, DB 는 그대로).
+  const needPeriod = (data ?? []).filter(
+    (d) => d.action === "return" && d.locker_id && (!d.expires_at || !pwOf(d.changes as Changes, "from"))
+  );
   const periodById = new Map<number, { start_date: string | null; expires_at: string | null }>();
+  const passwordById = new Map<number, string>();
   if (needPeriod.length > 0) {
     const lockerIds = Array.from(new Set(needPeriod.map((d) => d.locker_id as number)));
     type H = {
@@ -106,7 +118,7 @@ export async function GET(request: Request) {
       created_at: string;
       start_date: string | null;
       expires_at: string | null;
-      changes: Record<string, { from?: unknown; to?: unknown }> | null;
+      changes: Changes;
     };
     const prior: H[] = [];
     for (let from = 0; ; from += 1000) {
@@ -122,18 +134,23 @@ export async function GET(request: Request) {
       if (!page || page.length < 1000) break;
     }
     for (const r of needPeriod) {
-      let start: string | null = null;
-      let exp: string | null = null;
-      // 최근 → 과거 순. 만료일·시작일을 각각 처음 만나는 값으로
+      let start: string | null = r.start_date ?? null;
+      let exp: string | null = r.expires_at ?? null;
+      let pw: string | null = pwOf(r.changes as Changes, "from");
+      // 최근 → 과거 순. 만료일·시작일·비밀번호를 각각 처음 만나는 값으로
       for (const h of prior) {
         if (h.locker_id !== r.locker_id || h.created_at >= r.created_at) continue;
         const e = h.expires_at ?? (typeof h.changes?.expires_at?.to === "string" ? (h.changes.expires_at.to as string) : null);
         const s = h.start_date ?? (typeof h.changes?.start_date?.to === "string" ? (h.changes.start_date.to as string) : null);
+        // 비밀번호 변경·배정 때 등록한 값. 지운 기록(to=null)을 만나면 그때 비밀번호가 없었던 것
+        const hasPw = !!h.changes && "password" in h.changes;
         if (!exp && e) exp = e;
         if (!start && s) start = s;
-        if (exp && start) break;
+        if (pw === null && hasPw) pw = pwOf(h.changes, "to") ?? "";
+        if (exp && start && pw !== null) break;
       }
       if (exp || start) periodById.set(r.id, { start_date: start, expires_at: exp });
+      if (pw) passwordById.set(r.id, pw);
     }
   }
 
@@ -145,6 +162,9 @@ export async function GET(request: Request) {
         member_name: d.member_name ?? (d.member_id ? memberName.get(d.member_id) ?? null : null),
         start_date: d.start_date ?? p?.start_date ?? null,
         expires_at: d.expires_at ?? p?.expires_at ?? null,
+        // 회수 기록만 — 회수 당시 락커 비밀번호(모르면 null)
+        return_password:
+          d.action === "return" ? pwOf(d.changes as Changes, "from") ?? passwordById.get(d.id) ?? null : null,
         zone_name: zoneMap.get(d.zone_id)?.name ?? `구역 ${zoneMap.get(d.zone_id)?.zone_number ?? "?"}`,
         actor_name: staffMap.get(d.actor_uid) ?? nickMap.get(d.actor_uid) ?? "—",
       };
