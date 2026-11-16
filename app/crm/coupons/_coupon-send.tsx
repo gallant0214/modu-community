@@ -73,11 +73,13 @@ export function CouponSendTab({
   const [searching, setSearching] = useState(false);
   // 전화번호로 입력 — 문자 전송 '직접 입력'과 같은 입력칸. 번호를 회원과 맞춰 본 결과를 받는 회원으로 쓴다
   const [phonesRaw, setPhonesRaw] = useState("");
+  // key = 이 결과가 어떤 번호 목록으로 확인한 것인지 — 입력이 바뀐 뒤 옛 결과로 명단·발송이 나가지 않게
   const [phoneMatch, setPhoneMatch] = useState<{
+    key: string;
     members: MemberOption[];
     unmatched: string[];
     shared: { phone: string; names: string[] }[];
-  }>({ members: [], unmatched: [], shared: [] });
+  }>({ key: "", members: [], unmatched: [], shared: [] });
   const [matching, setMatching] = useState(false);
   const [count, setCount] = useState<number | null>(null);
   // 받을 회원 명단 + 직원이 뺀 회원
@@ -165,9 +167,12 @@ export function CouponSendTab({
   const parsedPhones = useMemo(() => parsePhoneList(phonesRaw), [phonesRaw]);
   const phonesKey = parsedPhones.join(",");
   // 개별 선택·전화번호 입력이 고른 회원 — 서버는 둘 다 member_ids 로 받는다
+  // 입력한 번호와 확인 결과가 같을 때만 쓴다 (확인 중이면 빈 명단)
+  const phoneMatchFresh = phoneMatch.key === phonesKey;
+  const phoneMembers = useMemo(() => (phoneMatchFresh ? phoneMatch.members : []), [phoneMatchFresh, phoneMatch]);
   const pickedIds = useMemo(
-    () => (audience === "phones" ? phoneMatch.members : selected).map((m) => m.id),
-    [audience, phoneMatch, selected]
+    () => (audience === "phones" ? phoneMembers : selected).map((m) => m.id),
+    [audience, phoneMembers, selected]
   );
 
   // 붙여넣은 번호 → 센터 회원 (디바운스). 회원이 아닌 번호는 쿠폰을 받을 수 없어 따로 알린다
@@ -176,7 +181,7 @@ export function CouponSendTab({
     const phones = phonesKey ? phonesKey.split(",") : [];
     const t = setTimeout(async () => {
       if (phones.length === 0) {
-        setPhoneMatch({ members: [], unmatched: [], shared: [] });
+        setPhoneMatch({ key: phonesKey, members: [], unmatched: [], shared: [] });
         return;
       }
       setMatching(true);
@@ -186,7 +191,7 @@ export function CouponSendTab({
           body: JSON.stringify({ phones }),
         });
         if (!r.ok) {
-          setPhoneMatch({ members: [], unmatched: [], shared: [] });
+          setPhoneMatch({ key: phonesKey, members: [], unmatched: [], shared: [] });
           setResult((r.data as { error?: string })?.error || "번호를 확인하지 못했어요");
           return;
         }
@@ -201,12 +206,13 @@ export function CouponSendTab({
           }
         }
         setPhoneMatch({
+          key: phonesKey,
           members,
           unmatched: (r.data.unmatched as string[]) ?? [],
           shared: matches.filter((m) => m.members.length > 1).map((m) => ({ phone: m.phone, names: m.members.map((x) => x.name) })),
         });
       } catch {
-        setPhoneMatch({ members: [], unmatched: [], shared: [] });
+        setPhoneMatch({ key: phonesKey, members: [], unmatched: [], shared: [] });
       } finally {
         setMatching(false);
       }
@@ -412,7 +418,8 @@ export function CouponSendTab({
   const send = async () => {
     if (!coupon) return;
     if (audience === "individual" && selected.length === 0) return alert("회원을 선택해 주세요");
-    if (audience === "phones" && phoneMatch.members.length === 0)
+    if (audience === "phones" && !phoneMatchFresh) return alert("입력한 번호를 회원과 확인하는 중이에요. 잠시 후 다시 눌러 주세요.");
+    if (audience === "phones" && phoneMembers.length === 0)
       return alert(parsedPhones.length === 0 ? "전화번호를 입력해 주세요" : "입력한 번호 중 회원으로 등록된 번호가 없어요");
     const n = sendTargets.length;
     if (n === 0) return alert("보낼 회원이 없어요. 명단에서 한 명 이상 선택해 주세요.");
@@ -603,15 +610,15 @@ export function CouponSendTab({
               {parsedPhones.length > 0 && " · Enter 로 정리됩니다"}
               {parsedPhones.length > 0 && (
                 <span className="ml-1.5">
-                  · {matching ? "회원 확인 중…" : (
+                  · {matching || !phoneMatchFresh ? "회원 확인 중…" : (
                     <>
-                      회원 확인 <strong className="text-[#2A251D] dark:text-zinc-100">{phoneMatch.members.length}명</strong>
+                      회원 확인 <strong className="text-[#2A251D] dark:text-zinc-100">{phoneMembers.length}명</strong>
                     </>
                   )}
                 </span>
               )}
             </div>
-            {!matching && phoneMatch.unmatched.length > 0 && (
+            {phoneMatchFresh && !matching && phoneMatch.unmatched.length > 0 && (
               <div className="mt-2 px-3 py-2 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#8C8270]">
                 회원으로 등록되지 않은 번호 {phoneMatch.unmatched.length}개 — 쿠폰은 회원에게만 발급돼서 빠져요
                 <div className="mt-1 font-mono text-[11.5px] text-[#6B5D47] dark:text-zinc-400 break-all">
@@ -619,7 +626,7 @@ export function CouponSendTab({
                 </div>
               </div>
             )}
-            {!matching && phoneMatch.shared.length > 0 && (
+            {phoneMatchFresh && !matching && phoneMatch.shared.length > 0 && (
               <div className="mt-2 px-3 py-2 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#8C8270]">
                 한 번호에 회원이 여러 명이라 모두 넣었어요. 필요 없는 회원은 아래 명단에서 체크를 끄세요.
                 <div className="mt-1 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
