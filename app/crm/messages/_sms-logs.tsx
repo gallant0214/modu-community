@@ -21,6 +21,16 @@ interface MsgLog {
   created_at: string;
 }
 
+/**
+ * 회원마다 문구가 다른 묶음 발송(쿠폰 발송 #회원명# 등)은 로그에 **원본 문구(#변수# 포함)** 를 남긴다.
+ * 실제로 받은 문구는 회원별 값으로 바뀌어 나갔으므로, 그런 기록에는 참고 문구를 붙인다 (2026-11-16 사용자 요청).
+ * 1명에게 보낸 기록은 로그 = 실제 받은 문구라서 붙이지 않는다(남은 #변수# 가 정말로 나간 것).
+ */
+const VAR_TOKEN_RE = /#[^#\s]{1,12}#/;
+function isTemplateLog(l: { receiver_cnt: number; content: string }): boolean {
+  return l.receiver_cnt > 1 && VAR_TOKEN_RE.test(l.content);
+}
+
 function formatDateTime(iso: string): string {
   try {
     const k = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
@@ -182,6 +192,11 @@ export function SmsLogsTab() {
                     {l.title ? <strong>[{l.title}] </strong> : null}
                     {l.content}
                   </div>
+                  {isTemplateLog(l) && (
+                    <div className="mt-1 text-[11.5px] font-medium text-[#6B7B3A] dark:text-[#A8B87A]">
+                      ※ 참고: #변수#로 정상문구로 전송되었습니다
+                    </div>
+                  )}
                 </button>
 
                 {isOpen && (
