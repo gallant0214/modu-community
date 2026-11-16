@@ -4,6 +4,7 @@ import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { digitsOnly } from "@/app/lib/crm-identity";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
+import { findMembersWithPhone, PHONE_TAKEN_PUBLIC_MESSAGE } from "@/app/lib/crm-phone-dup";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ function hyphenPhone(digits: string): string {
  * - privacyConsent=true 필수 (개인정보 수집·이용 동의). privacy_agreed_at 기록.
  * - 이미 그 센터에 내 계정으로 연동된 회원이 있으면 그대로 반환(멱등).
  * - 같은 센터에 동일 이름+전화의 미연동 회원(직원이 미리 등록한 가회원)이 있으면 그 레코드를 연결.
+ * - 그 번호를 다른 회원이 쓰고 있으면(이름이 다르거나 다른 계정에 연동) 409 — 번호 중복 가입 금지.
  * - 없으면 신규 crm_members 생성(member_type='matched', linked_firebase_uid=uid).
  */
 export async function POST(request: Request) {
@@ -117,6 +119,12 @@ export async function POST(request: Request) {
       .is("linked_firebase_uid", null);
     if (linkErr) return NextResponse.json({ error: "가입 실패", detail: errLogOnly(linkErr) }, { status: 500 });
     return NextResponse.json({ ok: true, memberId: match.id, linkedExisting: true });
+  }
+
+  // 🚨 같은 번호로 이미 회원이 있으면 새로 만들지 않는다 — 번호만 같아도 중복 가입 금지(crm-phone-dup 규칙).
+  //    (이름+번호가 같은 미연동 회원은 위 2)에서 이미 연결됐다. 여기 남는 건 이름이 다르거나 다른 앱 계정에 연동된 회원)
+  if ((await findMembersWithPhone(centerId, phoneDigits)).length > 0) {
+    return NextResponse.json({ error: PHONE_TAKEN_PUBLIC_MESSAGE, reason: "phone_taken" }, { status: 409 });
   }
 
   // 3) 신규 생성 (attendance_no = 폰 뒷 4자리; 중복은 터치출석 시 이름/전화로 선택)

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { digitsOnly } from "@/app/lib/crm-identity";
+import { findMembersWithPhone, PHONE_TAKEN_PUBLIC_MESSAGE } from "@/app/lib/crm-phone-dup";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,10 @@ export async function PATCH(request: Request) {
   if (body.phone !== undefined) {
     const d = digitsOnly(body.phone);
     if (d.length < 10) return NextResponse.json({ error: "연락처를 정확히 입력해주세요" }, { status: 400 });
+    // 같은 센터에서 다른 회원이 쓰는 번호로는 못 바꾼다 — 번호 중복 금지(crm-phone-dup 규칙)
+    if ((await findMembersWithPhone(ctx.centerId, d, ctx.memberId)).length > 0) {
+      return NextResponse.json({ error: PHONE_TAKEN_PUBLIC_MESSAGE, reason: "phone_taken" }, { status: 409 });
+    }
     patch.phone = hyphenPhone(d);
   }
   if (body.birth !== undefined) {

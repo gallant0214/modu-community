@@ -6,6 +6,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext, requirePermission } from "@/app/lib/crm-permissions";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { enrichMemberListDetail } from "@/app/lib/crm-member-list-detail";
+import { findMembersWithPhone } from "@/app/lib/crm-phone-dup";
 
 export const dynamic = "force-dynamic";
 
@@ -270,6 +271,21 @@ export async function POST(request: Request) {
 
   if ((memberType === "matched" || memberType === "full") && !linkedUid) {
     return NextResponse.json({ error: "정회원/매칭회원은 사용자 식별자가 필요합니다" }, { status: 400 });
+  }
+
+  // 같은 번호 중복 등록 금지 (이름이 달라도) — crm-phone-dup 규칙
+  if (phone) {
+    const dup = await findMembersWithPhone(ctx.centerId, phone);
+    if (dup.length > 0) {
+      return NextResponse.json(
+        {
+          error: `이미 같은 연락처로 등록된 회원이 있어요 (${dup.map((d) => d.name).join(", ")}). 회원 목록에서 검색해 주세요.`,
+          reason: "phone_taken",
+          member_id: dup[0].id,
+        },
+        { status: 409 }
+      );
+    }
   }
 
   const insert = {

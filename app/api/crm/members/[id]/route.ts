@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { findMembersWithPhone } from "@/app/lib/crm-phone-dup";
 
 export const dynamic = "force-dynamic";
 
@@ -393,6 +394,17 @@ export async function PATCH(
   if (body.phone !== undefined) {
     const v = body.phone.trim();
     if (!v) return NextResponse.json({ error: "연락처를 입력해주세요" }, { status: 400 });
+    // 같은 번호 중복 금지 (이름이 달라도) — crm-phone-dup 규칙. 본인은 제외
+    const dup = await findMembersWithPhone(ctx.centerId, v, memberId);
+    if (dup.length > 0) {
+      return NextResponse.json(
+        {
+          error: `이 연락처는 이미 다른 회원(${dup.map((d) => d.name).join(", ")})이 쓰고 있어요.`,
+          reason: "phone_taken",
+        },
+        { status: 409 }
+      );
+    }
     patch.phone = v;
   }
   if (body.email !== undefined) patch.email = body.email.trim() || null;

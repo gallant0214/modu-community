@@ -4,6 +4,7 @@ import { getClientIp, checkRateLimit } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import { signJoinMemberToken, verifyJoinMemberToken } from "@/app/lib/order-token";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
+import { findMembersWithPhone, PHONE_TAKEN_PUBLIC_MESSAGE } from "@/app/lib/crm-phone-dup";
 
 export const dynamic = "force-dynamic";
 
@@ -111,18 +112,21 @@ export async function POST(request: Request) {
 
   // 기존 등록 회원 차단 + 재사용 판별 (수정 중인 본인 레코드는 제외)
   const phoneDigits = phone.replace(/\D/g, "");
-  const { data: cands } = await supabase
-    .from("crm_members")
-    .select("id, name, phone, member_type, linked_firebase_uid")
-    .eq("center_id", centerId)
-    .eq("status", "active")
-    .ilike("phone", `%${phoneDigits.slice(-4)}%`);
-  const matches = (cands ?? []).filter(
-    (m) =>
-      m.id !== editId &&
-      (m.phone ?? "").replace(/\D/g, "") === phoneDigits &&
-      (m.name ?? "").trim().toLowerCase() === name.toLowerCase()
-  );
+  const samePhone = await findMembersWithPhone(centerId, phone, editId);
+  // 🚨 같은 번호를 다른 이름이 쓰고 있으면 가입 불가 — 번호만 같아도 중복 가입 금지(crm-phone-dup 규칙).
+  //    방금 등록한 정보를 고치는 중(editId)이면 다른 회원 번호로 바꾸는 것 자체를 막는다(재사용 대상이 아님).
+  if (
+    editId
+      ? samePhone.length > 0
+      : samePhone.some((m) => (m.name ?? "").trim().toLowerCase() !== name.toLowerCase())
+  ) {
+    return NextResponse.json(
+      { ok: false, reason: "phone_taken", error: PHONE_TAKEN_PUBLIC_MESSAGE },
+      { status: 409 }
+    );
+  }
+  // 이름+번호가 같은 회원 = 직원이 미리 등록해 둔 회원이면 재사용, 이미 가입·구매한 회원이면 차단
+  const matches = samePhone;
   let blocked = matches.some((m) => m.linked_firebase_uid || m.member_type !== "provisional");
   let reuseId: number | null = null;
   if (!blocked) {
