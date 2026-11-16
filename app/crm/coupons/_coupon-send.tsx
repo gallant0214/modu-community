@@ -278,8 +278,10 @@ export function CouponSendTab({
     return () => clearTimeout(t);
   }, [query, audience, getIdToken]);
 
+  // 전화번호 입력을 고친 뒤 회원 확인이 끝나기 전 — 옛 명단을 보여주지 않는다
+  const phonesPending = audience === "phones" && !phoneMatchFresh;
   // 실제 발송 대상 = 명단 − 직원이 뺀 사람 (1인 1장 보유자는 서버가 한 번 더 걸러낸다)
-  const sendTargets = recipients.filter((m) => !excluded.has(m.id));
+  const sendTargets = phonesPending ? [] : recipients.filter((m) => !excluded.has(m.id));
   const shownList = listQuery.trim()
     ? recipients.filter((m) => {
         const q = listQuery.trim().toLowerCase();
@@ -637,7 +639,7 @@ export function CouponSendTab({
           </div>
         )}
         <div className="mt-3 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-          대상 <b className="text-[#2A251D] dark:text-zinc-100">{count == null ? "…" : `${count.toLocaleString()}명`}</b>
+          대상 <b className="text-[#2A251D] dark:text-zinc-100">{count == null || phonesPending ? "…" : `${count.toLocaleString()}명`}</b>
           {excluded.size > 0 && (
             <span className="ml-1.5">
               · 뺀 회원 {excluded.size}명 → 실제 발송{" "}
@@ -678,7 +680,9 @@ export function CouponSendTab({
             </div>
           </div>
 
-          {listLoading && recipients.length === 0 ? (
+          {phonesPending ? (
+            <div className="px-3 py-6 text-center text-[12.5px] text-[#8C8270]">입력한 번호를 회원과 확인하는 중…</div>
+          ) : listLoading && recipients.length === 0 ? (
             <div className="px-3 py-6 text-center text-[12.5px] text-[#8C8270]">명단 불러오는 중…</div>
           ) : recipients.length === 0 ? (
             <div className="px-3 py-6 text-center text-[12.5px] text-[#8C8270]">조건에 맞는 회원이 없어요.</div>
