@@ -30,6 +30,7 @@ const AUDIENCE_LABEL: Record<string, string> = {
   expired: "만료 회원",
   unassigned: "미가입 회원",
   individual: "개별 선택",
+  phones: "전화번호 입력",
 };
 
 /** 발송 기록 — 발송 단위로 결과·사용 현황을 보고, 잘못 보낸 발송은 안 쓴 쿠폰을 한 번에 회수 */

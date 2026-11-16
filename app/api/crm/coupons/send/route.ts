@@ -100,7 +100,7 @@ export async function PUT(request: Request) {
  * POST /api/crm/coupons/send
  * body: {
  *   coupon_id,
- *   audience_kind: 'all'|'active'|'expiring'|'expired'|'unassigned'|'dormant'|'individual',
+ *   audience_kind: 'all'|'active'|'expiring'|'expired'|'unassigned'|'dormant'|'individual'|'phones',
  *   member_ids?, within_days?, inactive_days?,
  *   channels: ('push'|'sms')[]   — 빈 배열이면 알림 없이 쿠폰함에만 발급
  *   message?: string              — 안내 문구(#회원명# #쿠폰코드# 같은 변수 포함). 비우면 CRM 기본 안내문구
@@ -144,7 +144,8 @@ export async function POST(request: Request) {
   }
 
   const kind = body.audience_kind ?? "";
-  const validKinds = ["all", "active", "expiring", "expired", "unassigned", "individual", "dormant"];
+  // phones = 전화번호로 입력 — 화면이 번호를 회원으로 맞춘 뒤 member_ids 로 보내므로 개별 선택과 같게 처리
+  const validKinds = ["all", "active", "expiring", "expired", "unassigned", "individual", "phones", "dormant"];
   if (!validKinds.includes(kind)) {
     return NextResponse.json({ error: "발송 대상을 선택해 주세요" }, { status: 400 });
   }
@@ -159,7 +160,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "문자 발송 설정이 완료되지 않았어요" }, { status: 400 });
   }
 
-  let memberIds = await resolveAudience(ctx.centerId, kind, {
+  let memberIds = await resolveAudience(ctx.centerId, kind === "phones" ? "individual" : kind, {
     member_ids: body.member_ids ?? [],
     within_days: Math.max(1, Math.min(60, body.within_days ?? 7)),
     inactive_days: Math.max(1, Math.min(365, body.inactive_days ?? 14)),
@@ -220,7 +221,7 @@ export async function POST(request: Request) {
       skipped_count: skipped,
       audience_kind: kind,
       audience_filter: {
-        ...(kind === "individual" ? { member_ids: body.member_ids ?? [] } : {}),
+        ...(kind === "individual" || kind === "phones" ? { member_ids: body.member_ids ?? [] } : {}),
         ...(excluded.size > 0 ? { excluded_member_ids: Array.from(excluded) } : {}),
       } as never,
       sent_by_uid: ctx.uid,

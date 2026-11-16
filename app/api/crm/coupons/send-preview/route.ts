@@ -37,12 +37,13 @@ export async function POST(request: Request) {
   }
 
   const kind = body.audience_kind ?? "";
-  const validKinds = ["all", "active", "expiring", "expired", "unassigned", "individual", "dormant"];
+  // phones = 전화번호로 입력 — 화면이 번호를 회원으로 맞춘 뒤 member_ids 로 보내므로 개별 선택과 같게 처리
+  const validKinds = ["all", "active", "expiring", "expired", "unassigned", "individual", "phones", "dormant"];
   if (!validKinds.includes(kind)) {
     return NextResponse.json({ error: "대상 유형이 잘못됨" }, { status: 400 });
   }
 
-  const memberIds = await resolveAudience(ctx.centerId, kind, {
+  const memberIds = await resolveAudience(ctx.centerId, kind === "phones" ? "individual" : kind, {
     member_ids: body.member_ids ?? [],
     within_days: Math.max(1, Math.min(60, body.within_days ?? 7)),
     inactive_days: Math.max(1, Math.min(365, body.inactive_days ?? 14)),

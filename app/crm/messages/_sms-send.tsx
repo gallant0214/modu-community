@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/app/components/auth-provider";
+import { parsePhoneList as parseNumbers } from "@/app/lib/phone-list";
 
 /** UTF-8 바이트 길이 (알리고 90byte 초과 시 LMS) */
 function byteLen(s: string): number {
@@ -24,17 +25,6 @@ function formatPhone(raw: string): string {
 
 function onlyDigits(s: string): string {
   return (s ?? "").replace(/\D/g, "");
-}
-
-function parseNumbers(raw: string): string[] {
-  return Array.from(
-    new Set(
-      raw
-        .split(/[\s,;]+/)
-        .map((x) => x.replace(/\D/g, ""))
-        .filter((x) => x.length >= 9 && x.length <= 11)
-    )
-  );
 }
 
 interface Recipient {
