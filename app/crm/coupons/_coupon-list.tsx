@@ -418,10 +418,6 @@ function CouponEditor({
               <FieldLabel>할인 금액 (원)</FieldLabel>
               <input className={crmInputClass} inputMode="numeric" disabled={locked} value={amountWon ? formatWon(amountWon) : ""} onChange={(e) => setAmountWon(parseWon(e.target.value))} />
             </div>
-            <div>
-              <FieldLabel hint="(0 = 조건 없음)">최소 결제금액</FieldLabel>
-              <input className={crmInputClass} inputMode="numeric" disabled={locked} value={minPurchase ? formatWon(minPurchase) : ""} onChange={(e) => setMinPurchase(parseWon(e.target.value))} placeholder="0" />
-            </div>
           </div>
         )}
         {benefitType === "percent" && (
@@ -444,7 +440,7 @@ function CouponEditor({
           </label>
         )}
         {benefitType === "percent" && (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <FieldLabel>할인율 (%)</FieldLabel>
               <input className={crmInputClass} type="number" min={1} max={100} disabled={locked} value={percent} onChange={(e) => setPercent(Math.max(0, Math.min(100, Number(e.target.value) || 0)))} />
@@ -453,11 +449,27 @@ function CouponEditor({
               <FieldLabel hint="(0 = 제한 없음)">최대 할인액</FieldLabel>
               <input className={crmInputClass} inputMode="numeric" disabled={locked} value={maxDiscount ? formatWon(maxDiscount) : ""} onChange={(e) => setMaxDiscount(parseWon(e.target.value))} placeholder="0" />
             </div>
-            <div>
-              <FieldLabel hint="(0 = 조건 없음)">최소 결제금액</FieldLabel>
-              <input className={crmInputClass} inputMode="numeric" disabled={locked} value={minPurchase ? formatWon(minPurchase) : ""} onChange={(e) => setMinPurchase(parseWon(e.target.value))} placeholder="0" />
-            </div>
           </div>
+        )}
+        {/* 쿠폰 사용 최소 금액 — 정액·정률 공통. 예전엔 혜택 칸 사이 좁은 칸이라 잘 안 보였다 (2026-11-17 사용자 요청으로 따로 뺌) */}
+        {benefitType !== "gift" && (
+          <>
+            <FieldLabel hint="(0원 = 조건 없음)">쿠폰 사용 최소 금액</FieldLabel>
+            <div className="flex items-center gap-2 text-[13px] text-[#3A342A] dark:text-zinc-200">
+              <input
+                className={`${crmInputClass} !w-40 text-right`}
+                inputMode="numeric"
+                disabled={locked}
+                value={minPurchase ? formatWon(minPurchase) : ""}
+                onChange={(e) => setMinPurchase(parseWon(e.target.value))}
+                placeholder="0"
+              />
+              <span>원 이상 결제할 때만 사용</span>
+            </div>
+            <div className="mt-1 text-[11.5px] leading-relaxed text-[#A89B80]">
+              쿠폰을 적용하기 전 상품 금액 기준이에요. 예: 150,000원으로 하면 그보다 싼 상품(1개월권 등)에는 쓸 수 없어요.
+            </div>
+          </>
         )}
         {benefitType === "gift" && (
           <>
