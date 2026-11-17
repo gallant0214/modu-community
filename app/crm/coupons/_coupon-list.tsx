@@ -304,7 +304,9 @@ function CouponEditor({
 }) {
   const { getIdToken } = useAuth();
   // 이미 발급된 쿠폰은 혜택·조건을 못 바꾼다(받은 회원 쿠폰 가치가 달라지므로)
-  const locked = !!initial && initial.stats.issued > 0;
+  // 아직 쓸 수 있는 발급분이 있을 때만 혜택 잠금 (사용·만료·회수뿐이면 수정 가능 — 서버도 같은 기준)
+  const locked = !!initial && initial.stats.available > 0;
+  const reopened = !!initial && !locked && initial.stats.issued > 0;
 
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -393,7 +395,14 @@ function CouponEditor({
       <div className="space-y-1">
         {locked && (
           <div className="mb-2 px-3 py-2 rounded-lg bg-[#B47B2A]/[0.08] border border-[#B47B2A]/30 text-[12px] text-[#6B5D47] dark:text-zinc-300">
-            이미 {initial?.stats.issued}장이 발급된 쿠폰이라 <b>이름·설명만</b> 바꿀 수 있어요. 혜택을 바꾸려면 새 쿠폰을 만들어 주세요.
+            회원이 아직 쓸 수 있는 쿠폰이 {initial?.stats.available}장 있어 <b>이름·설명만</b> 바꿀 수 있어요.
+            그 쿠폰이 모두 사용·만료·회수되면 혜택도 바꿀 수 있어요. 지금 바로 바꾸려면 새 쿠폰을 만들어 주세요.
+          </div>
+        )}
+        {reopened && (
+          <div className="mb-2 px-3 py-2 rounded-lg bg-[#6B7B3A]/[0.07] border border-[#6B7B3A]/30 text-[12px] text-[#6B5D47] dark:text-zinc-300">
+            발급한 {initial?.stats.issued}장이 모두 사용·만료·회수돼서 혜택도 바꿀 수 있어요.
+            이미 사용된 쿠폰의 할인 기록은 그대로 남고, 회수를 취소해 되살린 쿠폰은 바뀐 혜택으로 쓰여요.
           </div>
         )}
 

@@ -19,6 +19,20 @@ export async function paginateAll<T>(
   return out;
 }
 
+/**
+ * 아직 쓸 수 있는(발급 상태 + 기한 안 지남) 쿠폰 장수 — effectiveStatus === "issued" 와 같은 기준.
+ * 1000행 제한을 피하려고 행을 받지 않고 개수만 센다.
+ */
+export async function countUsableIssues(couponId: number): Promise<number> {
+  const { count } = await supabase
+    .from("crm_coupon_issues")
+    .select("id", { count: "exact", head: true })
+    .eq("coupon_id", couponId)
+    .eq("status", "issued")
+    .or(`expires_at.is.null,expires_at.gte.${kstTodayYmd()}`);
+  return count ?? 0;
+}
+
 /** 쿠폰 정의 + 증정 상품 이름 */
 export async function loadCoupons(centerId: number, ids?: number[]): Promise<Map<number, CouponDef>> {
   let q = supabase.from("crm_coupons").select("*").eq("center_id", centerId);

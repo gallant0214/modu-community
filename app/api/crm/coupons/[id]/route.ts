@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
-import { validateCouponInput } from "@/app/lib/crm-coupons-db";
+import { countUsableIssues, validateCouponInput } from "@/app/lib/crm-coupons-db";
 import { effectiveStatus } from "@/app/lib/crm-coupons";
 import { ATTENDANCE_RULE_TRIGGER, TRIGGER_BY_KEY } from "@/app/lib/auto-message-triggers";
 
@@ -14,8 +14,10 @@ export const dynamic = "force-dynamic";
  *   { action: "archive" | "restore" }      보관/복원
  *   { ...쿠폰 필드 }                         수정
  *
- * 🚨 이미 발급된 쿠폰이 있으면 **이름·설명만** 바꿀 수 있다.
+ * 🚨 회원이 **아직 쓸 수 있는** 쿠폰(발급 상태 + 기한 안 지남)이 있으면 **이름·설명만** 바꿀 수 있다.
  *    혜택·조건은 사용 시점에 쿠폰 정의로 계산되므로, 바꾸면 이미 받은 회원 쿠폰의 가치가 달라진다.
+ *    발급분이 모두 사용·만료·회수됐으면 혜택도 바꿀 수 있다 (2026-11-17 사용자 결정).
+ *    사용된 쿠폰은 할인액(discount_applied_won)·정가가 따로 남아 있어 지난 기록은 바뀌지 않는다.
  */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireCrmContext(request);
@@ -46,11 +48,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     patch = { status: body.action === "archive" ? "archived" : "active" };
     action = body.action === "archive" ? "coupon.archive" : "coupon.restore";
   } else {
-    const { count } = await supabase
-      .from("crm_coupon_issues")
-      .select("id", { count: "exact", head: true })
-      .eq("coupon_id", id);
-    if ((count ?? 0) > 0) {
+    if ((await countUsableIssues(id)) > 0) {
       const name = String(body.name ?? "").trim();
       if (!name) return NextResponse.json({ error: "쿠폰 이름을 입력해 주세요" }, { status: 400 });
       patch = {
