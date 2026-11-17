@@ -7586,8 +7586,6 @@ function UsageIssueModal({
   const [lockerZone, setLockerZone] = useState<number | "">("");
   const [lockerId, setLockerId] = useState<number | "">("");
   const [lockerPassword, setLockerPassword] = useState("");
-  /** 직원이 비밀번호를 직접 고쳤는지 — 고쳤으면 자리 선택이 덮어쓰지 않는다 */
-  const pwTouchedRef = useRef(false);
   // 회수 전 기존 배정 락커(만료 포함) — 있으면 그 자리를 이어서 배정하고 비밀번호를 유지한다.
   const [existingLocker, setExistingLocker] = useState<
     { id: number; zone_id: number; zone_name: string; number: number; password: string | null } | null
@@ -7800,7 +7798,6 @@ function UsageIssueModal({
       setLockerZone("");
       setLockerId("");
       setLockerPassword("");
-      pwTouchedRef.current = false;
       // 🚨 판매자는 자동으로 채우지 않는다 — 열 때마다 비우고 직접 고르게 (2026-11-09)
       setSellerId("");
       setCart([]);
@@ -8348,14 +8345,13 @@ function UsageIssueModal({
                       const id = e.target.value ? Number(e.target.value) : "";
                       setLockerId(id);
                       if (!id) return;
-                      // 🚨 직원이 직접 입력한 비밀번호는 건드리지 않는다.
-                      if (pwTouchedRef.current) return;
                       const slotPw =
                         (existingLocker && id === existingLocker.id
                           ? existingLocker.password
                           : lockers.find((l) => l.id === id)?.password) ?? "";
-                      // 자리에 설정된 비밀번호가 있으면 그대로, 없으면 새로 만들어 준다
-                      setLockerPassword(slotPw || genLockerPassword());
+                      // 🚨 자동 생성하지 않는다 — 그 자리에 지금 설정된 비밀번호를 그대로 보여준다(없으면 비움).
+                      //    (락커 상세 '배정하기'와 같은 동작. 비워 두면 배정 시 비밀번호를 바꾸지 않는다)
+                      setLockerPassword(slotPw);
                     }}
                   >
                     <option value="">
@@ -8386,27 +8382,23 @@ function UsageIssueModal({
                 <input
                   className={crmInputClass}
                   value={lockerPassword}
-                  onChange={(e) => {
-                    pwTouchedRef.current = true;
-                    setLockerPassword(e.target.value);
-                  }}
-                  placeholder="자리 선택 시 자동 생성"
+                  onChange={(e) => setLockerPassword(e.target.value)}
+                  placeholder="자리를 고르면 설정된 비밀번호가 표시돼요"
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    pwTouchedRef.current = true;
-                    setLockerPassword(genLockerPassword());
-                  }}
+                  onClick={() => setLockerPassword(genLockerPassword())}
                   className="shrink-0 px-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#6B5D47] dark:text-zinc-300 hover:border-[#8B6BB1]/50"
                 >
                   재생성
                 </button>
               </div>
               <p className="mt-1 text-[11.5px] text-[#A89B80]">
-                {lockerId !== "" && lockers.find((l) => l.id === lockerId)?.password
-                  ? "이 자리에 설정된 비밀번호예요. 그대로 두면 유지되고, 고치면 변경됩니다."
-                  : "자리를 고르면 비밀번호가 자동으로 만들어져요. 직접 적어도 됩니다."}
+                {lockerId === ""
+                  ? "자리를 고르면 그 자리에 설정된 비밀번호가 표시돼요."
+                  : lockers.find((l) => l.id === lockerId)?.password
+                    ? "이 자리에 설정된 비밀번호예요. 그대로 두면 유지되고, 고치면 변경됩니다."
+                    : "이 자리에 설정된 비밀번호가 없어요. 비워 두면 비밀번호 없이 배정되고, 직접 적어도 됩니다."}
               </p>
             </CrmField>
           </>
