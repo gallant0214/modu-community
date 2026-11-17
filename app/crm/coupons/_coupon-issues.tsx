@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, crmInputClass } from "../_components/crm-modal";
+import { CrmPagination } from "../_components/crm-pagination";
 import { formatPhone } from "../_components/crm-labels";
 import type { IssueStatus } from "@/app/lib/crm-coupons";
 import type { CouponRow } from "./_coupon-list";
@@ -68,6 +69,9 @@ const STATUS_FILTERS: { key: "all" | IssueStatus; label: string }[] = [
   { key: "expired", label: "기간 만료" },
 ];
 
+// 한 페이지에 보여줄 줄 수 — 기본 30
+const PAGE_SIZES = [30, 50, 100];
+
 /**
  * 쿠폰 내역 — 회원별로 발급된 쿠폰 한 장 한 장.
  *   mode="usage" : 사용 이력(사용 완료 + 기간 필터 + 할인 합계)
@@ -108,6 +112,7 @@ export function CouponIssuesTab({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<number | null>(null);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
   // '발송 내용' 보기 — 회원이 받은 메세지
   const [viewing, setViewing] = useState<IssueRow | null>(null);
   const [sent, setSent] = useState<{ loading: boolean; error: string; data: SentDetail | null }>({
@@ -170,10 +175,26 @@ export function CouponIssuesTab({
     load();
   }, [load, refreshKey]);
 
-  // 회원 얼굴 썸네일 — 목록 응답엔 무거운 사진을 싣지 않고, 보이는 회원 것만 따로 불러온다(회원 목록과 같은 방식)
+  // 조건이 바뀌면 첫 페이지로. (회수·사용 취소 뒤 다시 불러올 때는 조건이 같으니 보던 페이지 유지)
+  const filterKey = [status, couponId, presetSendId, qApplied, from, to, pageSize].join("|");
+  const [page, setPage] = useState(1);
+  const [pageKey, setPageKey] = useState(filterKey);
+  if (pageKey !== filterKey) {
+    setPageKey(filterKey);
+    setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const curPage = Math.min(page, totalPages);
+  const pageRows = useMemo(
+    () => rows.slice((curPage - 1) * pageSize, curPage * pageSize),
+    [rows, curPage, pageSize],
+  );
+
+  // 회원 얼굴 썸네일 — 목록 응답엔 무거운 사진을 싣지 않고, 지금 페이지에 보이는 회원 것만 따로 불러온다(회원 목록과 같은 방식)
   const [thumbs, setThumbs] = useState<Record<number, string>>({});
   useEffect(() => {
-    const need = Array.from(new Set(rows.map((r) => r.memberId))).filter((id) => !(id in thumbs));
+    const need = Array.from(new Set(pageRows.map((r) => r.memberId))).filter((id) => !(id in thumbs));
     if (need.length === 0) return;
     let cancelled = false;
     (async () => {
@@ -195,7 +216,7 @@ export function CouponIssuesTab({
     return () => {
       cancelled = true;
     };
-  }, [rows, thumbs, getIdToken]);
+  }, [pageRows, thumbs, getIdToken]);
 
   const act = async (row: IssueRow, action: "revoke" | "restore" | "unuse") => {
     const msg = {
@@ -362,17 +383,31 @@ export function CouponIssuesTab({
         </button>
       </div>
 
-      <div className="mb-2 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-        {rows.length.toLocaleString()}건
-        {status === "used" && discountTotal > 0 && (
-          <span>
-            {" "}
-            · 할인 합계{" "}
-            <b className="text-[#2A251D] dark:text-zinc-100">
-              {won(discountTotal)}
-            </b>
-          </span>
-        )}
+      <div className="mb-2 flex items-center gap-2 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+        <span>
+          {rows.length.toLocaleString()}건
+          {status === "used" && discountTotal > 0 && (
+            <span>
+              {" "}
+              · 할인 합계{" "}
+              <b className="text-[#2A251D] dark:text-zinc-100">
+                {won(discountTotal)}
+              </b>
+            </span>
+          )}
+        </span>
+        <select
+          className={`${crmInputClass} !w-auto ml-auto !py-1 text-[12px]`}
+          value={pageSize}
+          onChange={(e) => setPageSize(Number(e.target.value))}
+          aria-label="한 페이지에 볼 개수"
+        >
+          {PAGE_SIZES.map((n) => (
+            <option key={n} value={n}>
+              {n}명씩 보기
+            </option>
+          ))}
+        </select>
       </div>
 
       {error ? (
@@ -406,7 +441,7 @@ export function CouponIssuesTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E8E0D0] dark:divide-zinc-800">
-              {rows.map((r) => (
+              {pageRows.map((r) => (
                 // 가운데 정렬 — 두 줄짜리 글자 칸과 한 줄짜리 배지·버튼이 같은 높이에 오도록
                 <tr key={r.id} className="align-middle">
                   {/* 얼굴 + 이름·연락처. 줄바꿈 금지 (좁아지면 번호가 두 줄로 꺾였다) */}
@@ -550,6 +585,18 @@ export function CouponIssuesTab({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!error && rows.length > 0 && (
+        <div className="mt-3 flex justify-center">
+          <CrmPagination
+            page={curPage}
+            totalPages={totalPages}
+            onChange={setPage}
+            total={rows.length}
+            pageSize={pageSize}
+          />
         </div>
       )}
 
