@@ -876,7 +876,8 @@ export default function CrmAttendancesPage() {
                           ) : (
                             <>
                               {a.member.membership.expires_at} ·{" "}
-                              <span className={a.member.membership.days_left <= 7 ? "text-[#B47B2A] dark:text-amber-300 font-semibold" : ""}>
+                              {/* 만료 7일 이내 = 빨간 글씨 (회원 상세 '임박' 칩과 같은 기준·색) */}
+                              <span className={a.member.membership.days_left <= 7 ? "text-red-600 dark:text-red-400 font-semibold" : ""}>
                                 {a.member.membership.days_left}일 남음
                               </span>
                             </>
