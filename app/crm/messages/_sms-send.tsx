@@ -3,12 +3,36 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { parsePhoneList as parseNumbers } from "@/app/lib/phone-list";
+import { LMS_MAX_BYTES, SMS_MAX_BYTES, smsByteLength, smsTypeFor } from "@/app/lib/sms-length";
 
-/** UTF-8 바이트 길이 (알리고 90byte 초과 시 LMS) */
-function byteLen(s: string): number {
-  let n = 0;
-  for (const ch of s) n += ch.charCodeAt(0) > 0x7f ? 2 : 1;
-  return n;
+/** 입력한 문자 내용이 단문(SMS)인지 장문(LMS)인지 — 글자 수에 따라 바로 바뀐다. 서버 발송 유형과 같은 기준 */
+export function SmsLengthBadge({ text }: { text: string }) {
+  const bytes = smsByteLength(text);
+  const type = smsTypeFor(text);
+  const over = bytes > LMS_MAX_BYTES;
+  const limit = type === "SMS" ? SMS_MAX_BYTES : LMS_MAX_BYTES;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-bold ${
+        over
+          ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+          : type === "LMS"
+            ? "bg-[#B47B2A]/12 text-[#B47B2A] dark:bg-amber-900/30 dark:text-amber-300"
+            : "bg-[#6B7B3A]/12 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
+      }`}
+    >
+      {type === "SMS" ? "SMS 단문" : "LMS 장문"} · {bytes.toLocaleString()}/{limit.toLocaleString()}byte
+    </span>
+  );
+}
+
+/** 배지 아래 한 줄 안내 — 지금 내용이 어떤 유형으로 나가는지 */
+export function smsLengthHint(text: string): string {
+  const bytes = smsByteLength(text);
+  if (bytes > LMS_MAX_BYTES) return "문자는 2,000byte(한글 약 1,000자)까지 보낼 수 있어요. 내용을 줄여 주세요.";
+  if (smsTypeFor(text) === "SMS")
+    return `단문(SMS)으로 보내요. ${SMS_MAX_BYTES - bytes}byte 더 쓰면 장문(LMS)으로 바뀌어요. (한글 45자까지 단문)`;
+  return "장문(LMS)으로 보내요. 단문보다 건당 요금이 높아요.";
 }
 
 function formatPhone(raw: string): string {
@@ -88,8 +112,8 @@ export function SmsSendTab() {
   const [numbersRaw, setNumbersRaw] = useState("");
   const [msg, setMsg] = useState("");
   const [title, setTitle] = useState("");
-  const [testmode, setTestmode] = useState(true);
-  const [sending, setSending] = useState(false);
+  // 누른 버튼 — 실제 발송 / 테스트 발송(검증만)
+  const [sending, setSending] = useState<null | "real" | "test">(null);
   const [result, setResult] = useState<string>("");
 
   // 회원 선택 수신자
@@ -108,13 +132,14 @@ export function SmsSendTab() {
     return Array.from(set);
   }, [recipients, directNumbers]);
 
-  const bytes = byteLen(msg);
-  const msgType = bytes <= 90 ? "SMS" : "LMS";
+  // 서버는 앞뒤 공백을 지우고 보낸다 — 같은 내용으로 길이를 센다
+  const sendText = msg.trim();
+  const tooLong = smsByteLength(sendText) > LMS_MAX_BYTES;
+  const msgType = smsTypeFor(sendText);
 
-  // 총 예상 지출 = 수신자 수 × 문자 유형별 단가. 테스트 모드는 실제 발송이 없어 0원.
+  // 실제 발송 시 총 예상 지출 = 수신자 수 × 문자 유형별 단가 (테스트 발송은 무료)
   const unitPrice = pricing ? (msgType === "SMS" ? pricing.sms : pricing.lms) : null;
-  const estimatedCost =
-    unitPrice != null && !testmode ? unitPrice * allNumbers.length : testmode ? 0 : null;
+  const estimatedCost = unitPrice != null ? unitPrice * allNumbers.length : null;
   const notEnoughCash =
     estimatedCost != null && remain != null && estimatedCost > remain.balance;
 
@@ -218,23 +243,28 @@ export function SmsSendTab() {
     }
   };
 
-  const send = async () => {
+  const send = async (testmode: boolean) => {
     if (allNumbers.length === 0) {
       alert("수신번호를 선택하거나 입력해 주세요.");
       return;
     }
-    if (!msg.trim()) {
+    if (!sendText) {
       alert("내용을 입력해 주세요.");
       return;
     }
+    if (tooLong) {
+      alert(smsLengthHint(sendText));
+      return;
+    }
+    const typeLabel = msgType === "SMS" ? "SMS(단문)" : "LMS(장문)";
     const label = testmode
-      ? `[테스트 모드] 실제 발송 없이 검증만 합니다.\n${allNumbers.length}명 대상, ${msgType}.`
-      : `실제 발송됩니다.\n${allNumbers.length}명에게 ${msgType} 발송(과금).${
+      ? `[테스트 발송] 문자를 보내지 않고 대상·내용만 확인합니다.\n${allNumbers.length}명 대상, ${typeLabel}.`
+      : `실제로 문자가 발송됩니다.\n${allNumbers.length}명에게 ${typeLabel} 발송(과금).${
           estimatedCost != null ? `\n예상 지출 ${estimatedCost.toLocaleString()}원` : ""
         }`;
     if (!window.confirm(`${label}\n\n계속할까요?`)) return;
 
-    setSending(true);
+    setSending(testmode ? "test" : "real");
     setResult("");
     try {
       const token = await getIdToken();
@@ -253,9 +283,11 @@ export function SmsSendTab() {
         setResult(`실패: ${data?.error || "발송 실패"}`);
       } else {
         setResult(
-          `${data.testmode ? "테스트 성공" : "발송 완료"} · ${data.msg_type} · 성공 ${data.success_cnt}건${
-            data.error_cnt ? ` · 실패 ${data.error_cnt}건` : ""
-          }`
+          data.testmode
+            ? `테스트 확인 완료 · ${data.msg_type} · ${data.success_cnt}명 (실제로 보내지 않았어요)`
+            : `발송 완료 · ${data.msg_type} · 성공 ${data.success_cnt}건${
+                data.error_cnt ? ` · 실패 ${data.error_cnt}건` : ""
+              }`
         );
         if (!data.testmode) {
           setNumbersRaw("");
@@ -268,7 +300,7 @@ export function SmsSendTab() {
     } catch (e) {
       setResult(`실패: ${e instanceof Error ? e.message : "네트워크 오류"}`);
     } finally {
-      setSending(false);
+      setSending(null);
     }
   };
 
@@ -282,7 +314,7 @@ export function SmsSendTab() {
     });
   };
 
-  const canSubmit = allNumbers.length > 0 && msg.trim().length > 0;
+  const canSubmit = allNumbers.length > 0 && sendText.length > 0 && !tooLong;
   const inputCls =
     "w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13.5px] text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:outline-none focus:border-[#6B7B3A]";
 
@@ -424,15 +456,7 @@ export function SmsSendTab() {
           <Panel
             title="문자 내용"
             step="3"
-            action={
-              <span className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${
-                msgType === "LMS"
-                  ? "bg-[#B47B2A]/12 text-[#B47B2A] dark:bg-amber-900/30 dark:text-amber-300"
-                  : "bg-[#6B7B3A]/12 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
-              }`}>
-                {bytes} byte · {msgType}
-              </span>
-            }
+            action={<SmsLengthBadge text={sendText} />}
           >
         {msgType === "LMS" && (
         <div className="mb-3">
@@ -451,7 +475,10 @@ export function SmsSendTab() {
           onChange={(e) => setMsg(e.target.value)}
           placeholder="보낼 문자 내용을 입력하세요."
         />
-        <div className="mt-1.5 flex justify-end">
+        <div className="mt-1.5 flex items-start justify-between gap-2">
+          <p className={`text-[11.5px] leading-relaxed ${tooLong ? "text-red-600 dark:text-red-400" : "text-[#8C8270]"}`}>
+            {sendText ? smsLengthHint(sendText) : "한글 45자(90byte)까지 단문(SMS), 넘으면 장문(LMS)으로 보내요."}
+          </p>
           <button
             type="button"
             onClick={appendOptout}
@@ -466,27 +493,9 @@ export function SmsSendTab() {
 
         <aside className="lg:sticky lg:top-20 self-start space-y-3">
           <div className="rounded-xl border border-[#E8E0D0] bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발송 모드</span>
-              <button
-                type="button"
-                onClick={() => setTestmode((v) => !v)}
-                className={`relative h-7 w-12 rounded-full transition-colors ${testmode ? "bg-[#6B7B3A]" : "bg-[#B4472A]"}`}
-                aria-pressed={!testmode}
-                aria-label="테스트 모드 전환"
-              >
-                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${testmode ? "left-1" : "left-6"}`} />
-              </button>
-            </div>
-            <div className={`rounded-lg px-3 py-2 text-[12.5px] font-semibold ${
-              testmode
-                ? "bg-[#6B7B3A]/10 text-[#5D6D2F] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
-                : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
-            }`}>
-              {testmode ? "테스트 검증만 진행" : "실제 발송 및 과금"}
-            </div>
+            <div className="mb-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발송 요약</div>
 
-            <dl className="mt-4 space-y-2 text-[12.5px]">
+            <dl className="space-y-2 text-[12.5px]">
               <div className="flex justify-between gap-3">
                 <dt className="text-[#8C8270]">최종 수신자</dt>
                 <dd className="font-bold text-[#2A251D] dark:text-zinc-100">{allNumbers.length}명</dd>
@@ -501,7 +510,9 @@ export function SmsSendTab() {
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-[#8C8270]">문자 유형</dt>
-                <dd className="font-bold text-[#3A342A] dark:text-zinc-100">{msgType}</dd>
+                <dd className={`font-bold ${msgType === "LMS" ? "text-[#B47B2A] dark:text-amber-300" : "text-[#3A342A] dark:text-zinc-100"}`}>
+                  {msgType === "SMS" ? "SMS (단문)" : "LMS (장문)"}
+                </dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-[#8C8270]">발신번호</dt>
@@ -513,18 +524,10 @@ export function SmsSendTab() {
                 <dt className="font-semibold text-[#6B5D47] dark:text-zinc-300">총 예상 지출 금액</dt>
                 <dd
                   className={`font-bold ${
-                    testmode
-                      ? "text-[#8C8270]"
-                      : notEnoughCash
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-[#B4472A] dark:text-amber-300"
+                    notEnoughCash ? "text-red-600 dark:text-red-400" : "text-[#B4472A] dark:text-amber-300"
                   }`}
                 >
-                  {testmode
-                    ? "0원 (검증만)"
-                    : estimatedCost != null
-                      ? `${estimatedCost.toLocaleString()}원`
-                      : "단가 조회 실패"}
+                  {estimatedCost != null ? `${estimatedCost.toLocaleString()}원` : "단가 조회 실패"}
                 </dd>
               </div>
               {unitPrice != null && (
@@ -567,23 +570,31 @@ export function SmsSendTab() {
           </details>
 
           <div className="rounded-xl border border-[#E8E0D0] bg-[#FEFCF7] p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <button
-          type="button"
-          onClick={send}
-          disabled={sending || !canSubmit}
-          className={`w-full px-5 py-3 rounded-lg text-[14px] font-bold text-white disabled:opacity-45 ${
-            testmode ? "bg-[#6B7B3A]" : "bg-[#B4472A]"
-          }`}
-        >
-          {sending ? "발송 중..." : testmode ? "테스트 발송" : "실제 발송"}
-        </button>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => send(false)}
+            disabled={sending !== null || !canSubmit || notEnoughCash}
+            className="w-full px-5 py-3 rounded-lg bg-[#B4472A] text-[14px] font-bold text-white hover:bg-[#9c3d24] disabled:opacity-45"
+          >
+            {sending === "real" ? "발송 중..." : `실제 발송${allNumbers.length ? ` (${allNumbers.length}명)` : ""}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => send(true)}
+            disabled={sending !== null || !canSubmit}
+            className="w-full px-5 py-2.5 rounded-lg border border-[#6B7B3A] bg-white text-[13px] font-semibold text-[#6B7B3A] hover:bg-[#6B7B3A]/5 disabled:opacity-45 dark:bg-zinc-950 dark:text-[#A8B87A]"
+          >
+            {sending === "test" ? "확인 중..." : "테스트 발송 (보내지 않고 확인만)"}
+          </button>
+        </div>
         {result && (
           <div className="mt-3 rounded-lg bg-[#FBF7EB] px-3 py-2 text-[12.5px] font-semibold text-[#3A342A] dark:bg-zinc-950 dark:text-zinc-200">
             {result}
           </div>
         )}
         <p className="mt-3 text-[11.5px] leading-relaxed text-[#A89B80]">
-          90byte 초과 시 LMS로 자동 전환됩니다. 실제 발송 전 테스트 발송으로 대상과 본문을 먼저 검증하세요.
+          실제 발송은 문자가 바로 나가고 건당 요금이 부과돼요. 테스트 발송은 문자를 보내지 않고 대상과 내용만 확인해요(무료).
         </p>
       </div>
         </aside>

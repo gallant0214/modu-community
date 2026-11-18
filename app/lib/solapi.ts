@@ -5,6 +5,7 @@
  * 문서: https://developers.solapi.com
  */
 import crypto from "node:crypto";
+import { smsByteLength, smsTypeFor } from "@/app/lib/sms-length";
 
 const SOLAPI_BASE = "https://api.solapi.com";
 
@@ -25,13 +26,13 @@ export function normalizePhone(p: string): string {
   return (p ?? "").replace(/\D/g, "");
 }
 
-/** UTF-8 바이트 길이(90byte 초과 시 LMS) */
+/** 문자 byte 길이·유형 — 화면 표시와 같은 기준(한글 2byte, 90byte 초과 시 LMS). sms-length.ts 한 곳에서 계산 */
 export function byteLength(s: string): number {
-  return new TextEncoder().encode(s ?? "").length;
+  return smsByteLength(s);
 }
 
 export function inferMsgType(msg: string): "SMS" | "LMS" {
-  return byteLength(msg) <= 90 ? "SMS" : "LMS";
+  return smsTypeFor(msg);
 }
 
 export interface SolapiSendResult {

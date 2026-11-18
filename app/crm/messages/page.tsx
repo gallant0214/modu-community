@@ -6,7 +6,8 @@ import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass, CrmModal } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
 import { AutoMessagesTab } from "./_auto-messages";
-import { SmsSendTab } from "./_sms-send";
+import { SmsLengthBadge, SmsSendTab, smsLengthHint } from "./_sms-send";
+import { LMS_MAX_BYTES, smsByteLength, smsTypeFor } from "@/app/lib/sms-length";
 import { SmsLogsTab } from "./_sms-logs";
 
 type AudienceKind = "all" | "active" | "dormant" | "expiring" | "expired" | "unassigned" | "individual";
@@ -91,6 +92,8 @@ export default function CrmMessagesPage() {
 
   // 문자 관련 기능 잠금 — 스페셜바디 범어점 외 센터는 준비중 (푸시·앱 알림은 그대로 사용)
   const smsLocked = !smsAllowedForCenter(centerId);
+  // 2번 발송 방법에 문자가 들어가 있는지 (단문/장문 표시용)
+  const usesSms = channel !== "push" && !smsLocked;
 
   // 수신자 확인 모달
   const [recipientModal, setRecipientModal] = useState<{
@@ -230,7 +233,10 @@ export default function CrmMessagesPage() {
     if (previewCount === 0) return setError("받을 회원이 없어요");
 
     const channels = channel === "both" ? ["push", "sms"] : [channel];
-    const howLabel = channel === "push" ? "푸시" : channel === "sms" ? "문자" : "푸시 + 문자";
+    if (channels.includes("sms") && smsByteLength(body.trim()) > LMS_MAX_BYTES)
+      return setError(smsLengthHint(body.trim()));
+    const smsType = smsTypeFor(body.trim()) === "SMS" ? "SMS(단문)" : "LMS(장문)";
+    const howLabel = channel === "push" ? "푸시" : channel === "sms" ? `문자 ${smsType}` : `푸시 + 문자 ${smsType}`;
     const warn = channels.includes("sms") ? "\n문자는 실제 발송되며 건당 요금이 부과됩니다." : "";
     if (!window.confirm(`${previewCount ?? "?"}명에게 ${howLabel}로 발송할까요?${warn}`)) return;
 
@@ -568,7 +574,29 @@ export default function CrmMessagesPage() {
           maxLength={2000}
           className={`${crmInputClass} resize-none`}
         />
-        <div className="text-right text-[11px] text-[#A89B80] mt-0.5">{body.length}/2000</div>
+        {usesSms ? (
+          // 문자로 보낼 때: 입력량에 따라 단문(SMS)/장문(LMS) 이 바로 바뀌어 보인다 — 서버 발송 유형과 같은 기준
+          <div className="mt-1.5 space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <SmsLengthBadge text={body.trim()} />
+              <span className="text-[11px] text-[#A89B80]">{body.length}/2000자</span>
+            </div>
+            <p
+              className={`text-[11.5px] leading-relaxed ${
+                smsByteLength(body.trim()) > LMS_MAX_BYTES ? "text-red-600 dark:text-red-400" : "text-[#8C8270]"
+              }`}
+            >
+              {body.trim() ? smsLengthHint(body.trim()) : "한글 45자(90byte)까지 단문(SMS), 넘으면 장문(LMS)으로 보내요."}
+            </p>
+            {title.trim() && smsTypeFor(body.trim()) === "SMS" && (
+              <p className="text-[11.5px] text-[#8C8270]">
+                단문(SMS)에는 제목이 붙지 않고 내용만 보내요.{channel === "both" ? " 제목은 앱 알림에만 쓰여요." : ""}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="text-right text-[11px] text-[#A89B80] mt-0.5">{body.length}/2000</div>
+        )}
       </Section>
 
       {error && (
