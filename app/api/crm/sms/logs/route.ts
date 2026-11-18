@@ -8,6 +8,8 @@ import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 40;
+/** 기록 하나에서 이름을 펼쳐 보여줄 최대 인원 (문자 기록은 수신번호를 50개까지만 남긴다) */
+const RECIPIENT_LIST_MAX = 50;
 
 const AUDIENCE_LABEL: Record<string, string> = {
   all: "전체 회원",
@@ -86,28 +88,89 @@ export async function GET(request: Request) {
     for (const s of staff ?? []) nameMap.set(s.firebase_uid, s.display_name || "");
   }
 
-  // 단건 문자 수신번호 → 회원 이름 매핑 (연락처로 회원 조회)
-  const singlePhones = Array.from(
-    new Set(
-      (smsRows ?? [])
-        .filter((r) => (r.receiver_cnt ?? 0) === 1)
-        .map((r) => digitsOnly(r.receivers))
-        .filter(Boolean)
-    )
-  );
-  const memberByPhone = new Map<string, string>(); // digits -> name
-  if (singlePhones.length) {
-    const candidates = Array.from(new Set(singlePhones.flatMap((d) => [d, hyphenate(d)])));
+  // 받는 사람 이름 — 문자는 수신번호로 회원을 찾고, 앱푸시는 발송 기록의 회원 id(없으면 수신 목록)로 찾는다.
+  //  한 기록당 RECIPIENT_LIST_MAX 명까지만 이름을 펼쳐 보여주고 나머지는 '외 N명'.
+  const smsPhonesByRow = new Map<number, string[]>();
+  for (const r of smsRows ?? []) {
+    const phones = String(r.receivers ?? "")
+      .split(",")
+      .map((x) => digitsOnly(x.split(" 외")[0]))
+      .filter((d) => d.length >= 9)
+      .slice(0, RECIPIENT_LIST_MAX);
+    smsPhonesByRow.set(r.id, phones);
+  }
+  const allPhones = Array.from(new Set(Array.from(smsPhonesByRow.values()).flat()));
+  const memberByPhone = new Map<string, { id: number; name: string }>(); // digits -> 회원
+  const PHONE_CHUNK = 150;
+  for (let i = 0; i < allPhones.length; i += PHONE_CHUNK) {
+    const chunk = allPhones.slice(i, i + PHONE_CHUNK);
+    const candidates = Array.from(new Set(chunk.flatMap((d) => [d, hyphenate(d)])));
     const { data: mems } = await supabase
       .from("crm_members")
-      .select("name, phone")
+      .select("id, name, phone, status")
       .eq("center_id", ctx.centerId)
       .in("phone", candidates);
-    for (const mm of (mems ?? []) as { name: string; phone: string | null }[]) {
+    // 같은 번호가 여럿이면 활성 회원을 우선
+    const sorted = ((mems ?? []) as { id: number; name: string; phone: string | null; status: string | null }[]).sort(
+      (a, b) => Number(a.status === "active") - Number(b.status === "active")
+    );
+    for (const mm of sorted) {
       const d = digitsOnly(mm.phone);
-      if (d) memberByPhone.set(d, mm.name);
+      if (d) memberByPhone.set(d, { id: mm.id, name: mm.name });
     }
   }
+
+  // 앱푸시: audience_filter.member_ids / member_id → 없으면 수신 목록(crm_message_recipients)
+  const pushIdsByRow = new Map<number, number[]>();
+  const needRecipientRows: number[] = [];
+  for (const b of pushRows ?? []) {
+    const f = ((b as { audience_filter?: unknown }).audience_filter ?? {}) as {
+      member_ids?: unknown;
+      member_id?: unknown;
+    };
+    const ids = Array.isArray(f.member_ids)
+      ? f.member_ids.map(Number).filter((n) => Number.isFinite(n) && n > 0)
+      : Number(f.member_id) > 0
+        ? [Number(f.member_id)]
+        : [];
+    if (ids.length) pushIdsByRow.set(b.id, ids.slice(0, RECIPIENT_LIST_MAX));
+    else if ((b.recipient_count ?? 0) > 0) needRecipientRows.push(b.id);
+  }
+  await Promise.all(
+    needRecipientRows.map(async (bid) => {
+      const { data } = await supabase
+        .from("crm_message_recipients")
+        .select("member_id")
+        .eq("broadcast_id", bid)
+        .eq("center_id", ctx.centerId)
+        .order("created_at", { ascending: true })
+        .limit(RECIPIENT_LIST_MAX);
+      pushIdsByRow.set(
+        bid,
+        (data ?? []).map((r) => Number((r as { member_id: number }).member_id)).filter((n) => n > 0)
+      );
+    })
+  );
+  const allIds = Array.from(new Set(Array.from(pushIdsByRow.values()).flat()));
+  const memberById = new Map<number, string>();
+  const ID_CHUNK = 300;
+  for (let i = 0; i < allIds.length; i += ID_CHUNK) {
+    const { data: mems } = await supabase
+      .from("crm_members")
+      .select("id, name")
+      .eq("center_id", ctx.centerId)
+      .in("id", allIds.slice(i, i + ID_CHUNK));
+    for (const mm of (mems ?? []) as { id: number; name: string }[]) memberById.set(mm.id, mm.name);
+  }
+
+  type Recipient = { member_id: number | null; name: string | null; phone: string | null };
+  /** 요약 줄 — 1~3명은 이름 전부, 그 이상은 '앞 3명 외 N명' */
+  const summarize = (list: Recipient[], total: number): string => {
+    const names = list.slice(0, 3).map((r) => r.name || (r.phone ? hyphenate(r.phone) : "알 수 없음"));
+    if (!names.length) return total ? `${total}명` : "—";
+    const rest = Math.max(0, total - names.length);
+    return rest > 0 ? `${names.join(", ")} 외 ${rest}명` : names.join(", ");
+  };
 
   type LogItem = {
     key: string;
@@ -115,6 +178,8 @@ export async function GET(request: Request) {
     title: string | null;
     content: string;
     recipient_label: string;
+    /** 받는 사람 목록(최대 RECIPIENT_LIST_MAX) — 펼쳤을 때 보여준다 */
+    recipients: Recipient[];
     receiver_cnt: number;
     msg_type: string | null;
     testmode: boolean;
@@ -129,19 +194,18 @@ export async function GET(request: Request) {
 
   const smsItems: LogItem[] = (smsRows ?? []).map((r) => {
     const cnt = r.receiver_cnt ?? 0;
-    let recipient: string;
-    if (cnt === 1) {
-      const d = digitsOnly(r.receivers);
-      recipient = memberByPhone.get(d) ?? hyphenate(d);
-    } else {
-      recipient = `${cnt}명`;
-    }
+    const recipients: Recipient[] = (smsPhonesByRow.get(r.id) ?? []).map((d) => {
+      const m = memberByPhone.get(d);
+      return { member_id: m?.id ?? null, name: m?.name ?? null, phone: d };
+    });
+    const recipient = summarize(recipients, cnt);
     return {
       key: `sms-${r.id}`,
       channel: "sms",
       title: r.title ?? null,
       content: r.msg ?? "",
       recipient_label: recipient,
+      recipients,
       receiver_cnt: cnt,
       msg_type: r.msg_type ?? null,
       testmode: !!r.testmode,
@@ -158,19 +222,26 @@ export async function GET(request: Request) {
   const pushItems: LogItem[] = (pushRows ?? []).map((b) => {
     const kind = (b as { audience_kind?: string }).audience_kind ?? "all";
     const cnt = b.recipient_count ?? 0;
-    let recipient: string;
-    if (kind === "individual") {
-      const f = (b as { audience_filter?: { member_name?: string | null } | null }).audience_filter;
-      recipient = f?.member_name || "개별 회원";
-    } else {
-      recipient = `${AUDIENCE_LABEL[kind] ?? kind}${cnt ? ` ${cnt}명` : ""}`;
-    }
+    const f = (b as { audience_filter?: { member_name?: string | null } | null }).audience_filter;
+    const recipients: Recipient[] = (pushIdsByRow.get(b.id) ?? []).map((id) => ({
+      member_id: id,
+      name: memberById.get(id) ?? (cnt === 1 ? f?.member_name ?? null : null),
+      phone: null,
+    }));
+    // 개별·자동 발송은 받은 회원 이름으로, 그룹 발송(전체·유효 회원 등)은 그룹 이름 + 인원
+    const recipient =
+      kind === "individual" || kind === "auto"
+        ? recipients.length
+          ? summarize(recipients, cnt)
+          : f?.member_name || `${cnt}명`
+        : `${AUDIENCE_LABEL[kind] ?? kind}${cnt ? ` ${cnt}명` : ""}`;
     return {
       key: `push-${b.id}`,
       channel: "push",
       title: b.title ?? null,
       content: b.body ?? "",
       recipient_label: recipient,
+      recipients,
       receiver_cnt: cnt,
       msg_type: null,
       testmode: false,

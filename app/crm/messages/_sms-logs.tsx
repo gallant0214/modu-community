@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
+import { formatPhone } from "../_components/crm-labels";
 
 interface MsgLog {
   key: string;
@@ -9,6 +11,8 @@ interface MsgLog {
   title: string | null;
   content: string;
   recipient_label: string;
+  /** 받는 사람 목록 (기록 하나당 최대 50명) — 펼쳤을 때 이름·번호로 보여준다 */
+  recipients: { member_id: number | null; name: string | null; phone: string | null }[];
   receiver_cnt: number;
   msg_type: string | null;
   testmode: boolean;
@@ -187,8 +191,14 @@ export function SmsLogsTab() {
                     <span>
                       발송: <span className="text-[#6B5D47] dark:text-zinc-300 font-medium">{l.sent_by_name || "—"}</span>
                     </span>
+                    <span className="ml-auto text-[11px] text-[#A89B80]">{isOpen ? "접기 ▲" : "펼치기 ▼"}</span>
                   </div>
-                  <div className="mt-1.5 text-[12.5px] text-[#3A342A] dark:text-zinc-300 line-clamp-2 whitespace-pre-wrap">
+                  {/* 누르면 같은 칸이 아래로 펼쳐져 전체 내용이 보인다 (따로 창을 띄우지 않음) */}
+                  <div
+                    className={`mt-1.5 text-[12.5px] text-[#3A342A] dark:text-zinc-300 whitespace-pre-wrap break-words ${
+                      isOpen ? "" : "line-clamp-2"
+                    }`}
+                  >
                     {l.title ? <strong>[{l.title}] </strong> : null}
                     {l.content}
                   </div>
@@ -200,22 +210,49 @@ export function SmsLogsTab() {
                 </button>
 
                 {isOpen && (
-                  <div className="mt-2 pt-2 border-t border-[#E8E0D0]/70 dark:border-zinc-800 space-y-1 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                  <div className="mt-2.5 pt-2.5 border-t border-[#E8E0D0]/70 dark:border-zinc-800 space-y-2 text-[12px] text-[#6B5D47] dark:text-zinc-400">
                     {!isPush && l.result_msg && (
                       <div>
                         <span className="text-[#A89B80]">결과: </span>
                         <span className={failed ? "text-red-600 dark:text-red-400" : ""}>{l.result_msg}</span>
                       </div>
                     )}
-                    {l.sent_by_name && (
-                      <div>
-                        <span className="text-[#A89B80]">발송자: </span>
-                        {l.sent_by_name}
-                      </div>
-                    )}
-                    <div className="whitespace-pre-wrap">
-                      <span className="text-[#A89B80]">내용: </span>
-                      {l.content}
+                    <div>
+                      <div className="mb-1 text-[#A89B80]">받는 사람 {l.receiver_cnt.toLocaleString()}명</div>
+                      {l.recipients.length === 0 ? (
+                        <div className="text-[#A89B80]">받는 사람 정보가 없어요.</div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+                          {l.recipients.map((r, i) => {
+                            const label = (
+                              <>
+                                <span className="font-semibold">{r.name || "회원 아님"}</span>
+                                {r.phone && <span className="ml-1 text-[#A89B80]">{formatPhone(r.phone)}</span>}
+                              </>
+                            );
+                            const cls =
+                              "inline-flex items-center px-2 py-0.5 rounded-full border border-[#E8E0D0] bg-white text-[11.5px] text-[#3A342A] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200";
+                            return r.member_id ? (
+                              <Link
+                                key={`${r.member_id}-${i}`}
+                                href={`/crm/members/${r.member_id}`}
+                                className={`${cls} hover:border-[#6B7B3A] hover:underline`}
+                              >
+                                {label}
+                              </Link>
+                            ) : (
+                              <span key={`${r.phone}-${i}`} className={cls}>
+                                {label}
+                              </span>
+                            );
+                          })}
+                          {l.receiver_cnt > l.recipients.length && (
+                            <span className="inline-flex items-center px-2 py-0.5 text-[11.5px] text-[#A89B80]">
+                              외 {(l.receiver_cnt - l.recipients.length).toLocaleString()}명
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
