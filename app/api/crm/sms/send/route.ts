@@ -15,9 +15,11 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/crm/sms/send — 솔라피 문자 발송
- * body: { receivers: string[], msg: string, title?: string, testmode?: boolean }
+ * body: { receivers: string[], msg: string, title?: string, testmode?: boolean, test_send?: boolean }
  * 권한: messages.send
  * testmode(기본 true): 실제 발송 없이 인증·수신자·글자수만 검증(솔라피는 native testmode 없음 → 검증만).
+ * test_send: 화면의 '테스트 발송' — 테스트 번호 1곳에만 실제로 보낸다(과금). 실수로 여러 명에게 나가지 않게
+ *   수신자 1명만 허용하고, 발송 로그 결과에 [테스트 발송] 을 붙여 실제 발송과 구분한다.
  */
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { receivers?: unknown; msg?: string; title?: string; testmode?: boolean };
+  let body: { receivers?: unknown; msg?: string; title?: string; testmode?: boolean; test_send?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -50,10 +52,13 @@ export async function POST(request: Request) {
   const msg = (body.msg ?? "").trim();
   const title = (body.title ?? "").trim() || undefined;
   const testmode = body.testmode !== false; // 기본 검증(안전). 실제 발송은 명시적으로 false.
+  const testSend = body.test_send === true;
 
   if (receivers.length === 0) return NextResponse.json({ error: "수신번호를 입력해 주세요" }, { status: 400 });
   if (receivers.length > 1000) return NextResponse.json({ error: "한 번에 최대 1,000명까지 발송할 수 있어요" }, { status: 400 });
   if (!msg) return NextResponse.json({ error: "내용을 입력해 주세요" }, { status: 400 });
+  if (testSend && receivers.length !== 1)
+    return NextResponse.json({ error: "테스트 발송은 번호 한 곳에만 보낼 수 있어요" }, { status: 400 });
 
   const msgType = inferMsgType(msg);
 
@@ -97,7 +102,7 @@ export async function POST(request: Request) {
     title,
     testmode: false,
     resultCode: result.ok ? 1 : -1,
-    resultMsg: result.message,
+    resultMsg: testSend ? `[테스트 발송] ${result.message}` : result.message,
     successCnt: result.success,
     errorCnt: result.failed,
     groupId: result.groupId ?? null,

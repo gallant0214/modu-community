@@ -57,6 +57,8 @@ interface Recipient {
   phone: string; // 숫자만
 }
 
+const TEST_PHONE_KEY = "crm.sms.testPhone";
+
 const SEGMENTS: { key: string; label: string }[] = [
   { key: "active", label: "활성 회원 전체" },
   { key: "expiring", label: "만료 임박" },
@@ -112,8 +114,21 @@ export function SmsSendTab() {
   const [numbersRaw, setNumbersRaw] = useState("");
   const [msg, setMsg] = useState("");
   const [title, setTitle] = useState("");
-  // 누른 버튼 — 실제 발송 / 테스트 발송(검증만)
+  // 누른 버튼 — 실제 발송 / 테스트 발송(테스트 번호 1곳에만 실제로 보냄)
   const [sending, setSending] = useState<null | "real" | "test">(null);
+  // 테스트 문자를 받을 번호 — 수신자(1·2번)와 별개. 다음에도 쓰도록 이 브라우저에 기억
+  //  (이 탭은 눌러야 열리므로 서버 렌더에 포함되지 않는다 → 첫 값에서 바로 읽어도 된다)
+  const [testPhone, setTestPhone] = useState(() => {
+    try {
+      return window.localStorage.getItem(TEST_PHONE_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const testNumber = useMemo(() => {
+    const list = parseNumbers(testPhone);
+    return list.length === 1 ? list[0] : "";
+  }, [testPhone]);
   const [result, setResult] = useState<string>("");
 
   // 회원 선택 수신자
@@ -243,9 +258,14 @@ export function SmsSendTab() {
     }
   };
 
-  const send = async (testmode: boolean) => {
-    if (allNumbers.length === 0) {
-      alert("수신번호를 선택하거나 입력해 주세요.");
+  /**
+   * 실제 발송 = 1번(회원 선택) + 2번(직접 입력) 번호 전부.
+   * 테스트 발송 = 테스트 번호 한 곳에만 같은 내용을 실제로 보낸다(1건 과금). 작성한 내용·수신자는 그대로 둔다.
+   */
+  const send = async (mode: "real" | "test") => {
+    const isTest = mode === "test";
+    if (isTest ? !testNumber : allNumbers.length === 0) {
+      alert(isTest ? "테스트 문자를 받을 번호를 확인해 주세요." : "수신번호를 선택하거나 입력해 주세요.");
       return;
     }
     if (!sendText) {
@@ -257,14 +277,16 @@ export function SmsSendTab() {
       return;
     }
     const typeLabel = msgType === "SMS" ? "SMS(단문)" : "LMS(장문)";
-    const label = testmode
-      ? `[테스트 발송] 문자를 보내지 않고 대상·내용만 확인합니다.\n${allNumbers.length}명 대상, ${typeLabel}.`
+    const label = isTest
+      ? `테스트 문자를 ${formatPhone(testNumber)} 로 1건 보냅니다.\n${typeLabel}${
+          unitPrice != null ? ` · 요금 ${unitPrice.toLocaleString()}원` : ""
+        }`
       : `실제로 문자가 발송됩니다.\n${allNumbers.length}명에게 ${typeLabel} 발송(과금).${
           estimatedCost != null ? `\n예상 지출 ${estimatedCost.toLocaleString()}원` : ""
         }`;
     if (!window.confirm(`${label}\n\n계속할까요?`)) return;
 
-    setSending(testmode ? "test" : "real");
+    setSending(mode);
     setResult("");
     try {
       const token = await getIdToken();
@@ -272,24 +294,25 @@ export function SmsSendTab() {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
-          receivers: allNumbers,
+          receivers: isTest ? [testNumber] : allNumbers,
           msg,
           title: msgType === "LMS" ? title || undefined : undefined,
-          testmode,
+          testmode: false,
+          test_send: isTest,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setResult(`실패: ${data?.error || "발송 실패"}`);
+        setResult(`${isTest ? "테스트 발송 " : ""}실패: ${data?.error || "발송 실패"}`);
       } else {
         setResult(
-          data.testmode
-            ? `테스트 확인 완료 · ${data.msg_type} · ${data.success_cnt}명 (실제로 보내지 않았어요)`
+          isTest
+            ? `테스트 문자를 ${formatPhone(testNumber)} 로 보냈어요 · ${data.msg_type}`
             : `발송 완료 · ${data.msg_type} · 성공 ${data.success_cnt}건${
                 data.error_cnt ? ` · 실패 ${data.error_cnt}건` : ""
               }`
         );
-        if (!data.testmode) {
+        if (!isTest) {
           setNumbersRaw("");
           setMsg("");
           setTitle("");
@@ -573,19 +596,43 @@ export function SmsSendTab() {
         <div className="space-y-2">
           <button
             type="button"
-            onClick={() => send(false)}
+            onClick={() => send("real")}
             disabled={sending !== null || !canSubmit || notEnoughCash}
             className="w-full px-5 py-3 rounded-lg bg-[#B4472A] text-[14px] font-bold text-white hover:bg-[#9c3d24] disabled:opacity-45"
           >
             {sending === "real" ? "발송 중..." : `실제 발송${allNumbers.length ? ` (${allNumbers.length}명)` : ""}`}
           </button>
+          <div className="border-t border-[#E8E0D0] pt-3 dark:border-zinc-800">
+            <label className="mb-1 block text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+              테스트로 받을 번호
+            </label>
+            <input
+              type="tel"
+              inputMode="numeric"
+              value={testPhone}
+              onChange={(e) => {
+                const v = formatPhone(e.target.value);
+                setTestPhone(v);
+                try {
+                  window.localStorage.setItem(TEST_PHONE_KEY, v);
+                } catch {
+                  /* 저장 못 해도 이번 화면에선 그대로 쓴다 */
+                }
+              }}
+              placeholder="010-0000-0000"
+              className={inputCls}
+            />
+            {testPhone && !testNumber && (
+              <p className="mt-1 text-[11.5px] text-red-600 dark:text-red-400">번호를 다시 확인해 주세요.</p>
+            )}
+          </div>
           <button
             type="button"
-            onClick={() => send(true)}
-            disabled={sending !== null || !canSubmit}
+            onClick={() => send("test")}
+            disabled={sending !== null || !testNumber || !sendText || tooLong}
             className="w-full px-5 py-2.5 rounded-lg border border-[#6B7B3A] bg-white text-[13px] font-semibold text-[#6B7B3A] hover:bg-[#6B7B3A]/5 disabled:opacity-45 dark:bg-zinc-950 dark:text-[#A8B87A]"
           >
-            {sending === "test" ? "확인 중..." : "테스트 발송 (보내지 않고 확인만)"}
+            {sending === "test" ? "보내는 중..." : "테스트 발송"}
           </button>
         </div>
         {result && (
@@ -594,7 +641,7 @@ export function SmsSendTab() {
           </div>
         )}
         <p className="mt-3 text-[11.5px] leading-relaxed text-[#A89B80]">
-          실제 발송은 문자가 바로 나가고 건당 요금이 부과돼요. 테스트 발송은 문자를 보내지 않고 대상과 내용만 확인해요(무료).
+          실제 발송은 1번에서 선택한 회원과 2번에 직접 입력한 번호로 바로 나가요. 테스트 발송은 위에 적은 번호 한 곳에만 같은 내용을 보내요(1건 요금 부과).
         </p>
       </div>
         </aside>
