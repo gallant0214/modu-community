@@ -10,6 +10,8 @@ interface Attendance {
   id: number;
   member_id: number;
   checked_in_at: string;
+  /** 회원앱에서 '퇴실'을 누른 시각 (없으면 null) */
+  checked_out_at?: string | null;
   source: string;
   member: {
     id: number;
@@ -790,7 +792,8 @@ export default function CrmAttendancesPage() {
           <table className="w-full text-[13px]">
             <thead className="bg-[#F6F0E5] dark:bg-zinc-950/80 text-[#6B5D47] dark:text-zinc-400">
               <tr>
-                <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">시간</th>
+                <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">출석</th>
+                <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">퇴실</th>
                 <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">상태</th>
                 <th className="px-4 py-2.5 text-left font-semibold">회원</th>
                 <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">앱연동</th>
@@ -808,6 +811,13 @@ export default function CrmAttendancesPage() {
                 >
                   <td className="px-4 py-3 text-[#2A251D] dark:text-zinc-100 font-bold whitespace-nowrap tabular-nums">
                     {formatTimeKST(a.checked_in_at)}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap tabular-nums">
+                    {a.checked_out_at ? (
+                      <span className="font-bold text-[#6B5D47] dark:text-zinc-300">{formatTimeKST(a.checked_out_at)}</span>
+                    ) : (
+                      <span className="text-[#C9BEA6]">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {a.member?.status === "active" ? (

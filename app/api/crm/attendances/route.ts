@@ -35,8 +35,8 @@ export async function GET(request: Request) {
 
   const memberIds = Array.from(new Set((data ?? []).map((a) => a.member_id)));
 
-  // 회원 기본 + 얼굴 / 유효·만료 이용권 병렬 조회
-  const [membersRes, mshipRes, passRes, rentalRes, lockerRes] = await Promise.all([
+  // 회원 기본 + 얼굴 / 유효·만료 이용권 / 퇴실 기록 병렬 조회
+  const [membersRes, mshipRes, passRes, rentalRes, lockerRes, checkoutRes] = await Promise.all([
     memberIds.length
       ? supabase
           .from("crm_members")
@@ -74,7 +74,39 @@ export async function GET(request: Request) {
           .eq("center_id", ctx.centerId)
           .in("assigned_member_id", memberIds)
       : Promise.resolve({ data: [] as never[] }),
+    // 🚨 퇴실 = 회원앱 '퇴실' 버튼(member-app/checkout). 누른 시각은 퇴실 적립 원장(reason checkout)에만 남는다
+    //    — 출석 기록에 따로 컬럼이 없으니 여기서 같은 날 기록을 붙인다. 하루 1회·출석 후 4시간 이내라 같은 날에만 생긴다.
+    memberIds.length
+      ? supabase
+          .from("crm_member_mileage_logs")
+          .select("member_id, created_at")
+          .eq("center_id", ctx.centerId)
+          .eq("reason", "checkout")
+          .gte("created_at", startUtc.toISOString())
+          .lt("created_at", endUtc.toISOString())
+          .in("member_id", memberIds)
+      : Promise.resolve({ data: [] as never[] }),
   ]);
+
+  // 퇴실 시각 → 그 회원의 '퇴실 직전 마지막 출석' 기록에 붙인다 (하루에 여러 번 출석한 경우 대비)
+  const checkoutByAttendance = new Map<number, string>();
+  {
+    const attsByMember = new Map<number, { id: number; at: string }[]>();
+    for (const a of data ?? []) {
+      const arr = attsByMember.get(a.member_id) ?? [];
+      arr.push({ id: a.id, at: a.checked_in_at });
+      attsByMember.set(a.member_id, arr);
+    }
+    for (const c of (checkoutRes.data ?? []) as unknown as { member_id: number; created_at: string }[]) {
+      const outMs = new Date(c.created_at).getTime();
+      let best: { id: number; ms: number } | null = null;
+      for (const a of attsByMember.get(c.member_id) ?? []) {
+        const inMs = new Date(a.at).getTime();
+        if (inMs <= outMs && (!best || inMs > best.ms)) best = { id: a.id, ms: inMs };
+      }
+      if (best && !checkoutByAttendance.has(best.id)) checkoutByAttendance.set(best.id, c.created_at);
+    }
+  }
 
   type Member = { id: number; name: string; phone: string | null; face_image_thumb: string | null; linked_firebase_uid: string | null; mileage: number | null };
   const memberMap = new Map<number, Member>(
@@ -148,6 +180,8 @@ export async function GET(request: Request) {
       const m = memberMap.get(a.member_id) ?? null;
       return {
         ...a,
+        /** 회원앱에서 '퇴실'을 누른 시각 (없으면 null) */
+        checked_out_at: checkoutByAttendance.get(a.id) ?? null,
         member: m
           ? {
               id: m.id,
