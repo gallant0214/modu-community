@@ -518,6 +518,10 @@ function ConsultationFormInner({
         setDraftSavedMsg(
           "임시저장되었습니다. ‘PT 상담 리스트 → 임시저장’에서 언제든 이어서 작성할 수 있어요."
         );
+      } else if (mode === "edit") {
+        // 수정(리스트 → 상세 → 수정)은 저장하면 리스트로 돌아간다.
+        // 상세와 같은 주소로 보내면 수정 화면이 그대로 남아 나갈 길이 없었다.
+        router.push("/crm/consultations?tab=list");
       } else {
         router.push(`/crm/consultations/${newId}`);
       }
@@ -1637,7 +1641,9 @@ function ConsultationFormInner({
             {dirty ? "저장하지 않은 변경사항이 있어요" : "입력 내용을 확인해 주세요"}
           </p>
           <p className="text-[11px] text-[#8C8270] dark:text-zinc-500">
-            저장 후 상담 상세 화면에서 결과를 관리할 수 있습니다.
+            {mode === "edit"
+              ? "저장하면 PT 상담 리스트로 돌아갑니다."
+              : "저장 후 상담 상세 화면에서 결과를 관리할 수 있습니다."}
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
