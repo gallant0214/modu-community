@@ -176,29 +176,6 @@ export default function CrmSchedulePage() {
     trainerMemberId?: number;
   } | null>(null);
 
-  /**
-   * 이미 일정이 있는 칸은 클릭해도 상세창만 열려 새 예약을 잡을 수 없다.
-   * 상세창의 '+ 이 시간에 스케줄 추가하기' 가 이 함수로 같은 시간·강사의 새 예약 모달을 연다.
-   */
-  const openAddScheduleAt = useCallback(
-    (startsAt: string, endsAt: string, trainerMemberId: number | null) => {
-      setPicked(null);
-      setPickedEvent(null);
-      setPickedClass(null);
-      const fromStaff = staff.find((t) => t.id === trainerMemberId);
-      const me = myMemberId != null ? staff.find((t) => t.id === myMemberId) : undefined;
-      const chosen = fromStaff ?? me ?? staff[0];
-      if (!chosen) return;
-      setNewSlot({
-        trainerId: chosen.id,
-        trainerName: chosen.display_name,
-        startsAt,
-        endsAt,
-      });
-    },
-    [staff, myMemberId]
-  );
-
   const range = useMemo(() => computeRange(viewMode, anchor), [viewMode, anchor]);
   const rangeLabel = useMemo(() => formatRangeLabel(viewMode, anchor, range), [viewMode, anchor, range]);
 
@@ -308,6 +285,34 @@ export default function CrmSchedulePage() {
     if (selectedTrainerId === "all") return trainers;
     return trainers.filter((t) => t.id === selectedTrainerId);
   }, [trainers, selectedTrainerId]);
+
+  /**
+   * 이미 일정이 있는 칸은 클릭해도 상세창만 열려 새 예약을 잡을 수 없다.
+   * 상세창의 '+ 이 시간에 스케줄 추가하기' 가 이 함수로 같은 시간의 새 예약 모달을 연다.
+   * 담당강사 기본값은 빈 칸 클릭과 같다: 강사 필터가 특정인이면 그 강사, 전체면 로그인한 강사.
+   * 기존 일정의 강사는 로그인한 사람이 강사 목록에 없을 때만 쓴다.
+   * (기존 일정 강사를 먼저 고르면 남의 예약 시간에 내 수업을 넣을 때마다 강사를 바꿔야 했다)
+   */
+  const openAddScheduleAt = useCallback(
+    (startsAt: string, endsAt: string, trainerMemberId: number | null) => {
+      setPicked(null);
+      setPickedEvent(null);
+      setPickedClass(null);
+      const filtered =
+        selectedTrainerId !== "all" ? trainers.find((t) => t.id === selectedTrainerId) : undefined;
+      const me = myMemberId != null ? trainers.find((t) => t.id === myMemberId) : undefined;
+      const fromStaff = staff.find((t) => t.id === trainerMemberId);
+      const chosen = filtered ?? me ?? fromStaff ?? staff[0];
+      if (!chosen) return;
+      setNewSlot({
+        trainerId: chosen.id,
+        trainerName: chosen.display_name,
+        startsAt,
+        endsAt,
+      });
+    },
+    [staff, trainers, myMemberId, selectedTrainerId]
+  );
 
   // 드래그로 예약 시간·강사 이동
   const reschedule = useCallback(
