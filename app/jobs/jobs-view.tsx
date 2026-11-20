@@ -561,6 +561,9 @@ export function JobsView({ initialData }: JobsViewProps) {
   const [total, setTotal] = useState(initialData?.total || 0);
   const [page, setPage] = useState(initialData?.page || 1);
   const [totalPages, setTotalPages] = useState(initialData?.totalPages || 1);
+  // 불러오기 실패 — 빈 목록('공고가 없습니다')과 구분해 다시 불러오기를 띄운다
+  const [loadError, setLoadError] = useState(false);
+  const lastPageRef = useRef(initialData?.page || 1);
 
   /* 필터 */
   const [regionCode, setRegionCode] = useState("");
@@ -615,6 +618,8 @@ export function JobsView({ initialData }: JobsViewProps) {
   /* 데이터 로드 */
   const loadJobs = useCallback(async (p = 1) => {
     setLoading(true);
+    setLoadError(false);
+    lastPageRef.current = p;
     const params = new URLSearchParams({
       page: String(p),
       sort,
@@ -643,13 +648,17 @@ export function JobsView({ initialData }: JobsViewProps) {
 
     try {
       const res = await fetch(`/api/jobs?${params}`);
-      const data = await res.json();
-      setJobs(data.posts || []);
+      const data = await res.json().catch(() => null);
+      // 서버 오류(500 등)를 빈 목록으로 그리면 '공고가 하나도 없다'로 보인다 (2026-11-20 사용자 지적)
+      if (!res.ok || !data || !Array.isArray(data.posts)) throw new Error("load failed");
+      setJobs(data.posts);
       setTotal(data.total || 0);
       setTotalPages(data.totalPages || 1);
       setPage(p);
     } catch {
       setJobs([]);
+      setTotal(0);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -863,7 +872,7 @@ export function JobsView({ initialData }: JobsViewProps) {
         {/* 정렬 + 결과 요약 */}
         <div className="flex items-center justify-between mb-5">
           <div className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            {searchQuery ? (
+            {loadError ? null : searchQuery ? (
               <span>&ldquo;<span className="font-semibold text-[#3A342A]">{searchQuery}</span>&rdquo; 검색 결과 · <strong className="font-bold text-[#6B7B3A]">{total}건</strong></span>
             ) : (
               <span>총 <strong className="font-bold text-[#6B7B3A]">{total}건</strong>의 공고</span>
@@ -894,6 +903,17 @@ export function JobsView({ initialData }: JobsViewProps) {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
+          </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl">
+            <p className="text-base font-bold text-[#3A342A] dark:text-zinc-300 mb-1">
+              공고를 불러오지 못했어요
+            </p>
+            <p className="text-sm text-[#8C8270] mb-5">잠시 후 다시 시도해 주세요</p>
+            <button
+              onClick={() => loadJobs(lastPageRef.current)}
+              className="px-5 py-2.5 text-sm font-semibold text-white bg-[#6B7B3A] hover:bg-[#5A6930] rounded-xl shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors"
+            >다시 불러오기</button>
           </div>
         ) : jobs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl">
