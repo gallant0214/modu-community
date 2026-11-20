@@ -249,12 +249,16 @@ const addDaysYmd = (ymd: string, n: number): string => {
 };
 
 // 만료 임박(EXPIRING_DAYS 이내) 회원권/수강권 보유 여부
+// 🚨 회원권은 '가장 늦게 끝나는 회원권'이 기간 안에 끝날 때만 임박이다.
+//    다음 회원권을 미리 사 둔 회원(이어붙이기·시작 예정 포함)은 끊김 없이 계속 쓰므로 임박이 아니다
+//    (2026-11-20 사용자 지적: 박일우·임성민. 터치출석 '곧 만료' 안내와 같은 규칙).
 const hasExpiringMembership = (m: MemberRow, todayStr: string): boolean => {
   const cutoff = addDaysYmd(todayStr, EXPIRING_DAYS);
   if ((m.items?.length ?? 0) > 0) {
-    return (m.items ?? []).some(
-      (it) => it.type === "membership" && !!it.expires && it.expires >= todayStr && it.expires <= cutoff
-    );
+    const latest = (m.items ?? [])
+      .filter((it) => it.type === "membership" && !!it.expires)
+      .reduce<string | null>((max, it) => (!max || it.expires > max ? it.expires : max), null);
+    return !!latest && latest >= todayStr && latest <= cutoff;
   }
   const eff = effExpiry(m);
   return !!m.current_membership && !!eff && eff >= todayStr && eff <= cutoff && !m.scheduled;
