@@ -2,6 +2,7 @@ import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { memberIdsWithFace } from "@/app/lib/crm-checkin";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("crm_members")
-    .select("id, name, phone, birth, face_image_data, face_image_thumb")
+    .select("id, name, phone, birth, face_image_thumb")
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
     .eq("attendance_no", no)
@@ -34,24 +35,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
 
-  // face_image_data 는 크므로 has_face 만. thumb 는 확인용으로 함께 반환.
-  const members = (data ?? []).map(
-    (m: {
-      id: number;
-      name: string;
-      phone: string | null;
-      birth: string | null;
-      face_image_data: string | null;
-      face_image_thumb: string | null;
-    }) => ({
-      id: m.id,
-      name: m.name,
-      phone: m.phone,
-      birth: m.birth,
-      has_face: !!m.face_image_data,
-      face_thumb: m.face_image_thumb,
-    })
+  // face_image_data 는 크므로 받아오지 않고 id 조회로 has_face 만 판정. thumb 는 확인용으로 함께 반환.
+  const rows = (data ?? []) as {
+    id: number;
+    name: string;
+    phone: string | null;
+    birth: string | null;
+    face_image_thumb: string | null;
+  }[];
+  const withFace = await memberIdsWithFace(
+    ctx.centerId,
+    rows.map((m) => m.id)
   );
+  const members = rows.map((m) => ({
+    id: m.id,
+    name: m.name,
+    phone: m.phone,
+    birth: m.birth,
+    has_face: withFace.has(m.id),
+    face_thumb: m.face_image_thumb,
+  }));
 
   return NextResponse.json({ members });
 }

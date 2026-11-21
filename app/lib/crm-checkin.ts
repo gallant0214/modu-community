@@ -514,6 +514,24 @@ export async function awardAttendanceMileage(
 }
 
 /**
+ * 주어진 회원 중 얼굴 사진(face_image_data)이 등록된 회원 id 집합.
+ * 🚨 face_image_data 는 1장 평균 166KB(base64)라, '등록 여부(has_face)' 만 필요한 출석 경로에서
+ *    값을 통째로 받아오면 Supabase 전송량만 낭비한다 → id 만 조회해서 판정한다.
+ *    face_image_thumb 로 대신 판정하지 않는다(회원 수정 경로에서 사진만 저장되고 썸네일이
+ *    없는 회원이 생길 수 있어 의미가 달라짐). ids 가 비면 조회 없이 빈 Set.
+ */
+export async function memberIdsWithFace(centerId: number, ids: number[]): Promise<Set<number>> {
+  if (ids.length === 0) return new Set<number>();
+  const { data } = await supabase
+    .from("crm_members")
+    .select("id")
+    .eq("center_id", centerId)
+    .in("id", ids)
+    .not("face_image_data", "is", null);
+  return new Set(((data ?? []) as { id: number }[]).map((m) => m.id));
+}
+
+/**
  * 키오스크(터치출석) 화면이 폴링해서 'QR(회원앱) 출석'을 감지하기 위한 헬퍼.
  * 회원이 QR을 스캔하면 source='app' 출석 레코드가 생성되는데, 이 출석은 태블릿이 아닌
  * 회원 폰에서 일어나므로 태블릿엔 결과창이 안 뜬다. 태블릿이 이 함수를 폴링해
@@ -542,12 +560,13 @@ export async function getLatestQrCheckin(centerId: number, sinceId: number | nul
 
   const { data: member } = await supabase
     .from("crm_members")
-    // face_image_data 는 용량이 커서 값 대신 '등록 여부' 만 쓴다(응답에 이미지 미포함)
-    .select("id, name, phone, birth, face_image_data")
+    .select("id, name, phone, birth")
     .eq("id", row.member_id)
     .eq("center_id", centerId)
     .maybeSingle();
   if (!member) return { latestId, checkin: null as null };
+  // 얼굴 '등록 여부' 만 id 조회로 판정 — 사진 값은 받지 않는다(응답에도 미포함)
+  const withFace = await memberIdsWithFace(centerId, [member.id]);
 
   const summary = await buildCheckinSummary(centerId, member.id);
   let voice_messages: string[] = [];
@@ -571,7 +590,7 @@ export async function getLatestQrCheckin(centerId: number, sinceId: number | nul
         birth: member.birth,
         phone: member.phone,
         // 얼굴 미등록이면 태블릿이 결과창 뒤에 '얼굴 등록' 화면을 띄운다
-        has_face: !!member.face_image_data,
+        has_face: withFace.has(member.id),
       },
       duplicate: false,
       mileage_awarded: Number(row.attendance_mileage_awarded) || 0,

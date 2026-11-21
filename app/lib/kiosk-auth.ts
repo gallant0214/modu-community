@@ -89,3 +89,44 @@ export async function resolveKioskCenter(
   if (!data || (data as { status: string }).status !== "active") return null;
   return { centerId: (data as { id: number }).id, centerName: (data as { name: string }).name };
 }
+
+// ── 정적 kiosk_token → 센터 캐시 (recent-checkin 폴링 전용) ──
+const KIOSK_CENTER_CACHE_TTL_MS = 60_000;
+const KIOSK_CENTER_CACHE_MAX = 100;
+const kioskCenterCache = new Map<string, { centerId: number; centerName: string; expiresAt: number }>();
+
+/**
+ * resolveKioskCenter 의 캐시 버전 — **읽기 전용 폴링(/api/touch/[token]/recent-checkin)에서만** 쓴다.
+ * 터치출석 화면이 2초마다 폴링하면서 매번 crm_centers 를 조회(하루 약 34,000건)하던 것을
+ * 정적 kiosk_token 기준 60초 캐시로 줄인다(폴링 간격은 현장 반응 속도 때문에 그대로).
+ *
+ * - 성공한 결과만 캐시. null(없는 토큰·비활성 센터)은 캐시하지 않는다.
+ * - 'q1.' 주간 QR 토큰은 캐시하지 않고 기존 resolveKioskCenter 로 넘긴다.
+ * - Map 이 무한히 커지지 않게 100개 초과 시 오래된 것부터 지운다.
+ * 🚨 출석 처리·얼굴 등록 같은 쓰기 API 는 반드시 resolveKioskCenter 를 써야 한다 —
+ *    토큰을 재발급하면 바로 막혀야 하기 때문(캐시는 최대 60초 늦게 반영).
+ */
+export async function resolveKioskCenterCached(
+  token: string | undefined | null
+): Promise<{ centerId: number; centerName: string } | null> {
+  const t = (token || "").trim();
+  if (t.startsWith("q1.")) return resolveKioskCenter(t);
+
+  const now = Date.now();
+  const hit = kioskCenterCache.get(t);
+  if (hit && hit.expiresAt > now) return { centerId: hit.centerId, centerName: hit.centerName };
+  if (hit) kioskCenterCache.delete(t);
+
+  const center = await resolveKioskCenter(t);
+  if (!center) return null;
+
+  // 삭제 후 다시 set → Map 삽입 순서가 최신으로 가서 '오래된 것부터' 지우는 기준이 유지된다
+  kioskCenterCache.delete(t);
+  kioskCenterCache.set(t, { ...center, expiresAt: now + KIOSK_CENTER_CACHE_TTL_MS });
+  while (kioskCenterCache.size > KIOSK_CENTER_CACHE_MAX) {
+    const oldest = kioskCenterCache.keys().next().value;
+    if (oldest === undefined) break;
+    kioskCenterCache.delete(oldest);
+  }
+  return center;
+}
