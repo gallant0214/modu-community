@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
-import { listPendingOnnuri } from "@/app/lib/crm-onnuri";
+import { listOnnuriCancels, listPendingOnnuri } from "@/app/lib/crm-onnuri";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +14,10 @@ export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
   if (!(await ctxHasPermission(ctx, "sales.onnuri_confirm"))) {
-    return NextResponse.json({ items: [], allowed: false });
+    return NextResponse.json({ items: [], cancels: [], allowed: false });
   }
   const all = new URL(request.url).searchParams.get("all") === "1";
-  const items = await listPendingOnnuri(ctx.centerId);
-  return NextResponse.json({ items: all ? items : items.filter((i) => i.overdue), allowed: true });
+  const [items, cancels] = await Promise.all([listPendingOnnuri(ctx.centerId), listOnnuriCancels(ctx.centerId)]);
+  // 취소 알림은 기다릴 이유가 없다 — 직원이 가맹점 앱에서 직접 취소한 것이라 바로 보여준다
+  return NextResponse.json({ items: all ? items : items.filter((i) => i.overdue), cancels, allowed: true });
 }

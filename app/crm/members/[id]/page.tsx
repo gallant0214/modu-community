@@ -3377,12 +3377,12 @@ interface PaymentRow {
 }
 
 /** PG 결제 출처 표시 — 어디서 결제됐는지 한눈에 */
-const PG_LABEL: Record<string, string> = { toss: "토스", portone: "KG이니시스" };
+const PG_LABEL: Record<string, string> = { toss: "토스", portone: "KG이니시스", onnuri: "모바일 온누리" };
 /**
  * 취소를 **실제로 해야 하는 곳**. 결제사(KG이니시스)와 관리 콘솔(포트원)이 달라서
  * 결제 출처 표기와 따로 둔다. 여기를 틀리면 직원이 엉뚱한 데를 찾아다닌다.
  */
-const PG_CONSOLE_LABEL: Record<string, string> = { toss: "토스", portone: "포트원" };
+const PG_CONSOLE_LABEL: Record<string, string> = { toss: "토스", portone: "포트원", onnuri: "온누리 가맹점 앱" };
 const PG_CHANNEL_LABEL: Record<string, string> = { web: "홈페이지", app: "회원앱" };
 
 const PAYMENT_METHOD_KO: Record<string, string> = {

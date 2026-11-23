@@ -7,7 +7,7 @@
  */
 
 /** 화면 표기 — 회원 상세 결제내역의 PG_LABEL 과 같다 */
-export const PG_PROVIDER_LABEL: Record<string, string> = { toss: "토스", portone: "KG이니시스" };
+export const PG_PROVIDER_LABEL: Record<string, string> = { toss: "토스", portone: "KG이니시스", onnuri: "모바일 온누리" };
 
 /** 토스페이먼츠 카드사 코드 (card.issuerCode) */
 const TOSS_CARD_ISSUER: Record<string, string> = {

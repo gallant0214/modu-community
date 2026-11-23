@@ -22,6 +22,7 @@ export interface PgCancelState {
 const PROVIDER_LABEL: Record<string, string> = {
   toss: "토스",
   portone: "KG이니시스",
+  onnuri: "모바일 온누리",
 };
 
 export interface PgCancelResult {
@@ -60,7 +61,7 @@ interface OrderForCancel {
 export async function applyPgCancel(opts: {
   order: OrderForCancel;
   /** 어느 PG 인지 — 환불 이력·로그 표기에만 쓴다. 판정에는 쓰지 않는다 */
-  provider: "toss" | "portone";
+  provider: "toss" | "portone" | "onnuri";
   /** PG 응답을 공통 모양으로 바꾼 값 */
   cancel: PgCancelState;
 }): Promise<PgCancelResult> {
@@ -265,7 +266,7 @@ export async function applyPgCancel(opts: {
  */
 async function retireBundleComponents(opts: {
   order: OrderForCancel;
-  provider: "toss" | "portone";
+  provider: "toss" | "portone" | "onnuri";
   cancel: PgCancelState;
   parentPaymentId?: number;
 }): Promise<string[]> {

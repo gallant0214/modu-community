@@ -342,7 +342,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error:
-          "온라인(토스) 결제는 여기서 환불할 수 없어요. 토스에서 결제를 취소하면 이용권 회수까지 자동으로 처리됩니다.",
+          "온라인 결제는 여기서 환불할 수 없어요. 결제한 곳(토스·KG이니시스·온누리 가맹점 앱)에서 취소하면 이용권 회수로 이어집니다.",
         code: "PG_REFUND_ONLY",
       },
       { status: 409 }

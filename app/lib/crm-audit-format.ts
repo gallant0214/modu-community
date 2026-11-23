@@ -35,6 +35,10 @@ export const ACTION_LABEL: Record<string, string> = {
   "payment.refund": "결제 환불 · 이용권 회수",
   "payment.restore": "환불 복원 · 이용권 복구",
   "payment.refund_pg": "PG 결제 취소 · 이용권 회수",
+  "onnuri.claim": "모바일 온누리 '결제했어요'",
+  "onnuri.approve": "모바일 온누리 결제 승인 · 이용권 발급",
+  "onnuri.reject": "모바일 온누리 결제 거절 · 주문 취소",
+  "onnuri.cancel_refund": "모바일 온누리 결제 취소 · 이용권 회수",
   // 모두의지도사가 사장님에게 판 CRM 이용권(SaaS 구독) — 센터 이용권 환불과 다른 건이다
   "saas.refund_pg": "CRM 이용권 결제 취소 · 구독 기간 조정",
   "order.pg_resync": "PG 상태 다시 확인",

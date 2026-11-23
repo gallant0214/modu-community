@@ -50,6 +50,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     pg_provider: string | null;
   } | null;
   if (!order) return NextResponse.json({ error: "주문을 찾을 수 없어요" }, { status: 404 });
+  if (order.pg_provider === "onnuri") {
+    return NextResponse.json(
+      { error: "모바일 온누리 결제는 가맹점 앱에서 취소하면 대시보드 상단 '온누리 결제 취소' 알림에서 환불 처리할 수 있어요" },
+      { status: 400 }
+    );
+  }
   if (!order.pg_payment_key) {
     return NextResponse.json({ error: "PG 결제 정보가 없는 주문이에요" }, { status: 400 });
   }

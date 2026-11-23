@@ -24,6 +24,7 @@ import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import type { CrmContext } from "@/app/lib/crm-auth";
 import type { PayMethod } from "@/app/lib/member-purchase";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
+import { applyPgCancel } from "@/app/lib/crm-pg-cancel";
 import {
   claimOrderForFulfillment,
   completeOrder,
@@ -111,6 +112,8 @@ export async function centerOnnuriEnabled(centerId: number): Promise<boolean> {
  * 알림 문구에서 결제 금액을 읽는다. 못 읽으면 null (직원이 수동 연결).
  * '잔액·포인트' 앞의 숫자는 결제 금액이 아니므로 건너뛴다.
  */
+/** 결제 취소 알림 — 직원이 확인하고 CRM 환불로 이어간다 */
+export const CANCEL_RE = /취소|환불/;
 /** 결제가 아닌 알림 — 취소·환불·실패·거절·오류 */
 export const NON_PAYMENT_RE = /취소|환불|실패|거절|오류|불가|반려/;
 
@@ -218,9 +221,16 @@ export async function ingestNotification(
     return { saved: false, amountWon: null, matchedOrderId: null };
   }
   // 🚨 취소·환불·실패 알림도 금액이 들어 있다 — 결제로 읽으면 돈 안 낸 주문이 발급될 수 있다.
-  //    금액을 비워(=후보 아님) 기록만 남긴다.
-  const nonPayment = NON_PAYMENT_RE.test(`${n.title}\n${n.text}`);
-  const amount = nonPayment ? null : parseAmountWon(`${n.title}\n${n.text}`);
+  //    amount_won(결제 후보 금액)은 비우고, 취소 알림은 cancel_amount_won 에 따로 담아
+  //    직원 확인 목록(배너)에 올린다. 실패·오류 알림은 기록만.
+  const fullText = `${n.title}\n${n.text}`;
+  const kind: "payment" | "cancel" | "other" = CANCEL_RE.test(fullText)
+    ? "cancel"
+    : NON_PAYMENT_RE.test(fullText)
+      ? "other"
+      : "payment";
+  const nonPayment = kind !== "payment";
+  const amount = nonPayment ? null : parseAmountWon(fullText);
   const postedAt = new Date(Number.isFinite(n.postedAt) && n.postedAt > 0 ? n.postedAt : Date.now());
   const { data, error } = await supabase
     .from("crm_onnuri_notifications")
@@ -233,7 +243,10 @@ export async function ingestNotification(
       amount_won: amount,
       posted_at: postedAt.toISOString(),
       dedupe_key: `${n.key}|${n.postedAt}`.slice(0, 300),
-      match_note: nonPayment ? "취소·실패 알림 (결제 아님)" : null,
+      kind,
+      cancel_amount_won: kind === "cancel" ? parseAmountWon(fullText) : null,
+      cancel_state: kind === "cancel" ? "open" : null,
+      match_note: kind === "cancel" ? "결제 취소 알림 — 환불 확인 필요" : kind === "other" ? "실패·오류 알림 (결제 아님)" : null,
     } as never)
     .select("id")
     .maybeSingle();
@@ -691,4 +704,244 @@ export async function onnuriTempEntry(
     .limit(1);
   const row = ((data ?? [])[0] ?? null) as { id: number; product_name: string; amount_won: number } | null;
   return row ? { orderId: row.id, productName: row.product_name, amountWon: row.amount_won } : null;
+}
+
+
+/* ═══════════════════════ 가맹점 앱에서 결제 취소 → CRM 환불 ═══════════════════════ */
+/*
+ * 가맹점 앱에서 결제를 취소하면 '결제가 취소되었어요' 알림이 온다. 알림에는 금액만 있고
+ * 어느 주문인지 번호가 없으므로 **자동으로 환불하지 않는다** (사장님 결정 2026-11-23).
+ * 같은 금액의 온누리 결제 주문을 후보로 보여주고 직원이 골라 [환불 처리] 한다.
+ * 환불은 토스·이니시스 취소와 같은 applyPgCancel 로 — 회원권·묶음 구성품·마일리지·쿠폰·회원 알림까지.
+ */
+
+/** 취소 알림과 연결할 수 있는 온누리 주문을 찾는 기간 */
+const CANCEL_LOOKBACK_DAYS = 30;
+
+export interface OnnuriCancelItem {
+  /** 대표 취소 알림 id (같은 취소의 알림 여러 개는 1건) */
+  notificationId: number;
+  amountWon: number | null;
+  postedAt: string;
+  text: string;
+  candidates: {
+    orderId: number;
+    memberId: number;
+    memberName: string;
+    productName: string;
+    amountWon: number;
+    paidAt: string | null;
+  }[];
+}
+
+interface CancelRow {
+  id: number;
+  device_id: number;
+  cancel_amount_won: number | null;
+  posted_at: string;
+  title: string | null;
+  body: string | null;
+}
+
+export async function listOnnuriCancels(centerId: number): Promise<OnnuriCancelItem[]> {
+  const { data } = await supabase
+    .from("crm_onnuri_notifications")
+    .select("id, device_id, cancel_amount_won, posted_at, title, body")
+    .eq("center_id", centerId)
+    .eq("cancel_state", "open")
+    .order("posted_at")
+    .limit(50);
+  const rows = (data ?? []) as unknown as CancelRow[];
+  // 같은 취소에서 나온 알림 여러 개는 1건으로
+  const heads: CancelRow[] = [];
+  for (const r of rows) {
+    const at = new Date(r.posted_at).getTime();
+    const dup = heads.find(
+      (h) =>
+        h.device_id === r.device_id &&
+        h.cancel_amount_won === r.cancel_amount_won &&
+        Math.abs(at - new Date(h.posted_at).getTime()) <= SAME_PAYMENT_MS
+    );
+    if (!dup) heads.push(r);
+  }
+
+  const out: OnnuriCancelItem[] = [];
+  for (const h of heads) {
+    const posted = new Date(h.posted_at).getTime();
+    let q = supabase
+      .from("crm_orders")
+      .select("id, member_id, product_name, amount_won, pg_approved_at")
+      .eq("center_id", centerId)
+      .eq("pg_provider", "onnuri")
+      .eq("status", "paid")
+      .gte("pg_approved_at", new Date(posted - CANCEL_LOOKBACK_DAYS * 86400_000).toISOString())
+      .lte("pg_approved_at", new Date(posted + MATCH_SKEW_MS).toISOString())
+      .order("pg_approved_at", { ascending: false })
+      .limit(20);
+    // 금액을 못 읽었으면 금액 조건 없이 최근 온누리 결제를 보여준다
+    if (h.cancel_amount_won) q = q.eq("amount_won", h.cancel_amount_won);
+    const { data: ords } = await q;
+    const orders = (ords ?? []) as unknown as {
+      id: number;
+      member_id: number;
+      product_name: string;
+      amount_won: number;
+      pg_approved_at: string | null;
+    }[];
+    const memberIds = [...new Set(orders.map((o) => o.member_id))];
+    const { data: mems } = memberIds.length
+      ? await supabase.from("crm_members").select("id, name").in("id", memberIds)
+      : { data: [] };
+    const names = new Map(((mems ?? []) as { id: number; name: string }[]).map((m) => [m.id, m.name]));
+    out.push({
+      notificationId: h.id,
+      amountWon: h.cancel_amount_won,
+      postedAt: h.posted_at,
+      text: [h.title, h.body].filter(Boolean).join(" · ").slice(0, 160),
+      candidates: orders.map((o) => ({
+        orderId: o.id,
+        memberId: o.member_id,
+        memberName: names.get(o.member_id) ?? "회원",
+        productName: o.product_name,
+        amountWon: o.amount_won,
+        paidAt: o.pg_approved_at,
+      })),
+    });
+  }
+  return out;
+}
+
+/** 대표 취소 알림과 같은 취소에서 나온 나머지 알림도 같이 정리한다 */
+async function resolveCancelSiblings(
+  centerId: number,
+  head: CancelRow,
+  patch: Record<string, unknown>
+) {
+  const at = new Date(head.posted_at).getTime();
+  let q = supabase
+    .from("crm_onnuri_notifications")
+    .update(patch as never)
+    .eq("center_id", centerId)
+    .eq("device_id", head.device_id)
+    .eq("cancel_state", "open")
+    .gte("posted_at", new Date(at - SAME_PAYMENT_MS).toISOString())
+    .lte("posted_at", new Date(at + SAME_PAYMENT_MS).toISOString());
+  q = head.cancel_amount_won ? q.eq("cancel_amount_won", head.cancel_amount_won) : q.is("cancel_amount_won", null);
+  await q;
+}
+
+async function loadOpenCancel(centerId: number, notiId: number): Promise<CancelRow | null> {
+  const { data } = await supabase
+    .from("crm_onnuri_notifications")
+    .select("id, device_id, cancel_amount_won, posted_at, title, body")
+    .eq("id", notiId)
+    .eq("center_id", centerId)
+    .eq("cancel_state", "open")
+    .maybeSingle();
+  return (data as unknown as CancelRow | null) ?? null;
+}
+
+/** 직원이 고른 온누리 주문을 환불 처리한다 (회원권 회수까지) */
+export async function refundOnnuriCancel(
+  centerId: number,
+  notiId: number,
+  orderId: number,
+  actorUid: string
+): Promise<{ ok: boolean; error?: string; note?: string }> {
+  const head = await loadOpenCancel(centerId, notiId);
+  if (!head) return { ok: false, error: "이미 처리된 취소 알림이에요" };
+
+  const { data: o } = await supabase
+    .from("crm_orders")
+    .select("id, center_id, member_id, amount_won, status, coupon_issue_id, pg_provider")
+    .eq("id", orderId)
+    .eq("center_id", centerId)
+    .maybeSingle();
+  const order = o as {
+    id: number;
+    center_id: number;
+    member_id: number;
+    amount_won: number;
+    status: string;
+    coupon_issue_id: number | null;
+    pg_provider: string;
+  } | null;
+  if (!order || order.pg_provider !== "onnuri") return { ok: false, error: "온누리 결제 주문이 아니에요" };
+  if (order.status !== "paid") return { ok: false, error: "이미 환불됐거나 결제가 끝나지 않은 주문이에요" };
+
+  // 선점 — 같은 취소 알림으로 두 번 환불하지 않게
+  const resolved = {
+    cancel_state: "refunded",
+    cancel_order_id: orderId,
+    cancel_resolved_at: nowIso(),
+    cancel_resolved_by: actorUid,
+  };
+  const { data: took } = await supabase
+    .from("crm_onnuri_notifications")
+    .update({ ...resolved, match_note: "환불 처리" } as never)
+    .eq("id", notiId)
+    .eq("cancel_state", "open")
+    .select("id");
+  if ((took ?? []).length === 0) return { ok: false, error: "이미 처리된 취소 알림이에요" };
+
+  const cancelWon = head.cancel_amount_won && head.cancel_amount_won < order.amount_won ? head.cancel_amount_won : order.amount_won;
+  const r = await applyPgCancel({
+    order: {
+      id: order.id,
+      center_id: order.center_id,
+      member_id: order.member_id,
+      amount_won: order.amount_won,
+      status: order.status,
+      coupon_issue_id: order.coupon_issue_id,
+    },
+    provider: "onnuri",
+    cancel: {
+      canceled: true,
+      isPartial: cancelWon < order.amount_won,
+      canceledAmountWon: cancelWon,
+      refundedAt: head.posted_at,
+      reason: "온누리 가맹점 앱에서 결제 취소",
+      txKey: `onnuri-cancel:${notiId}`,
+    },
+  });
+  if (!r.ok) {
+    await supabase
+      .from("crm_onnuri_notifications")
+      .update({
+        cancel_state: "open",
+        cancel_order_id: null,
+        cancel_resolved_at: null,
+        cancel_resolved_by: null,
+        match_note: `환불 실패: ${r.note}`.slice(0, 200),
+      } as never)
+      .eq("id", notiId);
+    return { ok: false, error: r.note };
+  }
+  await resolveCancelSiblings(centerId, head, { ...resolved, match_note: "같은 취소 알림" });
+  await supabase.from("crm_audit_logs").insert({
+    center_id: centerId,
+    actor_uid: actorUid,
+    action: "onnuri.cancel_refund",
+    entity_type: "crm_orders",
+    entity_id: orderId,
+    payload: { member_id: order.member_id, 환불금액: cancelWon, 처리경로: "온누리 가맹점 앱 결제 취소 → CRM 환불", 결과: r.note } as never,
+  });
+  return { ok: true, note: r.note };
+}
+
+/** 이 취소는 온라인 주문과 관계없음 (카운터에서 직접 받은 결제 등) — 목록에서 내린다 */
+export async function dismissOnnuriCancel(
+  centerId: number,
+  notiId: number,
+  actorUid: string
+): Promise<{ ok: boolean; error?: string }> {
+  const head = await loadOpenCancel(centerId, notiId);
+  if (!head) return { ok: false, error: "이미 처리된 취소 알림이에요" };
+  await resolveCancelSiblings(centerId, head, {
+    cancel_state: "dismissed",
+    cancel_resolved_at: nowIso(),
+    cancel_resolved_by: actorUid,
+    match_note: "관계없음 처리",
+  });
+  return { ok: true };
 }

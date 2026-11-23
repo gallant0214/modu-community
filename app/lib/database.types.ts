@@ -5001,6 +5001,12 @@ export type Database = {
           dedupe_key: string
           matched_order_id: number | null
           match_note: string | null
+          kind: string
+          cancel_amount_won: number | null
+          cancel_state: string | null
+          cancel_order_id: number | null
+          cancel_resolved_at: string | null
+          cancel_resolved_by: string | null
         }
         Insert: {
           id?: number
@@ -5015,6 +5021,12 @@ export type Database = {
           dedupe_key: string
           matched_order_id?: number | null
           match_note?: string | null
+          kind?: string
+          cancel_amount_won?: number | null
+          cancel_state?: string | null
+          cancel_order_id?: number | null
+          cancel_resolved_at?: string | null
+          cancel_resolved_by?: string | null
         }
         Update: {
           id?: number
@@ -5029,6 +5041,12 @@ export type Database = {
           dedupe_key?: string
           matched_order_id?: number | null
           match_note?: string | null
+          kind?: string
+          cancel_amount_won?: number | null
+          cancel_state?: string | null
+          cancel_order_id?: number | null
+          cancel_resolved_at?: string | null
+          cancel_resolved_by?: string | null
         }
         Relationships: []
       }
