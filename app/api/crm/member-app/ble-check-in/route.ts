@@ -16,6 +16,12 @@ export const dynamic = "force-dynamic";
 const BLE_DAILY_FAIL_MAX = 5;
 
 /**
+ * 출석한 회원이 다시 입구 근처에 와도 이 시간 안에는 새로 출석하지 않는다(2026-11-23 사장님 결정, 4시간).
+ * QR·번호 등 다른 방법으로 한 출석도 포함. 이때는 출석 기록·확인창·음성 모두 만들지 않는다.
+ */
+const BLE_REENTRY_BLOCK_MS = 4 * 60 * 60 * 1000;
+
+/**
  * POST /api/crm/member-app/ble-check-in  { major, minor }
  * 헤더 x-ble-device-token: 기능을 켤 때 받은 기기 전용 토큰.
  *
@@ -23,6 +29,7 @@ const BLE_DAILY_FAIL_MAX = 5;
  * - 기기 토큰 → 회원·센터 확인 (major 가 그 회원의 센터여야 함)
  * - minor(5분 회전 코드) 검증: 지금 창 ±1
  * - 실패는 기기당 하루 5회까지 — 신호를 엿듣거나 찍어 맞히는 집 출석 방지
+ * - 4시간 안에 이미 출석했으면(어떤 방법이든) 새로 출석하지 않고 duplicate
  * - 통과하면 QR 출석과 같은 처리(runCheckIn), source='ble'
  *
  * 응답 result: checked_in | duplicate — 네이티브가 결과 알림 문구를 고르는 데 쓴다.
@@ -94,6 +101,18 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (!(mem as { linked_firebase_uid?: string | null } | null)?.linked_firebase_uid) {
     return NextResponse.json({ error: "다시 설정이 필요해요", code: "revoked" }, { status: 401 });
+  }
+
+  // 4시간 안에 이미 출석한 회원 → 근처를 다시 지나가도 출석·확인창 없음
+  const { data: recent } = await supabase
+    .from("crm_attendances")
+    .select("id")
+    .eq("center_id", c.id)
+    .eq("member_id", device.member_id)
+    .gte("checked_in_at", new Date(Date.now() - BLE_REENTRY_BLOCK_MS).toISOString())
+    .limit(1);
+  if ((recent ?? []).length > 0) {
+    return NextResponse.json({ ok: true, result: "duplicate", center_name: c.name, can_enter: null, mileage_awarded: 0 });
   }
 
   const result = await memberSelfCheckIn(c.id, device.member_id, "ble");
