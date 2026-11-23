@@ -148,6 +148,18 @@ export async function recordAuthFailure(scope: string, ip: string): Promise<void
   await sharedIncr(`fail:${scope}:${ip}`, RATE_LIMIT_WINDOW);
 }
 
+/**
+ * 하루(UTC 기준 고정 창) 실패 횟수 — 블루투스 출석 코드 대입 방어처럼 '하루 N회'로 막아야 하는 곳.
+ * Redis 가 없을 때의 메모리 폴백은 아래 정리 주기(1분)에 지워지므로 그때는 약하게만 막힌다.
+ */
+const DAY_MS = 24 * 3600 * 1000;
+export async function dailyFailureCount(scope: string, key: string): Promise<number> {
+  return sharedGet(`fail-day:${scope}:${key}`, DAY_MS);
+}
+export async function recordDailyFailure(scope: string, key: string): Promise<number> {
+  return sharedIncr(`fail-day:${scope}:${key}`, DAY_MS);
+}
+
 // 오래된 엔트리 주기적 정리
 setInterval(() => {
   const now = Date.now();

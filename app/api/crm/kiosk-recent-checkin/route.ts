@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/crm/kiosk-recent-checkin?since=<attendanceId>
- * 로그인 상태 터치출석 화면이 폴링 — 회원앱 QR 출석(source='app')을 감지해
+ * 로그인 상태 터치출석 화면이 폴링 — 회원앱 QR·블루투스 출석(source='app'·'ble')을 감지해
  * 번호출석과 동일한 결과창을 태블릿에 띄우기 위한 데이터 반환.
  * since 없으면 baseline(latestId 만).
  */

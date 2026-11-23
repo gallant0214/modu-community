@@ -6,6 +6,7 @@ import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
 import FaceEnroll from "./face-enroll";
 import QrDisplay from "./qr-display";
+import { useKioskBeacon, BleBeaconSettings } from "./ble-beacon";
 import {
   speakMessages,
   playWarningBeep,
@@ -155,6 +156,8 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
     }
   }, [recogMode]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 블루투스 자동 출석 신호 — 전용 태블릿 APK(v1.3+)에서만 동작(일반 브라우저는 available=false)
+  const beacon = useKioskBeacon(kioskToken);
   // (얼굴 미등록자는 이제 설정과 무관하게 무조건 촬영 → photo_suggest_enabled 미사용)
 
   // 음성 안내 볼륨/속도 (기기별 localStorage). 모든 안내 음성에 공통 적용.
@@ -317,7 +320,9 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           };
           // 얼굴 미등록 회원이면 결과창보다 **촬영 창을 먼저** 띄운다(출석은 이미 처리됨).
           // 등록이 끝나면(또는 취소하면) 그때 결과창을 보여준다.
-          if (c.member?.id && !c.member?.has_face) {
+          // 단 블루투스 자동 출석(source='ble')은 회원이 태블릿 앞에 서지 않으므로 촬영 창을 띄우지 않는다
+          // (띄우면 아무도 닫지 않아 다음 회원 출석을 막는다).
+          if (c.member?.id && !c.member?.has_face && c.source !== "ble") {
             setResultAfterEnroll(qrResult);
             setEnrollOnly(true);
             setEnrollTarget({
@@ -1073,6 +1078,10 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
                 ▶ 미리듣기
               </button>
             </div>
+
+            {beacon.available && (
+              <BleBeaconSettings enabled={beacon.enabled} onChange={beacon.setEnabled} />
+            )}
           </div>
         </div>
       )}

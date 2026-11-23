@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/touch/[token]/recent-checkin?since=<attendanceId>
- * 공개 터치출석(/touch/[token]) 화면이 폴링 — 회원앱 QR 출석(source='app')을 감지해
+ * 공개 터치출석(/touch/[token]) 화면이 폴링 — 회원앱 QR·블루투스 출석(source='app'·'ble')을 감지해
  * 번호출석과 동일한 결과창을 태블릿에 띄우기 위한 데이터 반환.
  * URL 토큰(정적 kiosk_token)으로 센터 확인 — 2초 폴링이라 센터 조회만 60초 캐시(읽기 전용이므로 허용).
  * since 없으면 baseline.

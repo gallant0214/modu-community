@@ -3052,6 +3052,7 @@ const SOURCE_LABEL_A: Record<string, string> = {
   face: "얼굴인식",
   manual: "수동",
   app: "앱",
+  ble: "블루투스",
   qr: "QR",
 };
 const SOURCE_STYLE_A: Record<string, string> = {
@@ -3060,6 +3061,7 @@ const SOURCE_STYLE_A: Record<string, string> = {
   face: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
   manual: "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400",
   app: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  ble: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
   qr: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
 };
 

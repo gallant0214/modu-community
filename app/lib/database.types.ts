@@ -4960,6 +4960,39 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_member_ble_devices: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          token_hash: string
+          platform: string
+          created_at: string
+          last_used_at: string | null
+          revoked_at: string | null
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          token_hash: string
+          platform: string
+          created_at?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          token_hash?: string
+          platform?: string
+          created_at?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+        }
+        Relationships: []
+      }
       crm_onnuri_devices: {
         Row: {
           id: number

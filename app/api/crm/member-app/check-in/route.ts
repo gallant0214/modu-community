@@ -1,10 +1,8 @@
 import { errLogOnly } from "@/app/lib/api-error";
-import { NextResponse, after } from "next/server";
-import { supabase } from "@/app/lib/supabase";
+import { NextResponse } from "next/server";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { resolveKioskCenter } from "@/app/lib/kiosk-auth";
-import { runCheckIn } from "@/app/lib/crm-checkin";
-import { notifyCenterStaffAttendance } from "@/app/lib/crm-staff-notify";
+import { memberSelfCheckIn } from "@/app/lib/member-self-checkin";
 
 export const dynamic = "force-dynamic";
 
@@ -35,27 +33,10 @@ export async function POST(request: Request) {
   const ctx = await requireMemberForCenter(request, center.centerId);
   if (isMemberError(ctx)) return ctx;
 
-  const { data: member } = await supabase
-    .from("crm_members")
-    .select("id, name, phone, birth")
-    .eq("id", ctx.memberId)
-    .eq("center_id", center.centerId)
-    .eq("status", "active")
-    .maybeSingle();
-  if (!member) {
-    return NextResponse.json({ error: "회원 정보를 찾을 수 없어요" }, { status: 404 });
-  }
-
-  const result = await runCheckIn(center.centerId, member, "app");
+  const result = await memberSelfCheckIn(center.centerId, ctx.memberId, "app");
   if ("error" in result) {
-    return NextResponse.json({ error: result.error, detail: errLogOnly(result.detail) }, { status: result.status });
-  }
-  if (!("duplicate" in result && result.duplicate)) {
-    const memberName = member.name;
-    const mId = member.id;
-    after(() =>
-      notifyCenterStaffAttendance({ centerId: center.centerId, memberId: mId, memberName, kind: "in" })
-    );
+    const detail = "detail" in result ? result.detail : undefined;
+    return NextResponse.json({ error: result.error, detail: errLogOnly(detail) }, { status: result.status });
   }
   return NextResponse.json({ ...result, center_name: center.centerName });
 }

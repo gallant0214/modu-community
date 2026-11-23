@@ -34,6 +34,7 @@ const SOURCE_LABEL: Record<string, string> = {
   touch_number: "터치·번호",  // 출석번호 입력으로 체크인
   touch_face: "터치·얼굴",    // 얼굴 인식으로 체크인
   app: "앱",
+  ble: "블루투스",            // 회원앱 블루투스 자동 출석(태블릿 근처에서 폰이 감지)
 };
 
 const SOURCE_STYLE: Record<string, string> = {
@@ -43,6 +44,7 @@ const SOURCE_STYLE: Record<string, string> = {
   touch_number: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]",
   touch_face: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
   app: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  ble: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
 };
 
 /**
@@ -78,7 +80,7 @@ export default function CrmAttendancesPage() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<
-    "all" | "kiosk" | "manual" | "touch" | "touch_number" | "touch_face" | "app"
+    "all" | "kiosk" | "manual" | "touch" | "touch_number" | "touch_face" | "app" | "ble"
   >("all");
   const [refreshedAt, setRefreshedAt] = useState<string>("");
   const [month, setMonth] = useState(() => todayKst().slice(0, 7));
@@ -260,14 +262,14 @@ export default function CrmAttendancesPage() {
   const stats = useMemo(() => {
     const uniqueMembers = new Set(rows.map((a) => a.member_id));
     // 세분화된 소스는 상위 카테고리(touch) 로도 합산 유지 (KPI 카드 호환)
-    const sources = { kiosk: 0, manual: 0, touch: 0, app: 0, touch_number: 0, touch_face: 0 };
+    const sources = { kiosk: 0, manual: 0, touch: 0, app: 0, ble: 0, touch_number: 0, touch_face: 0 };
     for (const a of rows) {
       const s = a.source ?? "kiosk";
       if (s === "touch_number" || s === "touch_face") {
         sources[s] += 1;
         sources.touch += 1;
       } else if (s in sources) {
-        sources[s as "kiosk" | "manual" | "touch" | "app"] += 1;
+        sources[s as "kiosk" | "manual" | "touch" | "app" | "ble"] += 1;
       }
     }
     return {
@@ -410,8 +412,8 @@ export default function CrmAttendancesPage() {
           <KpiCard label="얼굴/QR" value={`${stats.sources.touch_face + stats.sources.kiosk}회`} hint={`얼굴 ${stats.sources.touch_face} · QR ${stats.sources.kiosk}`} tone="olive" />
           <KpiCard
             label="수동/앱"
-            value={`${stats.sources.manual + stats.sources.touch - stats.sources.touch_face + stats.sources.app}회`}
-            hint={`수동 ${stats.sources.manual + stats.sources.touch - stats.sources.touch_face} · 앱 ${stats.sources.app}`}
+            value={`${stats.sources.manual + stats.sources.touch - stats.sources.touch_face + stats.sources.app + stats.sources.ble}회`}
+            hint={`수동 ${stats.sources.manual + stats.sources.touch - stats.sources.touch_face} · 앱 ${stats.sources.app}${stats.sources.ble ? ` · 블루투스 ${stats.sources.ble}` : ""}`}
             tone="amber"
           />
         </div>
@@ -424,7 +426,7 @@ export default function CrmAttendancesPage() {
 
       <section className="mb-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-3 shadow-sm">
         <div className="flex items-center gap-2 flex-wrap">
-        {(["all", "kiosk", "manual", "touch_number", "touch_face", "touch", "app"] as const).map((s) => (
+        {(["all", "kiosk", "manual", "touch_number", "touch_face", "touch", "app", "ble"] as const).map((s) => (
           <button
             key={s}
             onClick={() => setSourceFilter(s)}
