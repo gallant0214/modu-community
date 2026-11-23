@@ -111,6 +111,9 @@ export async function centerOnnuriEnabled(centerId: number): Promise<boolean> {
  * 알림 문구에서 결제 금액을 읽는다. 못 읽으면 null (직원이 수동 연결).
  * '잔액·포인트' 앞의 숫자는 결제 금액이 아니므로 건너뛴다.
  */
+/** 결제가 아닌 알림 — 취소·환불·실패·거절·오류 */
+export const NON_PAYMENT_RE = /취소|환불|실패|거절|오류|불가|반려/;
+
 export function parseAmountWon(text: string): number | null {
   const re = /([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\s*원/g;
   let first: number | null = null;
@@ -214,7 +217,10 @@ export async function ingestNotification(
   if (device.source_package && n.package !== device.source_package) {
     return { saved: false, amountWon: null, matchedOrderId: null };
   }
-  const amount = parseAmountWon(`${n.title}\n${n.text}`);
+  // 🚨 취소·환불·실패 알림도 금액이 들어 있다 — 결제로 읽으면 돈 안 낸 주문이 발급될 수 있다.
+  //    금액을 비워(=후보 아님) 기록만 남긴다.
+  const nonPayment = NON_PAYMENT_RE.test(`${n.title}\n${n.text}`);
+  const amount = nonPayment ? null : parseAmountWon(`${n.title}\n${n.text}`);
   const postedAt = new Date(Number.isFinite(n.postedAt) && n.postedAt > 0 ? n.postedAt : Date.now());
   const { data, error } = await supabase
     .from("crm_onnuri_notifications")
@@ -227,6 +233,7 @@ export async function ingestNotification(
       amount_won: amount,
       posted_at: postedAt.toISOString(),
       dedupe_key: `${n.key}|${n.postedAt}`.slice(0, 300),
+      match_note: nonPayment ? "취소·실패 알림 (결제 아님)" : null,
     } as never)
     .select("id")
     .maybeSingle();
