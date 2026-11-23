@@ -2573,6 +2573,8 @@ const LOG_ENTITY_LABEL: Record<string, string> = {
   pass: "수강권",
   crm_memberships: "회원권",
   crm_rentals: "대여권",
+  crm_passes: "수강권",
+  crm_payments: "결제",
   membership: "회원권",
   rental: "대여권",
   reservation: "예약",
@@ -2588,6 +2590,10 @@ interface AuditLog {
   payload: Record<string, unknown> | null;
   created_at: string;
   subject_name?: string | null;
+  /** 실행한 직원 이름 (자동 처리면 '시스템 …') */
+  actor_name?: string | null;
+  /** 대상 상품 이름 (결제는 연결된 상품) */
+  item_label?: string | null;
 }
 
 /** 회원 관리 '수정 기록' — 센터 전체 변동 이력(등록·수정·삭제 등) 조회. */
@@ -2640,20 +2646,27 @@ function MemberLogModal({ open, onClose }: { open: boolean; onClose: () => void 
           {logs.map((log) => {
             const name = logName(log);
             const entity = log.entity_type ? LOG_ENTITY_LABEL[log.entity_type] ?? "" : "";
+            const item = log.item_label?.trim() || "";
             return (
               <li
                 key={log.id}
-                className="flex items-baseline justify-between gap-3 py-2 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 last:border-0 text-[12.5px]"
+                className="flex items-start justify-between gap-3 py-2 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 last:border-0 text-[12.5px]"
               >
                 <span className="text-[#3A342A] dark:text-zinc-300 min-w-0">
                   <span className="font-medium">
                     {actionLabel(log.action)}
                   </span>
                   {(name || entity) && (
-                    <span className="ml-1.5 text-[#8C8270] dark:text-zinc-500 truncate">
+                    <span className="ml-1.5 text-[#8C8270] dark:text-zinc-500">
                       · {name || entity}
                     </span>
                   )}
+                  {item && (
+                    <span className="ml-1.5 text-[#8C8270] dark:text-zinc-500">· {item}</span>
+                  )}
+                  <span className="block mt-0.5 text-[11.5px] text-[#A89B80] dark:text-zinc-500">
+                    처리: {log.actor_name || "알 수 없음"}
+                  </span>
                 </span>
                 <span className="text-[#A89B80] dark:text-zinc-500 shrink-0">
                   {formatDateTime(log.created_at)}

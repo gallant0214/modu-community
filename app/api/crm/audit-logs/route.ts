@@ -48,42 +48,86 @@ export async function GET(request: Request) {
 
   const logs = data ?? [];
 
-  // 대상 회원 이름 resolve — entity_type 별로 member_id 를 찾아 이름 매핑
-  const directMemberIds = new Set<number>(); // entity_type === 'member'
-  const bucket: Record<string, Set<number>> = {
-    crm_memberships: new Set(),
-    crm_rentals: new Set(),
-    pass: new Set(),
-    reservation: new Set(),
+  // 대상 회원 이름·상품명 resolve — entity_type 별로 member_id(와 상품명)를 찾아 매핑.
+  // 🚨 같은 테이블이 두 이름(pass / crm_passes 등)으로 남아 있어 둘 다 받는다.
+  type ResolverTable =
+    | "crm_memberships" | "crm_rentals" | "crm_passes" | "crm_reservations" | "crm_payments"
+    | "crm_pauses" | "crm_signed_contracts" | "crm_member_workout_logs" | "crm_pt_consultations";
+  const RESOLVERS: Record<string, { table: ResolverTable; cols: string; label?: (r: Record<string, unknown>) => string | null }> = {
+    crm_memberships: { table: "crm_memberships", cols: "id, member_id, plan_name", label: (r) => str(r.plan_name) },
+    membership: { table: "crm_memberships", cols: "id, member_id, plan_name", label: (r) => str(r.plan_name) },
+    crm_rentals: { table: "crm_rentals", cols: "id, member_id, item_name", label: (r) => str(r.item_name) },
+    rental: { table: "crm_rentals", cols: "id, member_id, item_name", label: (r) => str(r.item_name) },
+    pass: { table: "crm_passes", cols: "id, member_id, lesson_kind", label: (r) => str(r.lesson_kind) },
+    crm_passes: { table: "crm_passes", cols: "id, member_id, lesson_kind", label: (r) => str(r.lesson_kind) },
+    reservation: { table: "crm_reservations", cols: "id, member_id" },
+    crm_payments: { table: "crm_payments", cols: "id, member_id, pass_id, membership_id, rental_id, product_label, amount_won" },
+    crm_pauses: { table: "crm_pauses", cols: "id, member_id" },
+    crm_signed_contracts: { table: "crm_signed_contracts", cols: "id, member_id, title", label: (r) => str(r.title) },
+    crm_member_workout_logs: { table: "crm_member_workout_logs", cols: "id, member_id" },
+    crm_pt_consultations: { table: "crm_pt_consultations", cols: "id, member_id, name" },
   };
+  const bucket: Record<string, Set<number>> = {};
+  const directMemberIds = new Set<number>(); // entity_type === 'member' | 'crm_members'
   for (const l of logs) {
-    if (!l.entity_id) continue;
-    if (l.entity_type === "member") directMemberIds.add(l.entity_id);
-    else if (l.entity_type && bucket[l.entity_type]) bucket[l.entity_type].add(l.entity_id);
+    if (!l.entity_id || !l.entity_type) continue;
+    if (l.entity_type === "member" || l.entity_type === "crm_members") directMemberIds.add(l.entity_id);
+    else if (RESOLVERS[l.entity_type]) (bucket[l.entity_type] ??= new Set()).add(l.entity_id);
   }
 
-  // entity_id → member_id 해석 (테이블별 배치 조회)
   const entityToMember = new Map<string, number>(); // `${entity_type}:${entity_id}` → member_id
-  const resolvers: { type: string; table: "crm_memberships" | "crm_rentals" | "crm_passes" | "crm_reservations" }[] = [
-    { type: "crm_memberships", table: "crm_memberships" },
-    { type: "crm_rentals", table: "crm_rentals" },
-    { type: "pass", table: "crm_passes" },
-    { type: "reservation", table: "crm_reservations" },
-  ];
+  const entityLabel = new Map<string, string>(); // `${entity_type}:${entity_id}` → 상품명
+  const consultName = new Map<string, string>(); // 상담지 — 비회원은 상담자 이름
+  const paymentRows: { key: string; pass_id: number | null; membership_id: number | null; rental_id: number | null }[] = [];
   await Promise.all(
-    resolvers.map(async ({ type, table }) => {
-      const ids = Array.from(bucket[type]);
-      if (ids.length === 0) return;
+    Object.entries(bucket).map(async ([type, idSet]) => {
+      const r = RESOLVERS[type];
       const { data: rows } = await supabase
-        .from(table)
-        .select("id, member_id")
+        .from(r.table)
+        .select(r.cols)
         .eq("center_id", ctx.centerId)
-        .in("id", ids);
-      for (const r of rows ?? []) {
-        if (r.member_id) entityToMember.set(`${type}:${r.id}`, r.member_id);
+        .in("id", Array.from(idSet));
+      for (const row of (rows ?? []) as unknown as Record<string, unknown>[]) {
+        const key = `${type}:${row.id}`;
+        if (typeof row.member_id === "number") entityToMember.set(key, row.member_id);
+        const label = r.label?.(row);
+        if (label) entityLabel.set(key, label);
+        if (type === "crm_pt_consultations" && str(row.name)) consultName.set(key, str(row.name)!);
+        if (type === "crm_payments") {
+          if (str(row.product_label)) entityLabel.set(key, str(row.product_label)!);
+          paymentRows.push({
+            key,
+            pass_id: (row.pass_id as number | null) ?? null,
+            membership_id: (row.membership_id as number | null) ?? null,
+            rental_id: (row.rental_id as number | null) ?? null,
+          });
+        }
       }
     })
   );
+
+  // 결제 → 연결된 상품 이름 (회원권·수강권·대여권)
+  {
+    const need = paymentRows.filter((p) => !entityLabel.has(p.key));
+    const ids = (k: "pass_id" | "membership_id" | "rental_id") =>
+      Array.from(new Set(need.map((p) => p[k]).filter((v): v is number => typeof v === "number")));
+    const [ps, ms, rs] = await Promise.all([
+      ids("pass_id").length ? supabase.from("crm_passes").select("id, lesson_kind").in("id", ids("pass_id")) : Promise.resolve({ data: [] }),
+      ids("membership_id").length ? supabase.from("crm_memberships").select("id, plan_name").in("id", ids("membership_id")) : Promise.resolve({ data: [] }),
+      ids("rental_id").length ? supabase.from("crm_rentals").select("id, item_name").in("id", ids("rental_id")) : Promise.resolve({ data: [] }),
+    ]);
+    const pm = new Map(((ps.data ?? []) as { id: number; lesson_kind: string | null }[]).map((x) => [x.id, x.lesson_kind]));
+    const mm = new Map(((ms.data ?? []) as { id: number; plan_name: string | null }[]).map((x) => [x.id, x.plan_name]));
+    const rm = new Map(((rs.data ?? []) as { id: number; item_name: string | null }[]).map((x) => [x.id, x.item_name]));
+    for (const p of need) {
+      const label =
+        (p.membership_id && mm.get(p.membership_id)) ||
+        (p.pass_id && pm.get(p.pass_id)) ||
+        (p.rental_id && rm.get(p.rental_id)) ||
+        null;
+      if (label) entityLabel.set(p.key, label);
+    }
+  }
 
   // 전체 member_id 모아 이름 조회
   const allMemberIds = new Set<number>(directMemberIds);
@@ -157,18 +201,25 @@ export async function GET(request: Request) {
 
   const enriched = logs.map((l) => {
     let memberId: number | undefined;
-    if (l.entity_type === "member" && l.entity_id) memberId = l.entity_id;
-    else if (l.entity_id) memberId = entityToMember.get(`${l.entity_type}:${l.entity_id}`);
+    const key = `${l.entity_type}:${l.entity_id}`;
+    if ((l.entity_type === "member" || l.entity_type === "crm_members") && l.entity_id) memberId = l.entity_id;
+    else if (l.entity_id) memberId = entityToMember.get(key);
     const actorName = l.actor_uid?.startsWith("system:")
       ? SYSTEM_ACTOR_LABEL[l.actor_uid] ?? "시스템"
       : actorMap.get(l.actor_uid) ?? null;
     return {
       ...l,
-      subject_name: memberId ? nameMap.get(memberId) ?? null : null,
+      subject_name: memberId ? nameMap.get(memberId) ?? null : consultName.get(key) ?? null,
       subject_phone: memberId ? phoneMap.get(memberId) ?? null : null,
       actor_name: actorName,
+      /** 대상 상품 이름 (회원권·수강권·대여권·결제에 연결된 상품·계약서 제목) */
+      item_label: entityLabel.get(key) ?? null,
     };
   });
 
   return NextResponse.json({ logs: enriched, names });
+}
+
+function str(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
 }
