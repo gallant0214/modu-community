@@ -125,7 +125,7 @@ function statusText(s: BeaconStatus | null, enabled: boolean): string {
   if (s.supported === false) return "이 태블릿은 블루투스 신호를 보낼 수 없어요. 터치출석은 그대로 쓸 수 있어요.";
   if (s.permission === false) return "블루투스 권한이 필요해요. 앱을 완전히 종료한 뒤 다시 열어 허용해 주세요.";
   if (s.bluetoothOn === false) return "태블릿 블루투스가 꺼져 있어요. 설정에서 켜 주세요.";
-  if (s.advertising) return "작동 중 — 회원이 앱을 켜 두면 입구에서 자동으로 출석돼요.";
+  if (s.advertising) return "작동 중 — 회원 앱에서 블루투스 자동 출석을 켠 회원은 입구에서 자동으로 출석돼요.";
   return "준비 중…";
 }
 
