@@ -163,6 +163,9 @@ export async function releaseMemberPendingHolds(opts: {
     .eq("center_id", opts.centerId)
     .eq("member_id", opts.memberId)
     .eq("status", "pending")
+    // 🚨 온누리로 결제 중인 주문은 건드리지 않는다 — 회원이 이미 현장에서 돈을 냈을 수 있다.
+    //    여기서 만료시켜 버리면 정리 크론이 취소해, 직원이 승인할 주문이 사라진다.
+    .is("onnuri_state", null)
     .gt("mileage_used", 0)
     .gt("expires_at", new Date().toISOString());
   if (opts.exceptOrderId) q = q.neq("id", opts.exceptOrderId);

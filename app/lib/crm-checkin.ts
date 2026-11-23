@@ -337,7 +337,21 @@ export async function buildCheckinSummary(centerId: number, memberId: number) {
   // 🚨 입장 자격 = 유효한 회원권/수강권만. 락커·대여권(운동복)은 부가상품이라 제외한다.
   //    (예전에는 lockers 를 만료일 필터 없이 세어서, 회원권이 만료돼도 락커가 배정돼
   //     있으면 can_enter=true → 만료 경고음 대신 정상 확인음이 울렸다.)
+  // 모바일 온누리로 결제하고 '결제했어요'를 눌렀는데 아직 확인 전이면 임시 입장 허용.
+  // 확인 화면에도 보이게 '보유 회원권' 맨 앞에 한 줄 끼워 넣는다(실제 이용권 아님 — id 음수).
+  const { onnuriTempEntry } = await import("@/app/lib/crm-onnuri");
+  const tempEntry = await onnuriTempEntry(centerId, memberId).catch(() => null);
+  if (tempEntry) {
+    memberships.unshift({
+      id: -tempEntry.orderId,
+      plan_name: `온누리 결제 확인 중 · 임시 입장 (${tempEntry.productName})`,
+      expires_at: todayYmd,
+      is_paused: false,
+    });
+  }
+
   const canEnter =
+    !!tempEntry ||
     memberships.some((m) => !m.is_paused) ||
     passes.some((p) => !p.is_paused && p.remaining_sessions > 0);
 

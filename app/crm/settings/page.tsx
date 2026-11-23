@@ -18,6 +18,7 @@ import { useCrmTheme } from "../_components/crm-theme";
 import { useCrmToast } from "../_components/crm-toast";
 import { speakMessages, primeSpeech } from "../touch-attendance/_speak";
 import { ApiKeysPanel } from "./_api-keys-panel";
+import { OnnuriPanel } from "./_onnuri-panel";
 
 interface Settings {
   center_id: number;
@@ -132,6 +133,7 @@ type SettingsTab =
   | "vendors"
   | "display"
   | "api"
+  | "onnuri"
   | "inquiries";
 
 const SETTINGS_TABS: {
@@ -155,6 +157,7 @@ const SETTINGS_TABS: {
   { key: "vendors", label: "거래처", desc: "업체 관리", icon: "vendor" },
   { key: "logs", label: "활동 로그", desc: "변경 기록", icon: "log" },
   { key: "api", label: "API 연동", desc: "엑셀·시트 연동 키", icon: "key" },
+  { key: "onnuri", label: "온누리 결제", desc: "카운터 공기계 연결", icon: "card" },
   { key: "inquiries", label: "문의하기", desc: "관리자에게 문의", icon: "inquiry" },
 ];
 
@@ -798,6 +801,8 @@ export default function CrmSettingsPage() {
       {tab === "vendors" && <VendorsPanel />}
 
       {tab === "api" && <ApiKeysPanel />}
+
+      {tab === "onnuri" && <OnnuriPanel />}
 
       {tab === "inquiries" && <InquiriesPanel />}
 

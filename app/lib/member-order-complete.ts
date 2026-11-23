@@ -20,6 +20,7 @@ import {
   fulfillPurchase,
   fulfillProductComponents,
   recordPayment,
+  type PayMethod,
   type SellableProduct,
 } from "@/app/lib/member-purchase";
 import { settleOrderMileage } from "@/app/lib/member-checkout";
@@ -88,6 +89,8 @@ export async function completeOrder(opts: {
   memberName: string;
   /** PG 를 거친 주문이면 승인 결과. 0원 주문이면 없음 */
   pg?: PgResult;
+  /** 결제수단 — 안 주면 카드. 모바일 온누리 현장 결제는 기타·온누리 */
+  payMethod?: PayMethod;
 }): Promise<CompleteResult> {
   const { order, pg } = opts;
   const centerId = order.center_id;
@@ -149,6 +152,7 @@ export async function completeOrder(opts: {
         channel: order.channel,
         // 회원이 고른 시작일 — 회원권·수강권·운동복·락커 모두 같은 날짜로 발급
         startDate: order.start_date ?? null,
+        payMethod: opts.payMethod,
       });
     } catch (e) {
       return failOrder(
@@ -168,6 +172,7 @@ export async function completeOrder(opts: {
       amountWon: item.amount_won,
       outcome,
       note: `${channelLabel} · ${item.product_name}`,
+      payMethod: opts.payMethod,
     });
 
     await supabase
@@ -206,6 +211,7 @@ export async function completeOrder(opts: {
         startDate: order.start_date ?? null,
         pgMethod: pg?.method ?? (order.amount_won === 0 ? "쿠폰·마일리지" : null),
         channel: order.channel,
+        payMethod: opts.payMethod,
       });
       for (const co of compOutcomes) {
         await recordPayment({
@@ -218,6 +224,7 @@ export async function completeOrder(opts: {
           amountWon: 0,
           outcome: co,
           note: `${channelLabel} · 번들 구성품`,
+          payMethod: opts.payMethod,
         });
         issued.push({ kind: co.kind, id: co.id, name: "번들 구성품", summary: co.summary as unknown as Record<string, unknown> });
       }

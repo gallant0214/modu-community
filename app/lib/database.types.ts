@@ -2534,6 +2534,14 @@ export type Database = {
       }
       crm_orders: {
         Row: {
+          onnuri_state: string | null
+          onnuri_started_at: string | null
+          onnuri_claimed_at: string | null
+          onnuri_alerted_at: string | null
+          onnuri_notification_id: number | null
+          onnuri_resolved_at: string | null
+          onnuri_resolved_by: string | null
+          onnuri_reject_reason: string | null
           id: number
           center_id: number
           member_id: number
@@ -2568,6 +2576,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          onnuri_state?: string | null
+          onnuri_started_at?: string | null
+          onnuri_claimed_at?: string | null
+          onnuri_alerted_at?: string | null
+          onnuri_notification_id?: number | null
+          onnuri_resolved_at?: string | null
+          onnuri_resolved_by?: string | null
+          onnuri_reject_reason?: string | null
           id?: number
           center_id: number
           member_id: number
@@ -2602,6 +2618,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          onnuri_state?: string | null
+          onnuri_started_at?: string | null
+          onnuri_claimed_at?: string | null
+          onnuri_alerted_at?: string | null
+          onnuri_notification_id?: number | null
+          onnuri_resolved_at?: string | null
+          onnuri_resolved_by?: string | null
+          onnuri_reject_reason?: string | null
           id?: number
           center_id?: number
           member_id?: number
@@ -4915,6 +4939,96 @@ export type Database = {
           last_used_ip?: string | null
           revoked_at?: string | null
           revoked_by_uid?: string | null
+        }
+        Relationships: []
+      }
+      crm_onnuri_devices: {
+        Row: {
+          id: number
+          center_id: number
+          name: string
+          pair_code: string | null
+          pair_code_expires_at: string | null
+          token_hash: string | null
+          source_package: string | null
+          created_by_uid: string
+          created_at: string
+          paired_at: string | null
+          last_seen_at: string | null
+          revoked_at: string | null
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          name: string
+          pair_code?: string | null
+          pair_code_expires_at?: string | null
+          token_hash?: string | null
+          source_package?: string | null
+          created_by_uid: string
+          created_at?: string
+          paired_at?: string | null
+          last_seen_at?: string | null
+          revoked_at?: string | null
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          name?: string
+          pair_code?: string | null
+          pair_code_expires_at?: string | null
+          token_hash?: string | null
+          source_package?: string | null
+          created_by_uid?: string
+          created_at?: string
+          paired_at?: string | null
+          last_seen_at?: string | null
+          revoked_at?: string | null
+        }
+        Relationships: []
+      }
+      crm_onnuri_notifications: {
+        Row: {
+          id: number
+          center_id: number
+          device_id: number | null
+          package: string | null
+          title: string | null
+          body: string | null
+          amount_won: number | null
+          posted_at: string
+          received_at: string
+          dedupe_key: string
+          matched_order_id: number | null
+          match_note: string | null
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          device_id?: number | null
+          package?: string | null
+          title?: string | null
+          body?: string | null
+          amount_won?: number | null
+          posted_at: string
+          received_at?: string
+          dedupe_key: string
+          matched_order_id?: number | null
+          match_note?: string | null
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          device_id?: number | null
+          package?: string | null
+          title?: string | null
+          body?: string | null
+          amount_won?: number | null
+          posted_at?: string
+          received_at?: string
+          dedupe_key?: string
+          matched_order_id?: number | null
+          match_note?: string | null
         }
         Relationships: []
       }

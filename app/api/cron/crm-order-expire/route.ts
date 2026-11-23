@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { expireStaleOrders } from "@/app/lib/member-checkout";
+import { alertOverdueOnnuri } from "@/app/lib/crm-onnuri";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
  * 결제도 안 됐는데 쿠폰이 '사용 완료'로 묶인 채 남는다.
  *
  * 마일리지는 승인 시점에만 차감하므로 여기서 되돌릴 게 없다(선점만 풀린다).
+ *
+ * + 모바일 온누리: 10분 안에 자동으로 못 맞춘 결제를 권한 직원에게 알린다(강사앱 푸시).
  */
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) {
@@ -19,5 +22,11 @@ export async function GET(request: Request) {
   }
 
   const expired = await expireStaleOrders({ limit: 500 });
-  return NextResponse.json({ ok: true, expired });
+  let onnuriAlerted = 0;
+  try {
+    onnuriAlerted = await alertOverdueOnnuri();
+  } catch (e) {
+    console.error("[cron] onnuri alert error", e);
+  }
+  return NextResponse.json({ ok: true, expired, onnuriAlerted });
 }

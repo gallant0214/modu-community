@@ -11,6 +11,8 @@ import {
   SALES_RESTRICTED_MESSAGE,
 } from "@/app/lib/member-checkout";
 import PayClient from "./PayClient";
+import OnnuriPayClient from "./OnnuriPayClient";
+import { centerOnnuriEnabled } from "@/app/lib/crm-onnuri";
 import TossPayClient from "@/app/pay/TossPayClient";
 import SellerInfo, { loadSellerInfo } from "@/app/pay/SellerInfo";
 import { pgProductName } from "@/app/lib/pg-product-name";
@@ -66,7 +68,7 @@ export default async function PayPage({
     .from("crm_orders")
     .select(
       "id, center_id, member_id, product_id, product_type, product_name, list_price_won, " +
-        "coupon_discount_won, mileage_used, mileage_earned, amount_won, status, expires_at, pg_provider"
+        "coupon_discount_won, mileage_used, mileage_earned, amount_won, status, expires_at, pg_provider, onnuri_state"
     )
     .eq("order_uid", orderUid)
     .maybeSingle();
@@ -85,6 +87,7 @@ export default async function PayPage({
     status: string;
     expires_at: string | null;
     pg_provider: string | null;
+    onnuri_state: string | null;
   } | null;
 
   if (!order) notFound();
@@ -103,7 +106,7 @@ export default async function PayPage({
       />
     );
   }
-  if (order.expires_at && new Date(order.expires_at).getTime() < Date.now()) {
+  if (order.expires_at && new Date(order.expires_at).getTime() < Date.now() && order.onnuri_state !== "claimed") {
     return <Notice title="결제 시간이 지났어요" body="처음부터 다시 주문해주세요." />;
   }
   /* 주문 생성 뒤에 허용목록이 바뀌었을 수도 있다 — 결제창을 띄우기 전에 한 번 더 본다 */
@@ -175,6 +178,8 @@ export default async function PayPage({
   });
 
   const seller = await loadSellerInfo(order.center_id);
+  /* 모바일 온누리 — 카운터 공기계가 연결된 센터에서만 보인다 */
+  const onnuriEnabled = await centerOnnuriEnabled(order.center_id);
 
   /* 센터 판매 페이지 주소 — 결제 동의 문구와 하단에 약관·정책 링크를 띄우는 데 쓴다.
      🚨 PG 심사가 '이용약관·개인정보처리방침 유무'를 자동 검사한다. 결제 페이지에도 보여야 한다. */
@@ -218,7 +223,8 @@ export default async function PayPage({
         </dl>
       </section>
 
-      {provider === "toss" ? (
+      {(() => {
+        const cardPay = provider === "toss" ? (
         <TossPayClient
           orderUid={orderUid}
           token={t as string}
@@ -252,7 +258,23 @@ export default async function PayPage({
           returnToApp={rn === "1"}
           returnTo={returnTo}
         />
-      )}
+      );
+        return onnuriEnabled ? (
+          <OnnuriPayClient
+            orderUid={orderUid}
+            token={t as string}
+            amount={order.amount_won}
+            productName={order.product_name}
+            initialState={order.onnuri_state}
+            cardPay={cardPay}
+            policyHref={slug ? `/shop/${slug}/policy` : undefined}
+            returnToApp={rn === "1"}
+            returnTo={returnTo}
+          />
+        ) : (
+          cardPay
+        );
+      })()}
 
       <SellerInfo seller={seller} slug={slug} />
     </main>

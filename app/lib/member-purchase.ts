@@ -110,6 +110,17 @@ export interface FulfillOutcome {
  * 결제가 확인된 주문을 실제 상품으로 발급한다.
  * 이 함수를 호출하기 전에 **반드시 PG 서버 승인 확인이 끝나 있어야 한다.**
  */
+/**
+ * 발급·결제원장에 남길 결제수단. 안 주면 카드(PG 결제)로 기록한다.
+ * 모바일 온누리 현장 결제는 { method: "etc", custom: "온누리" } — 직원이 손으로 넣던
+ * 기존 온누리 결제(기타·온누리)와 같은 표기라 통계에서 한 줄로 묶인다.
+ */
+export interface PayMethod {
+  method: "card" | "cash" | "transfer" | "etc";
+  custom?: string | null;
+}
+const CARD: PayMethod = { method: "card", custom: null };
+
 export async function fulfillPurchase(opts: {
   centerId: number;
   memberId: number;
@@ -131,8 +142,11 @@ export async function fulfillPurchase(opts: {
    * 이 날짜로 발급한다(만료일도 여기서 계산). 안 주면 기존 규칙(이어붙이기/오늘).
    */
   startDate?: string | null;
+  /** 결제수단 — 안 주면 카드 */
+  payMethod?: PayMethod;
 }): Promise<FulfillOutcome> {
   const { centerId, memberId, product } = opts;
+  const pay = opts.payMethod ?? CARD;
   const today = kstToday();
   const isCount = product.billing_mode === "count";
   const discountWon = Math.max(0, Math.floor(opts.discountWon || 0));
@@ -180,7 +194,8 @@ export async function fulfillPurchase(opts: {
         mileage_used: mileageUsed,
         attendance_mileage_earn: Math.max(0, Math.floor(product.attendance_mileage_earn || 0)),
         vat_included: !!product.vat_included,
-        payment_method: "card",
+        payment_method: pay.method,
+        payment_method_custom: pay.method === "etc" ? pay.custom ?? null : null,
         start_date: startDate,
         expires_at: expiresAt,
         purchased_at: today,
@@ -228,7 +243,8 @@ export async function fulfillPurchase(opts: {
         mileage_earned: mileageEarned,
         mileage_used: mileageUsed,
         vat_included: !!product.vat_included,
-        payment_method: "card",
+        payment_method: pay.method,
+        payment_method_custom: pay.method === "etc" ? pay.custom ?? null : null,
         start_date: startDate,
         expires_at: expiresAt,
         status: "valid",
@@ -283,7 +299,8 @@ export async function fulfillPurchase(opts: {
       discount_won: discountWon,
       mileage_earned: mileageEarned,
       mileage_used: mileageUsed,
-      payment_method: "card",
+      payment_method: pay.method,
+      payment_method_custom: pay.method === "etc" ? pay.custom ?? null : null,
       vat_included: !!product.vat_included,
       issued_at: today,
       start_date: startDate,
@@ -324,6 +341,7 @@ export async function fulfillProductComponents(opts: {
   startDate?: string | null;
   pgMethod?: string | null;
   channel?: string | null;
+  payMethod?: PayMethod;
 }): Promise<FulfillOutcome[]> {
   const comps = Array.isArray(opts.product.components) ? opts.product.components : [];
   const out: FulfillOutcome[] = [];
@@ -364,6 +382,7 @@ export async function fulfillProductComponents(opts: {
       pgMethod: opts.pgMethod ?? null,
       channel: opts.channel ?? null,
       startDate: opts.startDate ?? null,
+      payMethod: opts.payMethod,
     });
     if (outcome.kind !== "none") out.push(outcome);
   }
@@ -385,7 +404,10 @@ export async function recordPayment(opts: {
   amountWon: number;
   outcome: FulfillOutcome;
   note?: string;
+  /** 결제수단 — 안 주면 카드 */
+  payMethod?: PayMethod;
 }): Promise<number | null> {
+  const pay = opts.payMethod ?? CARD;
   const { data } = await supabase
     .from("crm_payments")
     .insert({
@@ -395,7 +417,8 @@ export async function recordPayment(opts: {
       membership_id: opts.outcome.kind === "membership" ? opts.outcome.id : null,
       rental_id: opts.outcome.kind === "rental" ? opts.outcome.id : null,
       amount_won: opts.amountWon,
-      method: "card",
+      method: pay.method,
+      method_custom: pay.method === "etc" ? pay.custom ?? null : null,
       paid_at: new Date().toISOString(),
       recorded_by_uid: null,
       note: opts.note ?? "회원앱 구매",
