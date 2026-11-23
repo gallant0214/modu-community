@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { expireStaleOrders } from "@/app/lib/member-checkout";
-import { alertOverdueOnnuri } from "@/app/lib/crm-onnuri";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +13,7 @@ export const dynamic = "force-dynamic";
  *
  * 마일리지는 승인 시점에만 차감하므로 여기서 되돌릴 게 없다(선점만 풀린다).
  *
- * + 모바일 온누리: 10분 안에 자동으로 못 맞춘 결제를 권한 직원에게 알린다(강사앱 푸시).
+ * (모바일 온누리 '확인 요망' 강사앱 푸시는 2026-11-23 폐지 — 웹 CRM 배너에서만 처리)
  */
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) {
@@ -22,11 +21,5 @@ export async function GET(request: Request) {
   }
 
   const expired = await expireStaleOrders({ limit: 500 });
-  let onnuriAlerted = 0;
-  try {
-    onnuriAlerted = await alertOverdueOnnuri();
-  } catch (e) {
-    console.error("[cron] onnuri alert error", e);
-  }
-  return NextResponse.json({ ok: true, expired, onnuriAlerted });
+  return NextResponse.json({ ok: true, expired });
 }

@@ -129,7 +129,7 @@ export function OnnuriPanel() {
         </ol>
         <p className="mt-2 text-[12px] text-[#A89B80] leading-relaxed">
           연결되면 회원 결제 화면(홈페이지·회원앱·QR 가입)에 <b>모바일 온누리</b>가 나타나요. 회원이 카운터 QR로 결제하면
-          자동으로 이용권이 발급되고, 못 맞춘 건은 10분 뒤 대시보드·회원관리·출석현황 상단과 강사앱으로 알려 드려요.
+          자동으로 이용권이 발급되고, 못 맞춘 건은 10분 뒤 대시보드·회원관리·출석현황 상단에 알려 드려요.
         </p>
         {active.length === 0 && (
           <p className="mt-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-[12.5px] text-amber-800 dark:text-amber-300">

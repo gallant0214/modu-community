@@ -6,7 +6,7 @@
  *   2) 카운터 가맹점 QR 로 결제 후 '결제했어요'          → claimed (확인 전까지 임시 입장)
  *   3) 카운터 공기계의 온누리 가맹점 앱 알림을 '온누리 알림 앱'이 서버로 보낸다
  *   4) 금액·시각이 맞는 주문이 딱 한 건이면 자동 발급     → matched
- *   5) 10분 안에 못 맞추면 권한 직원(sales.onnuri_confirm)에게 강사앱 푸시 + CRM 상단 배너
+ *   5) 10분 안에 못 맞추면 CRM 상단 배너(웹만 — 강사앱 '확인 요망' 푸시는 11-23 폐지)
  *      → 직원이 [승인] 하면 발급(approved) / [거절] 하면 주문 취소(rejected)
  *
  * 🚨 자동 대조는 **회원이 '결제했어요'를 누른 주문만** 대상으로 한다.
@@ -629,16 +629,9 @@ export async function listPendingOnnuri(centerId: number): Promise<PendingOnnuri
   return out;
 }
 
-/** 확인 권한(sales.onnuri_confirm)이 있는 재직 직원에게 강사앱 푸시 */
-async function notifyConfirmNeeded(item: PendingOnnuriItem, centerId: number) {
-  await pushConfirmers(
-    centerId,
-    (centerName) => `[${centerName}] 미수 · 온누리 결제 확인 요망`,
-    `${item.memberName}님 ${item.productName} ${item.amountWon.toLocaleString("ko-KR")}원 — 결제를 확인하고 승인해 주세요`,
-    "onnuri_confirm",
-    { order_id: String(item.orderId), member_id: String(item.memberId) }
-  );
-}
+/* 🚨 '미수 · 온누리 결제 확인 요망'(onnuri_confirm) 강사앱 푸시는 2026-11-23 사용자 결정으로 폐지.
+   자동 확인이 안 된 건은 웹 CRM 빨간 배너에서만 처리하고, 강사앱에는 신청·구매 알림만 간다.
+   요청 없이 되살리지 말 것. */
 
 async function pushConfirmers(
   centerId: number,
@@ -671,38 +664,6 @@ async function pushConfirmers(
   }
 }
 
-/**
- * 10분이 지나도 못 맞춘 주문을 직원에게 알린다 (크론에서 10분마다).
- * alerted_at 을 조건부로 먼저 찍어 같은 주문이 두 번 알려지지 않게 한다.
- */
-export async function alertOverdueOnnuri(): Promise<number> {
-  const cutoff = new Date(Date.now() - ALERT_AFTER_MINUTES * 60_000).toISOString();
-  const { data } = await supabase
-    .from("crm_orders")
-    .select("center_id")
-    .eq("status", "pending")
-    .in("onnuri_state", ["waiting", "claimed"])
-    .is("onnuri_alerted_at", null)
-    .lte("onnuri_started_at", cutoff)
-    .limit(200);
-  const centers = [...new Set(((data ?? []) as { center_id: number }[]).map((r) => r.center_id))];
-  let sent = 0;
-  for (const centerId of centers) {
-    const items = (await listPendingOnnuri(centerId)).filter((i) => i.overdue);
-    for (const item of items) {
-      const { data: took } = await supabase
-        .from("crm_orders")
-        .update({ onnuri_alerted_at: nowIso() } as never)
-        .eq("id", item.orderId)
-        .is("onnuri_alerted_at", null)
-        .select("id");
-      if ((took ?? []).length === 0) continue;
-      await notifyConfirmNeeded(item, centerId);
-      sent++;
-    }
-  }
-  return sent;
-}
 
 /* ═══════════════════════ 임시 입장 ═══════════════════════ */
 
