@@ -122,6 +122,10 @@ export interface RefundSale {
   /** 원결제 수단 (cash/card/transfer/etc) — 결제수단별 매출에서도 빼기 위해 */
   method: string | null;
   refunded_at: string;
+  /** crm_payment_refunds.id — 외부 연동 API 가 환불 건을 한 줄씩 내보낼 때 쓴다 */
+  refund_id: number;
+  /** 원결제 crm_payments.id */
+  payment_id: number | null;
 }
 
 /**
@@ -141,6 +145,7 @@ export async function fetchRefundSales(
   if (from >= endExclYmd) return [];
 
   const refunds = await pageAll<{
+    id: number;
     amount_won: number | null;
     member_id: number | null;
     payment_id: number | null;
@@ -148,7 +153,7 @@ export async function fetchRefundSales(
   }>((f, t) =>
     supabase
       .from("crm_payment_refunds")
-      .select("amount_won, member_id, payment_id, refunded_at")
+      .select("id, amount_won, member_id, payment_id, refunded_at")
       .eq("center_id", centerId)
       .gte("refunded_at", `${from}T00:00:00+09:00`)
       .lt("refunded_at", `${endExclYmd}T00:00:00+09:00`)
@@ -218,6 +223,8 @@ export async function fetchRefundSales(
       member_id: r.member_id,
       method: p.method ?? null,
       refunded_at: r.refunded_at,
+      refund_id: Number(r.id),
+      payment_id: r.payment_id,
     });
   }
   return out;

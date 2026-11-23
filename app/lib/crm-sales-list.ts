@@ -2,6 +2,7 @@ import "server-only";
 import { supabase } from "./supabase";
 import { saleCategory } from "./crm-sales";
 import { PG_ORDER_SELECT, pgDetailFromOrder, type PgDetail, type PgOrderFields } from "./crm-pg-detail";
+import { fetchRefundSales } from "./crm-sales-issuance";
 
 /**
  * 기간 매출 라인아이템 — 통계 '매출 리스트'(/api/crm/stats/sales-list)와 외부 연동 API(/api/open/v1/sales) 공용.
@@ -30,6 +31,8 @@ export type SalesListItem = {
   staff_name: string | null;
   /** 온라인(PG) 결제 상세 — 토스·KG이니시스. 현장 결제는 null */
   pg: PgDetail | null;
+  /** crm_payments.id — 환불 건과 짝짓는 키. 원장(BROJ) 건은 null */
+  payment_id?: number | null;
 };
 
 /** KST 날짜 [startYmd, endExclYmd) 의 매출 라인아이템(최신순) */
@@ -123,6 +126,7 @@ export async function loadSalesListItems(
         payment_method: salePayMethod(r.payment_channel, r.cash_won ?? 0, r.card_won ?? 0, r.amount_won ?? 0),
         registration_type: (r.registration_type ?? "").trim() || null,
         source: "ledger",
+        payment_id: null,
         sales_channel: "현장",
         payer_name: memberName,
         staff_name: (r.seller_name ?? "").trim() || null,
@@ -224,6 +228,7 @@ export async function loadSalesListItems(
         payment_method: methodKo(p.method),
         registration_type: null,
         source: "issuance",
+        payment_id: p.id,
         sales_channel: pg ? pg.channel : p.source === "member_app" ? "회원앱" : "현장",
         payer_name: memberName,
         staff_name: p.recorded_by_uid ? staffName.get(p.recorded_by_uid) ?? null : null,
@@ -235,6 +240,196 @@ export async function loadSalesListItems(
   // 최신순 정렬
   items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return items;
+}
+
+/** 환불 라인아이템 — 외부 연동 API(/api/open/v1/sales)가 환불을 한 줄씩 내보낼 때 쓴다. */
+export type RefundListItem = {
+  /** 환불 처리 일시 (ISO) */
+  refunded_at: string;
+  refund_id: number;
+  /** 원결제 crm_payments.id */
+  payment_id: number | null;
+  /** 원결제 일시 (ISO) */
+  original_paid_at: string | null;
+  member_id: number | null;
+  member_name: string | null;
+  product_name: string;
+  category: string;
+  /** 음수 = 돌려준 금액 */
+  amount_won: number;
+  payment_method: string | null;
+  sales_channel: string | null;
+  staff_name: string | null;
+  is_partial: boolean;
+  /** pg = PG 결제 취소로 환불 / center = 센터에서 직접 환불 처리 */
+  refund_source: string | null;
+  reason: string | null;
+  pg_transaction_key: string | null;
+  pg: PgDetail | null;
+};
+
+/**
+ * KST [startYmd, endExclYmd) 에 **처리된** 환불을 한 줄씩.
+ * 🚨 어느 환불을 매출에서 뺄지는 fetchRefundSales 가 정한다(통계·정산·대시보드와 같은 규칙).
+ *    원장 커버 구간·상품 연결이 끊긴 옛 환불은 거기서 이미 빠진다 — 여기서 다시 판정하지 말 것.
+ */
+export async function loadRefundListItems(
+  centerId: number,
+  startYmd: string,
+  endExclYmd: string
+): Promise<RefundListItem[]> {
+  const sales = await fetchRefundSales(centerId, startYmd, endExclYmd);
+  if (sales.length === 0) return [];
+
+  const CAT_KO: Record<string, string> = {
+    membership: "회원권",
+    lesson: "수강권",
+    rental: "운동복",
+    locker: "락커",
+  };
+  const METHOD_KO: Record<string, string> = { cash: "현금", card: "카드", transfer: "계좌이체" };
+
+  const refundIds = sales.map((r) => r.refund_id);
+  const payIds = Array.from(new Set(sales.map((r) => r.payment_id).filter((v): v is number => !!v)));
+
+  type RefundRow = {
+    id: number;
+    is_partial: boolean;
+    reason: string | null;
+    source: string | null;
+    actor_uid: string | null;
+    pg_transaction_key: string | null;
+    order_id: number | null;
+  };
+  type PayRow = {
+    id: number;
+    paid_at: string | null;
+    order_id: number | null;
+    source: string | null;
+    pass_id: number | null;
+    membership_id: number | null;
+    rental_id: number | null;
+    product_label: string | null;
+  };
+  const refundById = new Map<number, RefundRow>();
+  const payById = new Map<number, PayRow>();
+  for (let i = 0; i < refundIds.length; i += 500) {
+    const { data } = await supabase
+      .from("crm_payment_refunds")
+      .select("id, is_partial, reason, source, actor_uid, pg_transaction_key, order_id")
+      .eq("center_id", centerId)
+      .in("id", refundIds.slice(i, i + 500));
+    for (const r of (data ?? []) as RefundRow[]) refundById.set(Number(r.id), r);
+  }
+  for (let i = 0; i < payIds.length; i += 500) {
+    const { data } = await supabase
+      .from("crm_payments")
+      .select("id, paid_at, order_id, source, pass_id, membership_id, rental_id, product_label")
+      .eq("center_id", centerId)
+      .in("id", payIds.slice(i, i + 500));
+    for (const p of (data ?? []) as PayRow[]) payById.set(Number(p.id), p);
+  }
+
+  const pays = Array.from(payById.values());
+  const passIds = Array.from(new Set(pays.map((p) => p.pass_id).filter(Boolean))) as number[];
+  const msIds = Array.from(new Set(pays.map((p) => p.membership_id).filter(Boolean))) as number[];
+  const rnIds = Array.from(new Set(pays.map((p) => p.rental_id).filter(Boolean))) as number[];
+  // 주문번호: 환불행에 order_id 가 있으면 그걸, 없으면 원결제의 order_id
+  const orderIds = Array.from(
+    new Set(
+      sales
+        .map((r) => refundById.get(r.refund_id)?.order_id ?? (r.payment_id ? payById.get(r.payment_id)?.order_id : null))
+        .filter((v): v is number => !!v)
+    )
+  );
+  const actorUids = Array.from(
+    new Set(Array.from(refundById.values()).map((r) => r.actor_uid).filter((v): v is string => !!v))
+  );
+  const memberIds = Array.from(new Set(sales.map((r) => r.member_id).filter((v): v is number => !!v)));
+
+  const [passRes, msRes, rnRes, orderRes, staffRes, nameMap] = await Promise.all([
+    passIds.length
+      ? supabase.from("crm_passes").select("id, lesson_kind").in("id", passIds)
+      : Promise.resolve({ data: [] as { id: number; lesson_kind: string | null }[] }),
+    msIds.length
+      ? supabase.from("crm_memberships").select("id, plan_name").in("id", msIds)
+      : Promise.resolve({ data: [] as { id: number; plan_name: string | null }[] }),
+    rnIds.length
+      ? supabase.from("crm_rentals").select("id, item_name").in("id", rnIds)
+      : Promise.resolve({ data: [] as { id: number; item_name: string | null }[] }),
+    // 🚨 pg_raw 는 경로별로만 읽는다(토스 결제별 secret 차단) — crm-pg-detail.ts
+    orderIds.length
+      ? supabase.from("crm_orders").select(PG_ORDER_SELECT).eq("center_id", centerId).in("id", orderIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+    actorUids.length
+      ? supabase
+          .from("crm_center_members")
+          .select("firebase_uid, display_name")
+          .eq("center_id", centerId)
+          .in("firebase_uid", actorUids)
+      : Promise.resolve({ data: [] as { firebase_uid: string | null; display_name: string | null }[] }),
+    fetchMemberNames(centerId, memberIds),
+  ]);
+  const passName = new Map((passRes.data ?? []).map((p) => [p.id, p.lesson_kind ?? "수강권"]));
+  const msName = new Map((msRes.data ?? []).map((m) => [m.id, m.plan_name ?? "회원권"]));
+  const rnName = new Map((rnRes.data ?? []).map((r) => [r.id, r.item_name ?? "운동복"]));
+  const pgByOrder = new Map(
+    ((orderRes.data ?? []) as unknown as PgOrderFields[]).map((o) => [o.id, pgDetailFromOrder(o)])
+  );
+  const staffName = new Map(
+    ((staffRes.data ?? []) as { firebase_uid: string | null; display_name: string | null }[])
+      .filter((r) => r.firebase_uid)
+      .map((r) => [r.firebase_uid as string, (r.display_name ?? "").trim() || null])
+  );
+
+  const out: RefundListItem[] = sales.map((r) => {
+    const ref = refundById.get(r.refund_id);
+    const pay = r.payment_id ? payById.get(r.payment_id) : undefined;
+    const orderId = ref?.order_id ?? pay?.order_id ?? null;
+    const pg = orderId ? pgByOrder.get(orderId) ?? null : null;
+    let productName = pay?.product_label ?? CAT_KO[r.category] ?? "상품";
+    if (pay?.pass_id) productName = passName.get(pay.pass_id) ?? productName;
+    else if (pay?.membership_id) productName = msName.get(pay.membership_id) ?? productName;
+    else if (pay?.rental_id) productName = rnName.get(pay.rental_id) ?? productName;
+    return {
+      refunded_at: r.refunded_at,
+      refund_id: r.refund_id,
+      payment_id: r.payment_id,
+      original_paid_at: pay?.paid_at ?? null,
+      member_id: r.member_id,
+      member_name: r.member_id ? nameMap.get(r.member_id) ?? null : null,
+      product_name: productName,
+      category: CAT_KO[r.category] ?? "기타",
+      amount_won: r.amount_won, // fetchRefundSales 가 이미 음수로 준다
+      payment_method: r.method ? METHOD_KO[r.method] ?? "기타" : null,
+      sales_channel: pg ? pg.channel : pay?.source === "member_app" ? "회원앱" : "현장",
+      staff_name: ref?.actor_uid ? staffName.get(ref.actor_uid) ?? null : null,
+      is_partial: !!ref?.is_partial,
+      refund_source: ref?.source ?? null,
+      reason: (ref?.reason ?? "").trim() || null,
+      pg_transaction_key: ref?.pg_transaction_key ?? null,
+      pg,
+    };
+  });
+  out.sort((a, b) => (a.refunded_at < b.refunded_at ? 1 : a.refunded_at > b.refunded_at ? -1 : 0));
+  return out;
+}
+
+/** 결제 id → 지금까지 환불된 누적 금액(양수). 결제행에 '이 결제는 환불됐다'를 붙이기 위함 */
+export async function loadRefundedTotals(centerId: number, paymentIds: number[]): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  const ids = Array.from(new Set(paymentIds.filter(Boolean)));
+  for (let i = 0; i < ids.length; i += 500) {
+    const { data } = await supabase
+      .from("crm_payment_refunds")
+      .select("payment_id, amount_won")
+      .eq("center_id", centerId)
+      .in("payment_id", ids.slice(i, i + 500));
+    for (const r of (data ?? []) as { payment_id: number; amount_won: number | null }[]) {
+      map.set(Number(r.payment_id), (map.get(Number(r.payment_id)) ?? 0) + Math.abs(r.amount_won ?? 0));
+    }
+  }
+  return map;
 }
 
 async function fetchMemberNames(

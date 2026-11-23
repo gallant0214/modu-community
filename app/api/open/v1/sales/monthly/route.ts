@@ -9,6 +9,7 @@ export const maxDuration = 60;
 /**
  * GET /api/open/v1/sales/monthly?from=YYYY-MM&to=YYYY-MM[&format=csv]
  * 월별 매출 합계·구분별 금액(최대 36개월). 없으면 최근 12개월. 결제 내역(sales)을 달마다 더한 값.
+ * total_won 은 결제 합계(예전과 같음). 환불은 refund_won(환불한 달 기준), 순매출은 net_won.
  */
 export async function GET(request: Request) {
   const key = await requireApiKey(request, "sales");

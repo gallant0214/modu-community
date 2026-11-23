@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { supabase } from "./supabase";
 import { enrichMemberListDetail } from "./crm-member-list-detail";
-import { loadSalesListItems } from "./crm-sales-list";
+import { loadRefundedTotals, loadRefundListItems, loadSalesListItems } from "./crm-sales-list";
 import { toCsv, type CsvColumn } from "./crm-api-keys";
 import { formatPhone, GENDER_LABEL } from "@/app/crm/_components/crm-labels";
 
@@ -408,6 +408,25 @@ export type OpenSaleRow = {
   pg_tx_id: string | null;
   pg_buyer_name: string | null;
   receipt_url: string | null;
+  /* ── 환불 연동 (2026-11-24 추가 — 기존 칸 위치가 바뀌지 않게 맨 뒤에 붙임) ── */
+  /** 결제 / 환불 */
+  kind: "결제" | "환불";
+  /** CRM 결제 번호 — 환불 행과 원결제 행을 짝짓는 키. 원장(이관) 결제는 비어 있음 */
+  payment_id: number | null;
+  /** 결제 행: 지금까지 환불된 누적 금액(양수, 없으면 0). 환불 행: 이번에 돌려준 금액(양수) */
+  refunded_won: number;
+  /** 환불 행만: 환불 처리 일시 */
+  refunded_at: string | null;
+  /** 환불 행만: 원결제 일시 */
+  original_paid_at: string | null;
+  /** 환불 행만: 부분 환불 여부 */
+  refund_partial: boolean | null;
+  /** 환불 행만: PG(결제 취소) / 센터(직접 환불) */
+  refund_source: string | null;
+  /** 환불 행만: 사유 */
+  refund_reason: string | null;
+  /** 환불 행만: CRM 환불 번호 (중복 반영 방지 키) */
+  refund_id: number | null;
 };
 
 export const OPEN_SALE_COLUMNS: CsvColumn<OpenSaleRow>[] = [
@@ -434,6 +453,15 @@ export const OPEN_SALE_COLUMNS: CsvColumn<OpenSaleRow>[] = [
   { key: "pg_tx_id", label: "PG 거래번호" },
   { key: "pg_buyer_name", label: "PG 구매자명" },
   { key: "receipt_url", label: "영수증" },
+  { key: "kind", label: "구분(결제/환불)" },
+  { key: "payment_id", label: "결제번호" },
+  { key: "refunded_won", label: "환불 금액" },
+  { key: "refunded_at", label: "환불 일시" },
+  { key: "original_paid_at", label: "원결제 일시" },
+  { key: "refund_partial", label: "부분 환불" },
+  { key: "refund_source", label: "환불 방식" },
+  { key: "refund_reason", label: "환불 사유" },
+  { key: "refund_id", label: "환불번호" },
 ];
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -478,9 +506,26 @@ function nextMonthYm(ym: string): string {
   return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
 }
 
-export async function loadOpenSales(centerId: number, fromYmd: string, toYmd: string): Promise<OpenSaleRow[]> {
-  const items = await loadSalesListItems(centerId, fromYmd, addDaysYmd(toYmd, 1));
-  return items.map((it) => ({
+/**
+ * 기간 결제 + 환불 내역.
+ *  - 결제 행: 결제 일시 기준. 양수. refunded_won = 그 결제가 지금까지 환불된 누적액.
+ *  - 환불 행: **환불 처리 일시 기준**(그래서 지난달 결제를 이번 달 환불하면 이번 달 조회에 나온다). 음수.
+ *    어떤 환불을 포함할지는 CRM 통계·정산과 같은 규칙(fetchRefundSales) — 합계가 CRM 순매출과 맞는다.
+ */
+export async function loadOpenSales(
+  centerId: number,
+  fromYmd: string,
+  toYmd: string,
+  opts: { includeRefunds?: boolean } = {}
+): Promise<OpenSaleRow[]> {
+  const includeRefunds = opts.includeRefunds !== false;
+  const endExcl = addDaysYmd(toYmd, 1);
+  const items = await loadSalesListItems(centerId, fromYmd, endExcl);
+  const refundedTotals = await loadRefundedTotals(
+    centerId,
+    items.map((it) => it.payment_id).filter((v): v is number => !!v)
+  );
+  const payRows: OpenSaleRow[] = items.map((it) => ({
     paid_at: kstYmdHm(it.date),
     member_id: it.member_id,
     member_name: it.member_name,
@@ -504,7 +549,60 @@ export async function loadOpenSales(centerId: number, fromYmd: string, toYmd: st
     pg_tx_id: it.pg?.pg_tx_id ?? null,
     pg_buyer_name: it.pg?.pg_buyer_name ?? null,
     receipt_url: it.pg?.receipt_url ?? null,
+    kind: "결제",
+    payment_id: it.payment_id ?? null,
+    refunded_won: it.payment_id ? refundedTotals.get(it.payment_id) ?? 0 : 0,
+    refunded_at: null,
+    original_paid_at: null,
+    refund_partial: null,
+    refund_source: null,
+    refund_reason: null,
+    refund_id: null,
   }));
+  if (!includeRefunds) return payRows;
+
+  const refunds = await loadRefundListItems(centerId, fromYmd, endExcl);
+  const SOURCE_KO: Record<string, string> = { pg: "PG 결제취소", center: "센터 환불" };
+  const refundRows: OpenSaleRow[] = refunds.map((r) => ({
+    // '결제 일시' 칸 = 이 줄이 일어난 시각(환불 행은 환불 처리 시각) → 날짜순 정렬·기간 필터가 그대로 맞는다
+    paid_at: kstYmdHm(r.refunded_at),
+    member_id: r.member_id,
+    member_name: r.member_name,
+    product_name: r.product_name,
+    category: r.category,
+    amount_won: r.amount_won,
+    payment_method: r.payment_method,
+    registration_type: null,
+    payer_name: r.member_name,
+    sales_channel: r.sales_channel,
+    staff_name: r.staff_name,
+    pg: r.pg?.pg ?? null,
+    pg_method: r.pg?.pg_method ?? null,
+    card_company: r.pg?.card_company ?? null,
+    easy_pay: r.pg?.easy_pay ?? null,
+    card_type: r.pg?.card_type ?? null,
+    installment_months: r.pg?.installment_months ?? null,
+    approval_no: r.pg?.approval_no ?? null,
+    pg_approved_at: r.pg?.approved_at ? kstYmdHm(r.pg.approved_at) : null,
+    order_no: r.pg?.order_no ?? null,
+    pg_tx_id: r.pg_transaction_key ?? r.pg?.pg_tx_id ?? null,
+    pg_buyer_name: r.pg?.pg_buyer_name ?? null,
+    receipt_url: r.pg?.receipt_url ?? null,
+    kind: "환불",
+    payment_id: r.payment_id,
+    refunded_won: Math.abs(r.amount_won),
+    refunded_at: kstYmdHm(r.refunded_at),
+    original_paid_at: r.original_paid_at ? kstYmdHm(r.original_paid_at) : null,
+    refund_partial: r.is_partial,
+    refund_source: r.refund_source ? SOURCE_KO[r.refund_source] ?? r.refund_source : null,
+    refund_reason: r.reason,
+    refund_id: r.refund_id,
+  }));
+
+  // 최신순 (결제·환불 섞어서)
+  return [...payRows, ...refundRows].sort((a, b) =>
+    (a.paid_at ?? "") < (b.paid_at ?? "") ? 1 : (a.paid_at ?? "") > (b.paid_at ?? "") ? -1 : 0
+  );
 }
 
 export type OpenMonthlyRow = {
@@ -516,6 +614,11 @@ export type OpenMonthlyRow = {
   apparel_won: number;
   locker_won: number;
   other_won: number;
+  /** 그 달에 처리된 환불 합계(양수) — CRM 통계와 같은 규칙 */
+  refund_won: number;
+  refund_count: number;
+  /** 결제 합계 − 환불 합계 */
+  net_won: number;
 };
 
 export const OPEN_MONTHLY_COLUMNS: CsvColumn<OpenMonthlyRow>[] = [
@@ -527,6 +630,9 @@ export const OPEN_MONTHLY_COLUMNS: CsvColumn<OpenMonthlyRow>[] = [
   { key: "apparel_won", label: "운동복" },
   { key: "locker_won", label: "락커" },
   { key: "other_won", label: "기타" },
+  { key: "refund_won", label: "환불 합계" },
+  { key: "refund_count", label: "환불 건수" },
+  { key: "net_won", label: "순매출(결제−환불)" },
 ];
 
 const CATEGORY_FIELD: Record<string, keyof OpenMonthlyRow> = {
@@ -540,7 +646,19 @@ export async function loadOpenMonthly(centerId: number, fromYm: string, toYm: st
   const items = await loadSalesListItems(centerId, `${fromYm}-01`, `${nextMonthYm(toYm)}-01`);
   const rows = new Map<string, OpenMonthlyRow>();
   for (let ym = fromYm; ym <= toYm; ym = nextMonthYm(ym)) {
-    rows.set(ym, { month: ym, total_won: 0, count: 0, membership_won: 0, lesson_won: 0, apparel_won: 0, locker_won: 0, other_won: 0 });
+    rows.set(ym, {
+      month: ym,
+      total_won: 0,
+      count: 0,
+      membership_won: 0,
+      lesson_won: 0,
+      apparel_won: 0,
+      locker_won: 0,
+      other_won: 0,
+      refund_won: 0,
+      refund_count: 0,
+      net_won: 0,
+    });
   }
   for (const it of items) {
     const ym = new Date(new Date(it.date).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 7);
@@ -552,6 +670,16 @@ export async function loadOpenMonthly(centerId: number, fromYm: string, toYm: st
     const field = CATEGORY_FIELD[it.category] ?? "other_won";
     (row[field] as number) += amt;
   }
+  // 환불은 '환불한 달'에 잡는다 (CRM 통계와 동일)
+  const refunds = await loadRefundListItems(centerId, `${fromYm}-01`, `${nextMonthYm(toYm)}-01`);
+  for (const r of refunds) {
+    const ym = new Date(new Date(r.refunded_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 7);
+    const row = rows.get(ym);
+    if (!row) continue;
+    row.refund_won += Math.abs(r.amount_won);
+    row.refund_count += 1;
+  }
+  for (const row of rows.values()) row.net_won = row.total_won - row.refund_won;
   return Array.from(rows.values());
 }
 
