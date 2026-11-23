@@ -5,6 +5,7 @@ import {
   centerOnnuriEnabled,
   claimOnnuri,
   loadOnnuriOrderByUid,
+  retryOnnuriMatch,
   startOnnuri,
   TEMP_ENTRY_DAYS,
 } from "@/app/lib/crm-onnuri";
@@ -31,7 +32,9 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const r = await load(url.searchParams.get("orderUid"), url.searchParams.get("t"));
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: r.status });
-  const o = r.order;
+  let o = r.order;
+  // 아직 못 맞춘 '결제했어요' 주문이면 확인할 때마다 다시 대조한다
+  if (await retryOnnuriMatch(o)) o = (await loadOnnuriOrderByUid(o.order_uid)) ?? o;
   return NextResponse.json({
     status: o.status,
     state: o.onnuri_state,

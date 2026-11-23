@@ -45,6 +45,12 @@ export const ALERT_AFTER_MINUTES = 10;
 const MATCH_SKEW_MS = 2 * 60_000;
 /** '결제했어요' 를 누른 뒤 이 시간 안에 온 알림까지 대조 */
 const MATCH_AFTER_CLAIM_MS = 10 * 60_000;
+/**
+ * 🚨 결제 한 번에 가맹점 앱 알림이 여러 개 온다 (실측: '결제되었어요' + '결제했어요' 0.04초 간격, 같은 금액).
+ * 같은 기기·같은 금액·이 간격 안의 알림은 **결제 1건**으로 묶는다. 안 묶으면 후보가 2건이 돼 자동 발급이 멈춘다.
+ * 한 카운터 QR 로 같은 금액 결제 2건이 15초 안에 연달아 나오는 일은 사실상 없다.
+ */
+const SAME_PAYMENT_MS = 15_000;
 
 const nowIso = () => new Date().toISOString();
 
@@ -254,14 +260,45 @@ async function holdWaitingOrders(centerId: number, amount: number, postedAt: Dat
 
 interface NotiRow {
   id: number;
+  device_id: number;
   amount_won: number | null;
   posted_at: string;
   title: string | null;
   body: string | null;
   matched_order_id: number | null;
+  /** 같은 결제로 묶인 알림 id 전부 (대표 id 포함) */
+  ids: number[];
 }
 
-/** 이 주문과 맞을 수 있는 (아직 안 쓴) 알림들 */
+/** 같은 결제에서 나온 알림들을 1건으로 묶는다 — 대표는 가장 먼저 온 알림 */
+function groupSamePayment(rows: Omit<NotiRow, "ids">[]): NotiRow[] {
+  const out: (NotiRow & { lastAt: number })[] = [];
+  for (const r of rows) {
+    const at = new Date(r.posted_at).getTime();
+    const g = out.find(
+      (x) => x.device_id === r.device_id && x.amount_won === r.amount_won && at - x.lastAt <= SAME_PAYMENT_MS
+    );
+    if (g) {
+      g.ids.push(r.id);
+      g.lastAt = at;
+      if (r.title && !g.title?.includes(r.title)) g.title = [g.title, r.title].filter(Boolean).join(" / ");
+    } else {
+      out.push({ ...r, ids: [r.id], lastAt: at });
+    }
+  }
+  return out.map((g) => ({
+    id: g.id,
+    device_id: g.device_id,
+    amount_won: g.amount_won,
+    posted_at: g.posted_at,
+    title: g.title,
+    body: g.body,
+    matched_order_id: g.matched_order_id,
+    ids: g.ids,
+  }));
+}
+
+/** 이 주문과 맞을 수 있는 (아직 안 쓴) 결제 알림들 — 같은 결제의 알림 여러 개는 1건 */
 async function candidateNotis(order: OnnuriOrderRow): Promise<NotiRow[]> {
   if (!order.onnuri_started_at) return [];
   const from = new Date(new Date(order.onnuri_started_at).getTime() - MATCH_SKEW_MS).toISOString();
@@ -270,14 +307,14 @@ async function candidateNotis(order: OnnuriOrderRow): Promise<NotiRow[]> {
     : nowIso();
   const { data } = await supabase
     .from("crm_onnuri_notifications")
-    .select("id, amount_won, posted_at, title, body, matched_order_id")
+    .select("id, device_id, amount_won, posted_at, title, body, matched_order_id")
     .eq("center_id", order.center_id)
     .eq("amount_won", order.amount_won)
     .is("matched_order_id", null)
     .gte("posted_at", from)
     .lte("posted_at", to)
     .order("posted_at");
-  return (data ?? []) as unknown as NotiRow[];
+  return groupSamePayment((data ?? []) as unknown as Omit<NotiRow, "ids">[]);
 }
 
 /** 이 알림과 맞을 수 있는 '결제했어요' 주문들 */
@@ -292,6 +329,15 @@ async function candidateOrders(centerId: number, amount: number, postedAt: Date)
     .lte("onnuri_started_at", new Date(postedAt.getTime() + MATCH_SKEW_MS).toISOString())
     .gte("onnuri_claimed_at", new Date(postedAt.getTime() - MATCH_AFTER_CLAIM_MS).toISOString());
   return (data ?? []) as unknown as OnnuriOrderRow[];
+}
+
+/**
+ * '결제했어요' 주문을 다시 대조한다 — 결제 화면이 상태를 확인할 때마다 부른다.
+ * 알림이 늦게 왔거나 대조 규칙이 바뀐 뒤에도, 화면을 열어 둔 회원은 따로 처리 없이 발급된다.
+ */
+export async function retryOnnuriMatch(order: OnnuriOrderRow): Promise<boolean> {
+  if (order.status !== "pending" || order.onnuri_state !== "claimed") return false;
+  return tryMatchOrder(order);
 }
 
 async function tryMatchOrder(order: OnnuriOrderRow): Promise<boolean> {
@@ -320,8 +366,8 @@ async function tryMatchNotification(
     return null;
   }
   const notis = await candidateNotis(orders[0]);
-  if (notis.length !== 1 || notis[0].id !== notiId) return null;
-  const r = await linkAndComplete(centerId, orders[0].id, notiId, "auto");
+  if (notis.length !== 1 || !notis[0].ids.includes(notiId)) return null;
+  const r = await linkAndComplete(centerId, orders[0].id, notis[0].id, "auto");
   return r.ok ? orders[0].id : null;
 }
 
@@ -344,6 +390,7 @@ async function linkAndComplete(
       .is("matched_order_id", null)
       .select("id");
     if ((took ?? []).length === 0) return { ok: false, error: "이미 다른 주문에 연결됐거나 없는 알림이에요" };
+    await linkSiblings(centerId, orderId, notiId);
   }
   const r = await completeOnnuriOrder(orderId, { by, notificationId: notiId });
   // 🚨 발급을 시작했으면(주문 선점 성공) 결제는 받은 것 — 발급 중 오류여도 알림 연결은 유지한다.
@@ -352,10 +399,31 @@ async function linkAndComplete(
     await supabase
       .from("crm_onnuri_notifications")
       .update({ matched_order_id: null, match_note: `발급 실패: ${r.error ?? ""}`.slice(0, 200) } as never)
-      .eq("id", notiId)
+      .eq("center_id", centerId)
       .eq("matched_order_id", orderId);
   }
   return r;
+}
+
+/** 대표 알림과 같은 결제에서 나온 나머지 알림도 같은 주문에 붙인다 (다른 주문 후보로 남지 않게) */
+async function linkSiblings(centerId: number, orderId: number, notiId: number) {
+  const { data: head } = await supabase
+    .from("crm_onnuri_notifications")
+    .select("device_id, amount_won, posted_at")
+    .eq("id", notiId)
+    .maybeSingle();
+  const h = head as { device_id: number; amount_won: number | null; posted_at: string } | null;
+  if (!h || !h.amount_won) return;
+  const at = new Date(h.posted_at).getTime();
+  await supabase
+    .from("crm_onnuri_notifications")
+    .update({ matched_order_id: orderId, match_note: "같은 결제 알림" } as never)
+    .eq("center_id", centerId)
+    .eq("device_id", h.device_id)
+    .eq("amount_won", h.amount_won)
+    .is("matched_order_id", null)
+    .gte("posted_at", new Date(at - SAME_PAYMENT_MS).toISOString())
+    .lte("posted_at", new Date(at + SAME_PAYMENT_MS).toISOString());
 }
 
 /* ═══════════════════════ 발급 · 승인 · 거절 ═══════════════════════ */
