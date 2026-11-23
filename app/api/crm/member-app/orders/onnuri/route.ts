@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyOrderToken } from "@/app/lib/order-token";
 import {
@@ -9,6 +9,7 @@ import {
   startOnnuri,
   TEMP_ENTRY_DAYS,
 } from "@/app/lib/crm-onnuri";
+import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,19 @@ export async function POST(request: Request) {
   if (body.action === "start") {
     const res = await startOnnuri(order);
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+    // 직원에게 '온누리 결제 신청' 푸시 — 구매 알림과 같은 토글·권한. 결제가 확인되면
+    // 발급 경로(completeOrder)에서 기존 '상품 구매' 알림이 따로 나간다.
+    if (res.started) {
+      after(() =>
+        notifyCenterStaffSignupPurchase({
+          centerId: order.center_id,
+          kind: "onnuri_request",
+          memberId: order.member_id,
+          productName: order.product_name,
+          amountWon: order.amount_won,
+        })
+      );
+    }
     return NextResponse.json({ ok: true, amountWon: order.amount_won });
   }
 

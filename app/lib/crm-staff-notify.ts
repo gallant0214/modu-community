@@ -75,6 +75,7 @@ export async function notifyStaffMember(params: {
       member_signup: "notify_signup_purchase",
       member_purchase: "notify_signup_purchase",
       member_refund: "notify_signup_purchase",
+      onnuri_request: "notify_signup_purchase",
       class_reminder: "class_reminder_enabled",
       class_end: "class_end_enabled",
     };
@@ -307,7 +308,8 @@ export async function notifyCenterStaffAttendance(params: {
  */
 export async function notifyCenterStaffSignupPurchase(params: {
   centerId: number;
-  kind: "signup" | "purchase" | "refund";
+  /** onnuri_request = 회원이 결제 화면에서 '온누리로 결제하기'를 눌렀다(아직 돈은 안 냄) */
+  kind: "signup" | "purchase" | "refund" | "onnuri_request";
   memberId?: number;
   memberName?: string;
   productName?: string;
@@ -354,6 +356,10 @@ export async function notifyCenterStaffSignupPurchase(params: {
       type = "member_refund";
       title = `[${centerName}] 상품 환불`;
       body = `${memberName}님이 ${product} 상품을 환불하였습니다${params.amountWon ? ` (${won(params.amountWon)}원)` : ""}`;
+    } else if (kind === "onnuri_request") {
+      type = "onnuri_request";
+      title = `[${centerName}] 온누리 결제 신청`;
+      body = `${memberName}님이 ${product} 상품 ${won(params.amountWon)}원을 온누리로 결제 신청하였습니다`;
     } else {
       type = "member_purchase";
       title = `[${centerName}] 상품 구매`;

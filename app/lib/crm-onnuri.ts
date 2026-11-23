@@ -163,11 +163,13 @@ async function loadOnnuriOrder(id: number): Promise<OnnuriOrderRow | null> {
 }
 
 /** 회원이 결제수단으로 온누리를 골랐다 */
-export async function startOnnuri(order: OnnuriOrderRow): Promise<{ ok: boolean; error?: string }> {
+export async function startOnnuri(
+  order: OnnuriOrderRow
+): Promise<{ ok: boolean; error?: string; /** 이번 요청으로 처음 신청됨 — 신청 알림은 이때 한 번만 */ started?: boolean }> {
   if (order.status !== "pending") return { ok: false, error: "결제를 진행할 수 없는 주문이에요" };
-  if (order.onnuri_state === "waiting" || order.onnuri_state === "claimed") return { ok: true };
+  if (order.onnuri_state === "waiting" || order.onnuri_state === "claimed") return { ok: true, started: false };
   if (order.amount_won <= 0) return { ok: false, error: "결제할 금액이 없어요" };
-  const { error } = await supabase
+  const { data: took, error } = await supabase
     .from("crm_orders")
     .update({
       onnuri_state: "waiting",
@@ -176,8 +178,12 @@ export async function startOnnuri(order: OnnuriOrderRow): Promise<{ ok: boolean;
       updated_at: nowIso(),
     } as never)
     .eq("id", order.id)
-    .eq("status", "pending");
-  return error ? { ok: false, error: "저장하지 못했어요" } : { ok: true };
+    .eq("status", "pending")
+    // 두 번 눌러도 신청 알림이 한 번만 가게 — 아직 신청 전인 주문만 바꾼다
+    .is("onnuri_state", null)
+    .select("id");
+  if (error) return { ok: false, error: "저장하지 못했어요" };
+  return { ok: true, started: (took ?? []).length > 0 };
 }
 
 /** 회원이 '결제했어요'를 눌렀다 — 임시 입장 시작 + 이미 온 알림과 바로 대조 */
