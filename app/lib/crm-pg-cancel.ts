@@ -5,6 +5,7 @@ import { matchItemsByRefundAmount, syncOrderRefundState } from "@/app/lib/crm-or
 import { refundOrderMileage } from "@/app/lib/member-checkout";
 import { restoreCouponAfterRefund } from "@/app/lib/crm-coupons-server";
 import { notifyMembersByIds } from "@/app/lib/member-notify";
+import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 /** PG 응답에서 뽑아낸 취소 상태 — toss/portone 공통 */
 export interface PgCancelState {
@@ -129,6 +130,7 @@ export async function applyPgCancel(opts: {
   let refundedMileageUsed = 0;
   let refundedMileageEarned = 0;
   let retired = 0;
+  let retiredWon = 0; // 회수된 항목의 환불 금액 — 직원 알림 문구용
 
   for (const itemId of matched.itemIds) {
     const { data: itRow } = await supabase
@@ -189,6 +191,7 @@ export async function applyPgCancel(opts: {
     notes.push(...(await retireBundleComponents({ order, provider, cancel, parentPaymentId: it.payment_id })));
     if (!r.kind) continue;
     retired += 1;
+    retiredWon += Math.max(0, it.amount_won ?? 0);
     if (r.label || it.product_name) retiredLabels.push(r.label || it.product_name);
     notes.push(`${RETIRE_KIND_LABEL[r.kind] ?? r.kind} '${r.label ?? ""}' 회수`);
     await supabase.from("crm_audit_logs").insert({
@@ -241,6 +244,18 @@ export async function applyPgCancel(opts: {
       );
     } catch {
       /* 알림 실패가 환불 처리를 막지 않도록 무시 */
+    }
+    // 직원 강사앱 — 구매 알림('상품 구매')과 짝을 맞춘 '상품 환불' (같은 토글·권한)
+    try {
+      await notifyCenterStaffSignupPurchase({
+        centerId: order.center_id,
+        kind: "refund",
+        memberId: order.member_id,
+        productName: retiredLabels.filter(Boolean).join(", ") || undefined,
+        amountWon: retiredWon,
+      });
+    } catch {
+      /* 무시 */
     }
   }
 

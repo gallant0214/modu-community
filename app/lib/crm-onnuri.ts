@@ -253,6 +253,7 @@ export async function ingestNotification(
   // 같은 알림 재전송 → 유니크 제약으로 무시
   if (error || !data) return { saved: false, amountWon: amount, matchedOrderId: null };
   const id = (data as { id: number }).id;
+  if (kind === "cancel") await notifyCancelArrived(device, id, postedAt);
   const matchedOrderId = amount ? await tryMatchNotification(device.center_id, id, amount, postedAt) : null;
   if (amount && !matchedOrderId) await holdWaitingOrders(device.center_id, amount, postedAt);
   return { saved: true, amountWon: amount, matchedOrderId };
@@ -624,6 +625,22 @@ export async function listPendingOnnuri(centerId: number): Promise<PendingOnnuri
 
 /** 확인 권한(sales.onnuri_confirm)이 있는 재직 직원에게 강사앱 푸시 */
 async function notifyConfirmNeeded(item: PendingOnnuriItem, centerId: number) {
+  await pushConfirmers(
+    centerId,
+    (centerName) => `[${centerName}] 미수 · 온누리 결제 확인 요망`,
+    `${item.memberName}님 ${item.productName} ${item.amountWon.toLocaleString("ko-KR")}원 — 결제를 확인하고 승인해 주세요`,
+    "onnuri_confirm",
+    { order_id: String(item.orderId), member_id: String(item.memberId) }
+  );
+}
+
+async function pushConfirmers(
+  centerId: number,
+  title: (centerName: string) => string,
+  body: string,
+  type: string,
+  extra: Record<string, string>
+) {
   const { data: staff } = await supabase
     .from("crm_center_members")
     .select("id, role, grade_id, is_solo_owner")
@@ -640,10 +657,10 @@ async function notifyConfirmNeeded(item: PendingOnnuriItem, centerId: number) {
     await notifyStaffMember({
       centerId,
       centerMemberId: s.id,
-      type: "onnuri_confirm",
-      title: `[${centerName}] 미수 · 온누리 결제 확인 요망`,
-      body: `${item.memberName}님 ${item.productName} ${item.amountWon.toLocaleString("ko-KR")}원 — 결제를 확인하고 승인해 주세요`,
-      data: { kind: "onnuri_confirm", order_id: String(item.orderId), member_id: String(item.memberId) },
+      type,
+      title: title(centerName),
+      body,
+      data: { kind: type, ...extra },
     }).catch(() => {});
   }
 }
@@ -944,4 +961,41 @@ export async function dismissOnnuriCancel(
     match_note: "관계없음 처리",
   });
   return { ok: true };
+}
+
+/**
+ * 가맹점 앱에서 결제가 취소됐다 → 확인 권한 직원에게 '환불 처리해 주세요' 푸시.
+ * 취소 1건에 알림이 여러 개 올 수 있어, 15초 안에 먼저 온 같은 기기의 취소 알림이 있으면 보내지 않는다.
+ */
+async function notifyCancelArrived(device: OnnuriDevice, notiId: number, postedAt: Date) {
+  try {
+    const { data: earlier } = await supabase
+      .from("crm_onnuri_notifications")
+      .select("id")
+      .eq("device_id", device.id)
+      .eq("kind", "cancel")
+      .lt("id", notiId)
+      .gte("posted_at", new Date(postedAt.getTime() - SAME_PAYMENT_MS).toISOString())
+      .limit(1);
+    if ((earlier ?? []).length > 0) return;
+    const item = (await listOnnuriCancels(device.center_id)).find((c) => c.notificationId === notiId);
+    if (!item) return;
+    const won = item.amountWon ? `${item.amountWon.toLocaleString("ko-KR")}원` : "금액 미확인";
+    const who =
+      item.candidates.length === 1
+        ? `${item.candidates[0].memberName}님 ${item.candidates[0].productName} ${won}`
+        : won;
+    await pushConfirmers(
+      device.center_id,
+      (centerName) => `[${centerName}] 온누리 결제 취소됨`,
+      `${who} 결제가 가맹점 앱에서 취소됐어요 — CRM에서 환불 처리해 주세요`,
+      "onnuri_cancel",
+      {
+        notification_id: String(notiId),
+        ...(item.candidates.length === 1 ? { member_id: String(item.candidates[0].memberId) } : {}),
+      }
+    );
+  } catch {
+    /* 푸시 실패가 알림 수신을 막지 않게 */
+  }
 }
