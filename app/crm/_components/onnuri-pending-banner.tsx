@@ -46,6 +46,17 @@ interface CancelItem {
   }[];
 }
 
+/** 취소 건 한 줄 — 누구 결제인지 바로 보이게 (후보가 1건이면 회원 이름·상품·금액) */
+function cancelLabel(c: CancelItem): string {
+  const won = c.amountWon ? `${c.amountWon.toLocaleString()}원` : "금액 미확인";
+  if (c.candidates.length === 1) {
+    const o = c.candidates[0];
+    return `${o.memberName} · ${o.productName} · ${o.amountWon.toLocaleString()}원`;
+  }
+  if (c.candidates.length > 1) return `${won} (같은 금액 결제 ${c.candidates.length}건 — 골라 주세요)`;
+  return `${won} (연결할 온라인 결제 없음)`;
+}
+
 const kst = (iso: string | null) => {
   if (!iso) return "—";
   const d = new Date(new Date(iso).getTime() + 9 * 3600_000);
@@ -106,8 +117,8 @@ export function OnnuriPendingBanner() {
             <span className="block text-[12.5px] text-white/85 truncate">
               {cancels
                 .slice(0, 3)
-                .map((c) => (c.amountWon ? `${c.amountWon.toLocaleString()}원` : "금액 미확인"))
-                .join(" · ")}
+                .map((c) => cancelLabel(c))
+                .join(" / ")}
               {cancels.length > 3 ? ` 외 ${cancels.length - 3}건` : ""} — 가맹점 앱에서 취소한 결제의 이용권을 회수해 주세요
             </span>
           </span>
@@ -402,7 +413,27 @@ function OnnuriCancelModal({
           return (
             <li key={c.notificationId} className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 p-3.5">
               <div className="flex items-baseline justify-between gap-2">
-                <div className="min-w-0 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 truncate">{c.text}</div>
+                <div className="min-w-0">
+                  {(() => {
+                    const o = c.candidates.find((x) => x.orderId === sel);
+                    return o ? (
+                      <>
+                        <a
+                          href={`/crm/members/${o.memberId}`}
+                          className="text-[14.5px] font-bold text-[#2A251D] dark:text-zinc-100 hover:underline"
+                        >
+                          {o.memberName}
+                        </a>
+                        <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 truncate">{o.productName}</div>
+                      </>
+                    ) : (
+                      <div className="text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100">
+                        {c.candidates.length > 0 ? "아래에서 취소한 결제를 골라 주세요" : "연결할 온라인 결제 없음"}
+                      </div>
+                    );
+                  })()}
+                  <div className="mt-0.5 text-[11.5px] text-[#A89B80] truncate">가맹점 앱 알림: {c.text}</div>
+                </div>
                 <div className="text-right shrink-0">
                   <div className="text-[17px] font-extrabold text-[#2A251D] dark:text-zinc-100 tabular-nums">
                     {c.amountWon ? `${c.amountWon.toLocaleString()}원` : "금액 미확인"}
@@ -432,7 +463,10 @@ function OnnuriCancelModal({
                           className="mt-0.5 accent-[#6B7B3A]"
                         />
                         <span className="min-w-0">
-                          <a href={`/crm/members/${o.memberId}`} className="font-bold hover:underline">
+                          <a
+                            href={`/crm/members/${o.memberId}`}
+                            className="font-bold text-[#2A251D] dark:text-zinc-100 hover:underline"
+                          >
                             {o.memberName}
                           </a>
                           <span className="ml-1 text-[#6B5D47] dark:text-zinc-400">{o.productName}</span>
