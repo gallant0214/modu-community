@@ -1,5 +1,6 @@
 import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
+import { centerPgEnabled } from "@/app/lib/crm-counter-pay";
 import { supabase } from "@/app/lib/supabase";
 import { onlineSalesEnabled, memberPgProvider } from "@/app/lib/member-checkout";
 import { portoneConfigured } from "@/app/lib/portone-payments";
@@ -73,7 +74,9 @@ export async function GET(request: Request) {
     apparel: map("apparel"), // 운동복
     lockers: map("locker"), // 락커
     // 온라인 결제 가능 여부 — 꺼져 있으면 가입 화면에서 '회원권 결제' 를 미리 막는다(/submit 과 같은 판정)
+    //  🚨 PG 는 범어점만 — 나머지 센터는 카운터 결제 요청이라 언제나 가능
     paymentAvailable:
-      onlineSalesEnabled() && (memberPgProvider() === "toss" ? tossKeysMatch() : portoneConfigured()),
+      !(await centerPgEnabled(center.id)) ||
+      (onlineSalesEnabled() && (memberPgProvider() === "toss" ? tossKeysMatch() : portoneConfigured())),
   });
 }

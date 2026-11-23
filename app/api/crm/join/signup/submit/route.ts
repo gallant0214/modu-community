@@ -1,5 +1,6 @@
 import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
+import { centerPgEnabled, counterOrderFields, notifyCounterRequest } from "@/app/lib/crm-counter-pay";
 import { getClientIp, checkRateLimit } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import {
@@ -71,13 +72,6 @@ export async function POST(request: Request) {
   const rl = await checkRateLimit(getClientIp(request), "write");
   if (rl) return rl;
 
-  /* 결제창을 띄울 수 있는 상태인지 — 쓰는 PG 의 키만 본다.
-     포트원 키가 비어도 토스로 팔고 있으면 막을 이유가 없다. */
-  const pgReady = memberPgProvider() === "toss" ? tossKeysMatch() : portoneConfigured();
-  if (!onlineSalesEnabled() || !pgReady) {
-    return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
-  }
-
   let body: {
     token?: string;
     /** /register 가 발급한 회원 토큰 — 방금 등록한 그 회원에게만 계약서·주문을 만든다 */
@@ -114,6 +108,17 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (!center || center.status !== "active") {
     return NextResponse.json({ error: "센터를 찾을 수 없어요" }, { status: 404 });
+  }
+
+  /* 결제창을 띄울 수 있는 상태인지 — 쓰는 PG 의 키만 본다.
+     포트원 키가 비어도 토스로 팔고 있으면 막을 이유가 없다.
+     🚨 PG 는 범어점만 연결돼 있다. 나머지 센터는 '카운터 결제 요청'이라 PG 상태를 보지 않는다. */
+  const pgEnabled = await centerPgEnabled(centerId);
+  if (pgEnabled) {
+    const pgReady = memberPgProvider() === "toss" ? tossKeysMatch() : portoneConfigured();
+    if (!onlineSalesEnabled() || !pgReady) {
+      return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
+    }
   }
 
   // 2) 회원 — /register 에서 이미 등록됨. 토큰으로 그 회원만 허용.
@@ -260,10 +265,9 @@ export async function POST(request: Request) {
       amount_won: amount,
       status: "pending",
       order_uid: orderUid,
-      pg_provider: memberPgProvider(),
       channel: "web",
-      expires_at: expiresAt,
       start_date: startDate,
+      ...(pgEnabled ? { pg_provider: memberPgProvider(), expires_at: expiresAt } : counterOrderFields()),
     } as never)
     .select("id")
     .single();
@@ -290,6 +294,9 @@ export async function POST(request: Request) {
     await supabase.from("crm_orders").delete().eq("id", orderId);
     return NextResponse.json({ error: "주문 생성 실패", detail: errLogOnly(itemErr) }, { status: 500 });
   }
+
+  // 카운터 결제 요청이면 직원에게 바로 알린다 (결제 페이지는 '카운터에서 결제' 안내)
+  if (!pgEnabled) await notifyCounterRequest(orderId).catch(() => {});
 
   const payToken = signOrderToken(orderUid);
   // 결제 성공 후 가입 완료(앱 설치) 화면으로 — 출석번호(휴대폰 뒤 4자리)도 함께 전달

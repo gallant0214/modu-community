@@ -1303,6 +1303,7 @@ export type Database = {
           support_email: string | null
           refund_policy: string | null
           shop_slug: string | null
+          pg_enabled: boolean
           created_at: string
           updated_at: string
           lat: number | null
@@ -1342,6 +1343,7 @@ export type Database = {
           support_email?: string | null
           refund_policy?: string | null
           shop_slug?: string | null
+          pg_enabled?: boolean
           created_at?: string
           updated_at?: string
           lat?: number | null
@@ -1381,6 +1383,7 @@ export type Database = {
           support_email?: string | null
           refund_policy?: string | null
           shop_slug?: string | null
+          pg_enabled?: boolean
           created_at?: string
           updated_at?: string
           lat?: number | null
@@ -2535,6 +2538,11 @@ export type Database = {
       crm_orders: {
         Row: {
           onnuri_state: string | null
+          counter_state: string | null
+          counter_requested_at: string | null
+          counter_resolved_at: string | null
+          counter_resolved_by: string | null
+          counter_cancel_reason: string | null
           onnuri_started_at: string | null
           onnuri_claimed_at: string | null
           onnuri_alerted_at: string | null
@@ -2577,6 +2585,11 @@ export type Database = {
         }
         Insert: {
           onnuri_state?: string | null
+          counter_state?: string | null
+          counter_requested_at?: string | null
+          counter_resolved_at?: string | null
+          counter_resolved_by?: string | null
+          counter_cancel_reason?: string | null
           onnuri_started_at?: string | null
           onnuri_claimed_at?: string | null
           onnuri_alerted_at?: string | null
@@ -2619,6 +2632,11 @@ export type Database = {
         }
         Update: {
           onnuri_state?: string | null
+          counter_state?: string | null
+          counter_requested_at?: string | null
+          counter_resolved_at?: string | null
+          counter_resolved_by?: string | null
+          counter_cancel_reason?: string | null
           onnuri_started_at?: string | null
           onnuri_claimed_at?: string | null
           onnuri_alerted_at?: string | null

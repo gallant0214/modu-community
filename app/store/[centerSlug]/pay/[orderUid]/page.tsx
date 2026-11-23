@@ -16,6 +16,7 @@ import { centerOnnuriEnabled } from "@/app/lib/crm-onnuri";
 import TossPayClient from "@/app/pay/TossPayClient";
 import SellerInfo, { loadSellerInfo } from "@/app/pay/SellerInfo";
 import { pgProductName } from "@/app/lib/pg-product-name";
+import { safeReturnPath } from "@/app/lib/safe-return-to";
 
 export const dynamic = "force-dynamic";
 
@@ -39,22 +40,6 @@ export default async function PayPage({
   const { centerSlug, orderUid } = await params;
   const { t, rn, returnTo } = await searchParams;
 
-  if (!onlineSalesEnabled()) {
-    return <Notice title="준비 중이에요" body={SALES_DISABLED_MESSAGE} />;
-  }
-  /* 식별코드·채널키·API 키 중 하나라도 비면 결제창이 뜨다 말거나 검증이 실패한다.
-     결제창을 띄워 돈을 받고 나서 터지면 수습이 훨씬 어려우니 들어오기 전에 막는다.
-     🚨 어느 PG 인지는 **주문을 읽어야** 알 수 있다(아래 provider). 여기서는 둘 다
-        쓸 수 없는 경우만 미리 거르고, PG 별 검사는 주문을 읽은 뒤에 한 번 더 한다. */
-  if (!portoneConfigured() && !tossKeysMatch()) {
-    return (
-      <Notice
-        title="결제 설정에 문제가 있어요"
-        body="센터로 문의해주세요. (결제 연동 설정 누락)"
-      />
-    );
-  }
-
   if (!verifyOrderToken(t, orderUid)) {
     return (
       <Notice
@@ -68,7 +53,8 @@ export default async function PayPage({
     .from("crm_orders")
     .select(
       "id, center_id, member_id, product_id, product_type, product_name, list_price_won, " +
-        "coupon_discount_won, mileage_used, mileage_earned, amount_won, status, expires_at, pg_provider, onnuri_state"
+        "coupon_discount_won, mileage_used, mileage_earned, amount_won, status, expires_at, pg_provider, onnuri_state, " +
+        "counter_state"
     )
     .eq("order_uid", orderUid)
     .maybeSingle();
@@ -88,9 +74,13 @@ export default async function PayPage({
     expires_at: string | null;
     pg_provider: string | null;
     onnuri_state: string | null;
+    counter_state: string | null;
   } | null;
 
   if (!order) notFound();
+  /* 🚨 PG 는 범어점만 연결돼 있다. 나머지 센터 주문은 '카운터 결제 요청'이라 PG 결제창을 띄우지 않는다
+     (crm-counter-pay). PG 판매 스위치·설정 검사도 PG 주문에만 해당한다. */
+  const isCounter = order.counter_state === "requested";
 
   if (order.status !== "pending") {
     return (
@@ -109,9 +99,25 @@ export default async function PayPage({
   if (order.expires_at && new Date(order.expires_at).getTime() < Date.now() && order.onnuri_state !== "claimed") {
     return <Notice title="결제 시간이 지났어요" body="처음부터 다시 주문해주세요." />;
   }
-  /* 주문 생성 뒤에 허용목록이 바뀌었을 수도 있다 — 결제창을 띄우기 전에 한 번 더 본다 */
-  if (!salesAllowedForMember(order.member_id)) {
-    return <Notice title="준비 중이에요" body={SALES_RESTRICTED_MESSAGE} />;
+  if (!isCounter) {
+    if (!onlineSalesEnabled()) {
+      return <Notice title="준비 중이에요" body={SALES_DISABLED_MESSAGE} />;
+    }
+    /* 식별코드·채널키·API 키 중 하나라도 비면 결제창이 뜨다 말거나 검증이 실패한다.
+       결제창을 띄워 돈을 받고 나서 터지면 수습이 훨씬 어려우니 들어오기 전에 막는다.
+       PG 별 검사는 아래(provider)에서 한 번 더 한다. */
+    if (!portoneConfigured() && !tossKeysMatch()) {
+      return (
+        <Notice
+          title="결제 설정에 문제가 있어요"
+          body="센터로 문의해주세요. (결제 연동 설정 누락)"
+        />
+      );
+    }
+    /* 주문 생성 뒤에 허용목록이 바뀌었을 수도 있다 — 결제창을 띄우기 전에 한 번 더 본다 */
+    if (!salesAllowedForMember(order.member_id)) {
+      return <Notice title="준비 중이에요" body={SALES_RESTRICTED_MESSAGE} />;
+    }
   }
 
   /* 🚨 포트원 V1 은 buyer_tel 이 **필수**다. 비우면 결제창이 거부한다.
@@ -137,7 +143,7 @@ export default async function PayPage({
   /* 🚨 **주문에 저장된 PG** 를 따른다. 환경변수(현재 PG)를 보면, 결제창을 띄운 뒤
      스위치가 바뀐 경우 진행 중이던 결제가 엉뚱한 PG 로 승인 요청된다. */
   const provider = order.pg_provider === "toss" ? "toss" : "portone";
-  if (provider === "toss" ? !tossKeysMatch() : !portoneConfigured()) {
+  if (!isCounter && (provider === "toss" ? !tossKeysMatch() : !portoneConfigured())) {
     return (
       <Notice
         title="결제 설정에 문제가 있어요"
@@ -192,7 +198,7 @@ export default async function PayPage({
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-lg bg-white px-5 pb-16 pt-8">
-      <h1 className="text-lg font-bold text-gray-900">결제하기</h1>
+      <h1 className="text-lg font-bold text-gray-900">{isCounter ? "구매 요청" : "결제하기"}</h1>
 
       {/* 주문 요약 — 실제로 청구될 금액을 그대로 보여준다 */}
       <section className="mt-5 rounded-xl border border-gray-200 p-4">
@@ -223,7 +229,13 @@ export default async function PayPage({
         </dl>
       </section>
 
-      {(() => {
+      {isCounter ? (
+        <CounterRequested
+          returnToApp={rn === "1"}
+          // QR 셀프가입 — 결제 전이므로 '결제 완료' 가 아닌 가입 완료 안내로 보낸다
+          nextHref={safeReturnPath(returnTo)?.replace(/([?&])paid=1(&|$)/, "$1").replace(/[?&]$/, "") ?? null}
+        />
+      ) : (() => {
         const cardPay = provider === "toss" ? (
         <TossPayClient
           orderUid={orderUid}
@@ -278,6 +290,35 @@ export default async function PayPage({
 
       <SellerInfo seller={seller} slug={slug} />
     </main>
+  );
+}
+
+/** 카운터 결제 요청 접수 안내 — PG 미연결 센터 */
+function CounterRequested({ returnToApp, nextHref }: { returnToApp: boolean; nextHref: string | null }) {
+  return (
+    <section className="mt-6 rounded-xl border-2 border-blue-500 p-5">
+      <p className="text-base font-bold text-gray-900">구매 요청이 접수됐어요</p>
+      <ol className="mt-3 space-y-2 text-[14px] leading-relaxed text-gray-700">
+        <li>
+          <b>1.</b> 센터 <b>카운터</b>에서 위 금액을 결제해 주세요
+        </li>
+        <li>
+          <b>2.</b> 직원이 결제를 확인하면 <b>이용권이 바로 등록</b>돼요
+        </li>
+      </ol>
+      <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13px] text-gray-600">
+        등록되면 회원 앱 알림으로 알려드려요.
+        {returnToApp && " 이 창을 닫고 앱으로 돌아가셔도 돼요."}
+      </p>
+      {nextHref && (
+        <a
+          href={nextHref}
+          className="mt-4 block w-full rounded-xl bg-blue-600 py-3.5 text-center text-base font-bold text-white"
+        >
+          다음
+        </a>
+      )}
+    </section>
   );
 }
 

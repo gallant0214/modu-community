@@ -87,6 +87,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "sales.edit",         label: "매출(결제) 내역 수정",             defaults: D_ADMIN },
       { key: "sales.refund",       label: "회원권·대여권 환불 처리",   defaults: D_ADMIN },
       { key: "sales.onnuri_confirm", label: "모바일 온누리 결제 확인·승인 (미수 알림 받기 포함)", defaults: D_ADMIN },
+      { key: "sales.counter_confirm", label: "앱·홈페이지 카운터 결제 요청 승인 (요청 알림 받기 포함)", defaults: D_STAFF_NO_ALBA },
       { key: "sales.delete",       label: "매출(결제) 내역 삭제",             defaults: D_ADMIN },
       { key: "sales.excel",        label: "매출 내역 엑셀 내보내기",       defaults: D_ADMIN },
       { key: "sales.payroll_view", label: "직원 급여·수업료 정책 보기 — 다른 직원 포함", defaults: D_ADMIN },

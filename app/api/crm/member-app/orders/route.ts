@@ -1,5 +1,6 @@
 import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
+import { centerPgEnabled, counterOrderFields, notifyCounterRequest } from "@/app/lib/crm-counter-pay";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
@@ -99,13 +100,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "한 번에 최대 10개까지 담을 수 있어요" }, { status: 400 });
   }
 
-  if (!onlineSalesEnabled()) {
-    return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
-  }
-  /* 🚨 테스트 채널로 도는 동안은 허용된 회원(PG 심사원)만 결제할 수 있다.
-     여기가 돈이 걸리는 유일한 관문이므로 반드시 주문 생성에서 막는다. */
-  if (!salesAllowedForMember(ctx.memberId)) {
-    return NextResponse.json({ error: SALES_RESTRICTED_MESSAGE }, { status: 503 });
+  /* 🚨 PG(온라인 카드 결제)는 범어점만 연결돼 있다. 나머지 센터는 PG 를 거치지 않고
+     '카운터 결제 요청'으로 접수 → 직원이 카운터에서 결제 받고 승인하면 발급(crm-counter-pay). */
+  const pgEnabled = await centerPgEnabled(centerId);
+  if (pgEnabled) {
+    if (!onlineSalesEnabled()) {
+      return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
+    }
+    /* 🚨 테스트 채널로 도는 동안은 허용된 회원(PG 심사원)만 결제할 수 있다.
+       여기가 돈이 걸리는 유일한 관문이므로 반드시 주문 생성에서 막는다. */
+    if (!salesAllowedForMember(ctx.memberId)) {
+      return NextResponse.json({ error: SALES_RESTRICTED_MESSAGE }, { status: 503 });
+    }
   }
   const channel = body.channel === "web" ? "web" : "app";
 
@@ -201,10 +207,9 @@ export async function POST(request: Request) {
       amount_won: quote.amountWon,
       status: "pending",
       order_uid: orderUid,
-      pg_provider: memberPgProvider(),
       channel,
-      expires_at: expiresAt,
       start_date: startDate,
+      ...(pgEnabled ? { pg_provider: memberPgProvider(), expires_at: expiresAt } : counterOrderFields()),
     } as never)
     .select(ORDER_SELECT)
     .single();
@@ -262,6 +267,23 @@ export async function POST(request: Request) {
   }
 
   const payToken = signOrderToken(orderUid);
+
+  /* ── 카운터 결제 요청 — 직원에게 알리고, 결제 페이지는 '카운터에서 결제' 안내를 보여준다 ── */
+  if (!pgEnabled) {
+    await notifyCounterRequest(order.id).catch(() => {});
+    return NextResponse.json({
+      free: false,
+      /** PG 없이 카운터에서 결제 — 직원 승인 후 발급 */
+      counter: true,
+      orderId: order.id,
+      orderUid,
+      amount: quote.amountWon,
+      orderName,
+      // 예전 앱은 이 주소를 연다 — 결제 페이지가 카운터 결제 안내를 보여준다
+      payUrl: `${payPath(await payPathSlugForCenter(centerId), orderUid)}?t=${payToken}`,
+      payToken,
+    });
+  }
 
   return NextResponse.json({
     free: false,

@@ -12,6 +12,7 @@ import {
   SALES_RESTRICTED_MESSAGE,
 } from "@/app/lib/member-checkout";
 import { computeMemberNextStart, computeNextStart } from "@/app/lib/next-start";
+import { centerPgEnabled } from "@/app/lib/crm-counter-pay";
 
 export const dynamic = "force-dynamic";
 
@@ -54,12 +55,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "상품을 선택해주세요" }, { status: 400 });
   }
 
-  if (!onlineSalesEnabled()) {
-    return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
-  }
-  // 결제 못 할 회원에게 금액까지 계산해 보여주면 마지막에 막혀 더 혼란스럽다
-  if (!salesAllowedForMember(ctx.memberId)) {
-    return NextResponse.json({ error: SALES_RESTRICTED_MESSAGE }, { status: 503 });
+  // PG 판매 스위치·허용 회원은 PG 센터(범어점)에만 해당 — 나머지는 카운터 결제 요청이라 PG 를 안 쓴다
+  if (await centerPgEnabled(centerId)) {
+    if (!onlineSalesEnabled()) {
+      return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
+    }
+    // 결제 못 할 회원에게 금액까지 계산해 보여주면 마지막에 막혀 더 혼란스럽다
+    if (!salesAllowedForMember(ctx.memberId)) {
+      return NextResponse.json({ error: SALES_RESTRICTED_MESSAGE }, { status: 503 });
+    }
   }
 
   // 시한 지난 주문이 잡고 있던 마일리지를 풀어야 가용액이 정확해진다

@@ -460,7 +460,8 @@ export async function GET(request: Request) {
       product_seller_member_id: sellerId,
       product_seller_name: sellerId ? staffByIdMap.get(sellerId) ?? null : null,
       /** 온라인 결제면 어디서 결제됐는지. 직원 발급이면 null */
-      pg: ord
+      // 카운터 결제 요청(PG 미연결 센터)은 돈을 카운터에서 받았다 — 일반 결제처럼 CRM 에서 환불한다
+      pg: ord && ord.pg_provider !== "counter"
         ? {
             provider: ord.pg_provider,
             channel: ord.channel, // web | app

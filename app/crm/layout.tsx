@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmSidebar } from "./_components/crm-sidebar";
 import { OnnuriPendingBanner } from "./_components/onnuri-pending-banner";
+import { CounterPayBanner } from "./_components/counter-pay-banner";
 import { CrmThemeProvider } from "./_components/crm-theme";
 import { CrmToastProvider } from "./_components/crm-toast";
 import { getCenterCookie, clearCenterCookie } from "./_components/crm-center-cookie";
@@ -219,6 +220,10 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           {/* 미수 · 온누리 결제 확인 요망 — 대시보드·회원관리·출석현황 맨 위. 처리할 때까지 계속 뜬다 */}
           {ctx.permissions?.["sales.onnuri_confirm"] && ONNURI_BANNER_PATHS.has(pathname ?? "") && (
             <OnnuriPendingBanner />
+          )}
+          {/* 이용권 결제 요청 — PG 미연결 센터의 앱·홈페이지 구매. 카운터에서 결제 받고 승인할 때까지 계속 뜬다 */}
+          {ctx.permissions?.["sales.counter_confirm"] && ONNURI_BANNER_PATHS.has(pathname ?? "") && (
+            <CounterPayBanner />
           )}
           {children}
         </main>

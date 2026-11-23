@@ -31,10 +31,10 @@ async function loadCenter(slug: string) {
   if (!isValidShopSlug(slug)) return null;
   const { data } = await supabase
     .from("crm_centers")
-    .select("id, name, status")
+    .select("id, name, status, pg_enabled")
     .eq("shop_slug", slug)
     .maybeSingle();
-  const c = data as { id: number; name: string; status: string } | null;
+  const c = data as { id: number; name: string; status: string; pg_enabled: boolean } | null;
   if (!c || c.status !== "active") return null;
   return c;
 }
@@ -108,11 +108,14 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
         <p className="text-xs font-semibold text-blue-600">이용권 구매</p>
         <h1 className="mt-1 text-xl font-bold text-gray-900">{center.name}</h1>
         <p className="mt-2 text-sm leading-relaxed text-gray-500">
-          결제하시면 이용권이 바로 등록됩니다. 회원 앱에서 바로 확인하실 수 있어요.
+          {center.pg_enabled
+            ? "결제하시면 이용권이 바로 등록됩니다. 회원 앱에서 바로 확인하실 수 있어요."
+            : "구매를 요청하시고 센터 카운터에서 결제해 주세요. 결제가 확인되면 이용권이 등록됩니다."}
         </p>
       </header>
 
-      {!onlineSalesEnabled() && (
+      {/* PG 판매 스위치는 PG 센터(범어점)에만 해당 — 나머지는 카운터 결제 요청 */}
+      {center.pg_enabled && !onlineSalesEnabled() && (
         <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
           온라인 결제 준비 중입니다. 구매는 센터로 문의해주세요.
         </p>
@@ -122,7 +125,7 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
         centerId={center.id}
         centerName={center.name}
         products={products}
-        salesEnabled={onlineSalesEnabled()}
+        salesEnabled={!center.pg_enabled || onlineSalesEnabled()}
       />
 
       {/* 🚨 KG이니시스 사이트 검수 3번 — "상품 상세페이지에 서비스 제공기간, 교환, 환불,
