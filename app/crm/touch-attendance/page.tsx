@@ -931,7 +931,8 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           onClick={() => setSettingsOpen(false)}
         >
           <div
-            className="w-full max-w-[420px] rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5"
+            // 내용이 화면보다 길면(세로 태블릿·블루투스 설정 추가) 모달 안에서 스크롤 — 위아래가 잘리지 않게
+            className="w-full max-w-[420px] max-h-full overflow-y-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
