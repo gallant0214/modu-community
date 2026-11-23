@@ -92,7 +92,7 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
       mileageEarn: p.mileage_earn,
       billingMode: p.billing_mode,
       eligibility: p.online_eligibility || "any",
-      /** 단독 구매 불가 — 이용권에 곁들여 담는 상품 */
+      /** 곁들임 상품 — 이용권에 같이 담거나 단독으로 살 수 있다 */
       addon: p.type === "apparel",
     }));
 

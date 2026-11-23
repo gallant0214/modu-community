@@ -10,7 +10,7 @@
 import { supabase } from "@/app/lib/supabase";
 import { computeCouponDiscount, effectiveStatus, benefitText, type CouponDef } from "@/app/lib/crm-coupons";
 import type { SellableProduct } from "@/app/lib/member-purchase";
-import { ONLINE_SELLABLE_TYPES as SELLABLE, ADDON_TYPES as ADDONS } from "@/app/lib/crm-online-sale";
+import { ONLINE_SELLABLE_TYPES as SELLABLE } from "@/app/lib/crm-online-sale";
 import { shopRegistrationType } from "@/app/lib/crm-registration-type";
 
 /** pending 주문이 살아있는 시간 — 지나면 쿠폰·마일리지 선점이 풀린다 */
@@ -436,10 +436,7 @@ export async function quoteCart(opts: {
       return { ...empty, ok: false, error: `'${p.name}' 은 지금 구매할 수 없어요` };
     }
   }
-  // 곁들이는 상품만 담고 이용권이 없으면 막는다
-  if (products.every((p) => ADDONS.has(p.type))) {
-    return { ...empty, ok: false, error: "회원권이나 수강권을 함께 선택해주세요" };
-  }
+  // 운동복만 담은 주문도 허용한다(2026-11-23) — 이용권 없이 운동복만 따로 결제할 수 있어야 한다.
 
   /* ── 신규/재등록 자격 ─────────────────────────────── */
   const { data: memRow } = await supabase

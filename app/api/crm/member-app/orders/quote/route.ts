@@ -11,7 +11,7 @@ import {
   salesAllowedForMember,
   SALES_RESTRICTED_MESSAGE,
 } from "@/app/lib/member-checkout";
-import { computeMemberNextStart } from "@/app/lib/next-start";
+import { computeMemberNextStart, computeNextStart } from "@/app/lib/next-start";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +92,11 @@ export async function POST(request: Request) {
   }
 
   // 시작일 기본값 — 지금 이용 중인 이용권 종료일 다음날(없으면 오늘). 앱에서 수정 가능.
-  const nextStart = await computeMemberNextStart(centerId, ctx.memberId);
+  // 운동복만 사는 경우엔 회원권이 아니라 지금 쓰는 운동복 뒤로 잇는다(없으면 오늘).
+  const apparelOnly = products.every((p) => p.type === "apparel");
+  const nextStart = apparelOnly
+    ? await computeNextStart(centerId, ctx.memberId, "apparel")
+    : await computeMemberNextStart(centerId, ctx.memberId);
 
   return NextResponse.json({
     lines: quote.lines,

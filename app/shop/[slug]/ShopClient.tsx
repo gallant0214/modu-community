@@ -20,7 +20,7 @@ export interface ShopProduct {
   billingMode: string;
   /** any(누구나) | new(신규만) | rejoin(재등록만) */
   eligibility: string;
-  /** 단독 구매 불가 — 이용권에 곁들여 담는 상품(운동복) */
+  /** 곁들임 상품(운동복) — 이용권에 같이 담거나, 운동복만 따로 살 수 있다 */
   addon: boolean;
 }
 
@@ -82,7 +82,7 @@ export default function ShopClient(props: {
   useEffect(() => {
     const pid = Number(searchParams.get("product"));
     if (!pid) return;
-    const p = props.products.find((x) => x.id === pid && !x.addon);
+    const p = props.products.find((x) => x.id === pid);
     if (p) setPicked(p);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -217,12 +217,15 @@ export default function ShopClient(props: {
       <div className="mt-6 space-y-6">
         {renderGroups(grouped)}
         {Object.keys(groupedCommon).length > 0 && renderGroups(groupedCommon)}
+        {/* 운동복 — 이용권 없이 운동복만 따로 구매할 수 있다 (신규/재등록 탭과 무관하게 항상 노출) */}
+        {addonProducts.length > 0 && renderGroups({ 운동복: addonProducts })}
       </div>
 
       {picked && (
         <CheckoutSheet
           product={picked}
-          addonProducts={addonProducts}
+          // 운동복을 직접 고른 경우엔 '함께 담기' 를 보여주지 않는다(운동복만 결제)
+          addonProducts={picked.addon ? [] : addonProducts}
           addons={addons}
           onToggleAddon={(id: number) =>
             setAddons((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
