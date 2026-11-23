@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * 블루투스 자동 출석 — 터치출석 태블릿 APK(v1.3+)와 웹 화면 사이의 연결.
@@ -27,7 +27,34 @@ export interface BeaconStatus {
 }
 
 const LS_ENABLED = "crm_touch_ble_enabled"; // 태블릿별. 기본 켜짐("0" 일 때만 꺼짐)
+const LS_RANGE = "crm_touch_ble_range"; // 태블릿별 감지 거리. 기본 보통
 const RETRY_MS = 5 * 60 * 1000;
+
+/**
+ * 감지 거리 3단계 — 입구에서 폰을 들고 시험하며 태블릿 톱니바퀴에서 고른다.
+ * 폰은 태블릿이 알려 주는 '1m 기준 세기'와 실제로 받은 세기를 비교해 거리를 추정하므로,
+ * 기준 세기를 높이면 폰이 더 멀다고 판단(더 가까이 와야 출석), 낮추면 더 가깝다고 판단한다.
+ * '보통' = 서버 기본값(app/lib/ble-beacon.ts BLE_TX_POWER·BLE_MEASURED_POWER) 그대로.
+ */
+export type BeaconRange = "near" | "normal" | "far";
+const TX_LEVELS = ["ultra_low", "low", "medium", "high"];
+function rangeParams(range: BeaconRange, baseTx: string, baseMp: number): { txPower: string; measuredPower: number } {
+  if (range === "near") return { txPower: baseTx, measuredPower: baseMp + 8 };
+  if (range === "far") {
+    const i = TX_LEVELS.indexOf(baseTx);
+    return { txPower: TX_LEVELS[Math.min(TX_LEVELS.length - 1, (i < 0 ? 0 : i) + 1)], measuredPower: baseMp - 4 };
+  }
+  return { txPower: baseTx, measuredPower: baseMp };
+}
+
+interface BeaconResponse {
+  uuid: string;
+  major: number;
+  tx_power: string;
+  measured_power: number;
+  codes: { minor: number; from: string; to: string }[];
+  refresh_at: string;
+}
 
 function getBridge(): BeaconBridge | null {
   if (typeof window === "undefined") return null;
@@ -57,6 +84,33 @@ export function useKioskBeacon(kioskToken?: string) {
       return true; // 저장소 차단 — 기본 켜짐
     }
   });
+  const [range, setRangeState] = useState<BeaconRange>(() => {
+    if (typeof window === "undefined") return "normal";
+    try {
+      const v = localStorage.getItem(LS_RANGE);
+      return v === "near" || v === "far" ? v : "normal";
+    } catch {
+      return "normal";
+    }
+  });
+  // 마지막으로 받은 신호 값 — 감지 거리를 바꿀 때 서버를 다시 부르지 않고 바로 적용
+  const lastData = useRef<BeaconResponse | null>(null);
+  // 1시간마다 받는 load() 안에서 '지금' 감지 거리를 읽기 위한 사본(setRange 에서만 갱신)
+  const rangeRef = useRef(range);
+
+  const send = (d: BeaconResponse, r: BeaconRange) => {
+    const bridge = getBridge();
+    if (!bridge) return;
+    bridge.setSchedule(
+      JSON.stringify({
+        uuid: d.uuid,
+        major: d.major,
+        ...rangeParams(r, d.tx_power, d.measured_power),
+        // APK 는 시각(epoch ms)만 보고 지금 창의 코드를 고른다. 코드가 다 끝나면 스스로 멈춘다.
+        codes: d.codes.map((c) => ({ minor: c.minor, from: Date.parse(c.from), to: Date.parse(c.to) })),
+      })
+    );
+  };
 
   useEffect(() => {
     if (!available || !kioskToken) return;
@@ -77,22 +131,10 @@ export function useKioskBeacon(kioskToken?: string) {
       try {
         const res = await fetch(`/api/touch/${kioskToken}/beacon`, { cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
-        const d = await res.json();
+        const d = (await res.json()) as BeaconResponse;
         if (stopped) return;
-        bridge.setSchedule(
-          JSON.stringify({
-            uuid: d.uuid,
-            major: d.major,
-            txPower: d.tx_power,
-            measuredPower: d.measured_power,
-            // APK 는 시각(epoch ms)만 보고 지금 창의 코드를 고른다. 코드가 다 끝나면 스스로 멈춘다.
-            codes: (d.codes as { minor: number; from: string; to: string }[]).map((c) => ({
-              minor: c.minor,
-              from: Date.parse(c.from),
-              to: Date.parse(c.to),
-            })),
-          })
-        );
+        lastData.current = d;
+        send(d, rangeRef.current);
         const next = Math.max(60_000, Date.parse(d.refresh_at) - Date.now());
         timer = setTimeout(load, next);
       } catch {
@@ -116,7 +158,18 @@ export function useKioskBeacon(kioskToken?: string) {
     }
   };
 
-  return { available, enabled, setEnabled };
+  const setRange = (r: BeaconRange) => {
+    rangeRef.current = r;
+    setRangeState(r);
+    try {
+      localStorage.setItem(LS_RANGE, r);
+    } catch {
+      /* noop */
+    }
+    if (enabled && lastData.current) send(lastData.current, r);
+  };
+
+  return { available, enabled, setEnabled, range, setRange };
 }
 
 function statusText(s: BeaconStatus | null, enabled: boolean): string {
@@ -133,9 +186,13 @@ function statusText(s: BeaconStatus | null, enabled: boolean): string {
 export function BleBeaconSettings({
   enabled,
   onChange,
+  range,
+  onRangeChange,
 }: {
   enabled: boolean;
   onChange: (v: boolean) => void;
+  range: BeaconRange;
+  onRangeChange: (r: BeaconRange) => void;
 }) {
   const [status, setStatus] = useState<BeaconStatus | null>(() => readBeaconStatus());
   useEffect(() => {
@@ -169,6 +226,37 @@ export function BleBeaconSettings({
         })}
       </div>
       <div className="mt-2 text-[12px] text-[#8C8270] dark:text-zinc-500">{statusText(status, enabled)}</div>
+
+      {enabled && (
+        <div className="mt-3.5">
+          <div className="text-[13.5px] text-[#3A342A] dark:text-zinc-200 mb-1.5">감지 거리</div>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { r: "near", label: "가깝게" },
+              { r: "normal", label: "보통" },
+              { r: "far", label: "멀게" },
+            ] as const).map(({ r, label }) => {
+              const active = range === r;
+              return (
+                <button
+                  key={r}
+                  onClick={() => onRangeChange(r)}
+                  className={`px-3 py-2.5 rounded-xl border text-[14px] font-semibold transition-colors ${
+                    active
+                      ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+                      : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
+                  }`}
+                >
+                  {active ? "✓ " : ""}{label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-1.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
+            입구 밖에서도 출석되면 &lsquo;가깝게&rsquo;, 태블릿 앞에서도 잘 안 되면 &lsquo;멀게&rsquo;로 바꿔 보세요. 바로 적용돼요.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

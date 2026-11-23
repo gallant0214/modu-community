@@ -1080,7 +1080,12 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             </div>
 
             {beacon.available && (
-              <BleBeaconSettings enabled={beacon.enabled} onChange={beacon.setEnabled} />
+              <BleBeaconSettings
+                enabled={beacon.enabled}
+                onChange={beacon.setEnabled}
+                range={beacon.range}
+                onRangeChange={beacon.setRange}
+              />
             )}
           </div>
         </div>
