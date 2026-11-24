@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  * 정적 kiosk_token(공개 /touch URL)만 받는다. 주간 QR 토큰(q1.)은 resolveKioskCenter 가 거절.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
@@ -26,6 +26,23 @@ export async function GET(
   if (!center) {
     return NextResponse.json({ error: "유효하지 않은 링크예요" }, { status: 404 });
   }
+  // 태블릿이 알려 준 송출 상태 — 현장 점검용 기록(태블릿을 직접 볼 수 없을 때 서버 로그로 확인)
+  const url = new URL(request.url);
+  const st = url.searchParams.get("st");
+  if (st) {
+    console.log(
+      "[ble-beacon]",
+      JSON.stringify({
+        center: center.centerId,
+        st: st.slice(0, 300),
+        ua: (request.headers.get("user-agent") || "").slice(0, 200),
+      })
+    );
+  }
+  if (url.searchParams.get("report") === "1") {
+    return new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+  }
+
   // iBeacon major 는 16bit
   if (center.centerId > 0xffff) {
     return NextResponse.json({ error: "지원하지 않는 센터예요" }, { status: 400 });

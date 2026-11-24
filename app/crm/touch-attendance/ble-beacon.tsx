@@ -72,6 +72,16 @@ export function readBeaconStatus(): BeaconStatus | null {
   }
 }
 
+/** 서버 점검용 — 태블릿 앱이 알려 주는 송출 상태 그대로(짧은 JSON) */
+function statusParam(): string {
+  try {
+    const b = getBridge();
+    return encodeURIComponent((b ? b.status() : "none").slice(0, 300));
+  } catch {
+    return "err";
+  }
+}
+
 /** 공개 터치출석(kioskToken) + 전용 APK 일 때만 동작. available=false 면 설정 모달에도 안 보인다. */
 export function useKioskBeacon(kioskToken?: string) {
   // APK 가 페이지 로드 전에 브리지를 넣으므로 첫 렌더에 바로 알 수 있다
@@ -129,12 +139,18 @@ export function useKioskBeacon(kioskToken?: string) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = async () => {
       try {
-        const res = await fetch(`/api/touch/${kioskToken}/beacon`, { cache: "no-store" });
+        // 태블릿의 송출 상태를 같이 보낸다 — 태블릿을 직접 볼 수 없을 때 서버 기록으로 점검하기 위함
+        const res = await fetch(`/api/touch/${kioskToken}/beacon?st=${statusParam()}`, { cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
         const d = (await res.json()) as BeaconResponse;
         if (stopped) return;
         lastData.current = d;
         send(d, rangeRef.current);
+        // 송출 시작 결과는 조금 뒤에 나온다 — 10초 뒤 상태만 한 번 더 알린다(응답 본문 없음)
+        setTimeout(() => {
+          if (stopped) return;
+          fetch(`/api/touch/${kioskToken}/beacon?report=1&st=${statusParam()}`, { cache: "no-store" }).catch(() => {});
+        }, 10_000);
         const next = Math.max(60_000, Date.parse(d.refresh_at) - Date.now());
         timer = setTimeout(load, next);
       } catch {
