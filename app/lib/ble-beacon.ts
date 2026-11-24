@@ -17,14 +17,14 @@ export const BLE_WINDOW_MS = 5 * 60 * 1000;
 /**
  * 태블릿 광고 세기.
  * 🚨 최저 출력(ultra_low)은 실제 태블릿에서 바로 앞의 폰에도 닿지 않았다(2026-11-24 현장 확인 — 신호 0건).
- *    주머니·가방 속 폰까지 닿아야 하므로 중간 출력으로 보낸다. 출석 범위는 출력이 아니라
+ *    주머니·가방 속 폰까지 닿아야 하므로 최대 출력으로 보낸다. 출석 범위는 출력이 아니라
  *    폰의 거리 판정(아래 기준 세기)으로 좁힌다.
  * measuredPower = 1m 거리에서 폰이 실제로 받는 신호 세기(dBm). 폰이 '가까움'을 판정하는 기준이라,
  * 현장에서 너무 멀리서/가까이서만 잡히면 이 값만 고쳐 배포하면 된다(APK 재설치 불필요).
  * 출력을 바꾸면 이 값도 실측해서 같이 바꿔야 한다(출력 한 단계 ≈ 6~8dB).
  */
-export const BLE_TX_POWER = "medium" as const;
-export const BLE_MEASURED_POWER = -69;
+export const BLE_TX_POWER = "high" as const;
+export const BLE_MEASURED_POWER = -61;
 
 /** 태블릿에 한 번에 내려주는 코드 개수 — 12 × 5분 = 1시간치(하루 24회 호출) */
 export const BLE_CODES_PER_FETCH = 12;
