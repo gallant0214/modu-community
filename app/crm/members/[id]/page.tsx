@@ -17,6 +17,7 @@ import {
 } from "../../_components/crm-labels";
 import { CouponPicker, type AppliedCoupon } from "../../_components/coupon-picker";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
+import { useCrmCenterAlert } from "../../_components/crm-center-alert";
 import BirthDateInput from "@/app/crm/_components/birth-date-input";
 import { RefundDialog } from "@/app/crm/_components/refund-dialog";
 import { CrmDeniedNotice } from "@/app/crm/_components/crm-denied-notice";
@@ -7595,6 +7596,8 @@ function UsageIssueModal({
   const [showProducts, setShowProducts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // 판매자 미선택 → 결제 창 가운데에 잠깐 안내
+  const [centerAlertNode, showCenterAlert] = useCrmCenterAlert();
 
   // 장바구니 — 여러 상품을 한 번의 결제로 처리하기 위한 스냅샷 배열
   interface CartLine {
@@ -7717,7 +7720,10 @@ function UsageIssueModal({
     if (!startDate) return "시작일을 선택해 주세요";
     if (!durationDays || durationDays < 1) return "이용 기간을 입력해 주세요";
     if (!expiresAt) return "기간을 확인해 주세요";
-    if (!sellerId) return "판매자를 선택해 주세요";
+    if (!sellerId) {
+      showCenterAlert("판매자를 선택해 주세요");
+      return "판매자를 선택해 주세요";
+    }
     const loc = type === "locker" && lockerId
       ? lockers.find((l) => l.id === lockerId)
       : null;
@@ -8209,6 +8215,7 @@ function UsageIssueModal({
 
   return (
     <CrmModal open={open} onClose={onClose} title="회원권 발급" size="xl">
+      {centerAlertNode}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-4">
         <div className="space-y-3">
         <CrmField label="종류" required>
@@ -9068,6 +9075,8 @@ function PassIssueModal({
   const [sellerId, setSellerId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // 판매자·담당 강사 미선택 → 발급 창 가운데에 잠깐 안내
+  const [centerAlertNode, showCenterAlert] = useCrmCenterAlert();
 
   // 🚨 담당 강사·판매자는 자동으로 채우지 않는다 — 열 때마다 비우고 직접 고르게 한다.
   //    (공용 '스페셜바디' 계정으로 발급하면 담당 강사가 그 계정으로 자동 지정돼
@@ -9159,8 +9168,14 @@ function PassIssueModal({
   const submit = async () => {
     setError("");
     if (!lessonKind.trim()) return setError("수업 종류를 입력해주세요");
-    if (!trainerId) return setError("담당 강사를 선택해 주세요");
-    if (!sellerId) return setError("판매자를 선택해 주세요");
+    if (!trainerId) {
+      showCenterAlert("담당 강사를 선택해 주세요");
+      return setError("담당 강사를 선택해 주세요");
+    }
+    if (!sellerId) {
+      showCenterAlert("판매자를 선택해 주세요");
+      return setError("판매자를 선택해 주세요");
+    }
     if (totalSessions < 1) return setError("총 세션 수는 1 이상이어야 합니다");
     setSubmitting(true);
     try {
@@ -9224,6 +9239,7 @@ function PassIssueModal({
 
   return (
     <CrmModal open={open} onClose={onClose} title="수강권 발급" size="lg">
+      {centerAlertNode}
       <div className="space-y-3">
         <CrmField label="수강권 상품" required>
           <div className="relative">
