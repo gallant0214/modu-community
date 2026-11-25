@@ -553,14 +553,11 @@ export default function CrmSchedulePage() {
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
           예약 {reservations.length}건 · 일정 {events.length}건
-          {unprocessedCount > 0 && (
-            <>
-              {" · "}
-              <span className="font-semibold text-red-600 dark:text-red-400">
-                출석 미처리 {unprocessedCount}건
-              </span>
-            </>
-          )}
+          {" · "}
+          {/* 보이는 기간 기준 — 0건도 표시, 있으면 빨간 글씨 */}
+          <span className={unprocessedCount > 0 ? "font-semibold text-red-600 dark:text-red-400" : undefined}>
+            {viewMode === "day" ? "이날" : viewMode === "week" ? "이번주" : "이번달"} 출석 미처리 {unprocessedCount}건
+          </span>
         </span>
         {/* 상태 색상 범례 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
