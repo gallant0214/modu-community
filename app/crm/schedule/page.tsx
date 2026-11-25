@@ -552,7 +552,10 @@ export default function CrmSchedulePage() {
       {panelMode === "calendar" && (
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          예약 {reservations.length}건 · 일정 {events.length}건
+          {/* 예약=범례 '예약완료'(노랑) 계열, 일정=범례 '개인스케줄'(하늘) 계열 — 글자는 읽히게 진한 톤 */}
+          <span className="font-semibold text-amber-700 dark:text-amber-400">예약 {reservations.length}건</span>
+          {" · "}
+          <span className="font-semibold text-sky-700 dark:text-sky-400">일정 {events.length}건</span>
           {" · "}
           {/* 보이는 기간 기준 — 0건도 표시, 있으면 빨간 글씨 */}
           <span className={unprocessedCount > 0 ? "font-semibold text-red-600 dark:text-red-400" : undefined}>
