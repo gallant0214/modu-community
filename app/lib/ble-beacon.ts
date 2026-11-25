@@ -24,7 +24,9 @@ export const BLE_WINDOW_MS = 5 * 60 * 1000;
  * 출력을 바꾸면 이 값도 실측해서 같이 바꿔야 한다(출력 한 단계 ≈ 6~8dB).
  */
 export const BLE_TX_POWER = "high" as const;
-export const BLE_MEASURED_POWER = -61;
+// 2026-11-25 입구 태블릿(Infos_Duple) 실측: 2m 거리에서 폰(S20 Ultra) 수신 세기 -58~-72(중간 -63).
+// 사장님 기준 "2m 는 '보통'에서 출석" → 보통 문턱 약 -68(= -57 × 1.195). 가깝게(+8) ≈ -59(1m 안쪽), 멀게(-4) ≈ -73.
+export const BLE_MEASURED_POWER = -57;
 
 /** 태블릿에 한 번에 내려주는 코드 개수 — 12 × 5분 = 1시간치(하루 24회 호출) */
 export const BLE_CODES_PER_FETCH = 12;
