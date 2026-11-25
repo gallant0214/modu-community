@@ -143,7 +143,19 @@ export async function getBleRange(centerId: number): Promise<BleRange> {
   }
 }
 
-/** 지금 그 센터 태블릿이 내보내는 1m 기준 세기 — 아이폰 판정용 */
+/**
+ * 아이폰은 태블릿 설정보다 한 단계 넓게 판정한다(사장님 결정 2026-11-25: 안드로이드는 '가깝게' 그대로, 아이폰만 넓게).
+ * 아이폰은 화면이 꺼져 있으면 새 세기 값을 2~3초에 한 번만 받아서, 같은 기준이면 태블릿 앞에 도착하고도
+ * 2~3초 기다리게 된다. 한 단계 넓히면 그 지연만큼 일찍 판정돼 도착할 때쯤 출석이 끝난다.
+ * (앞당겨 판정하는 보정은 실기기에서 4~5m 에 미리 찍혀 폐기 — 회원앱 BleCheckinManager.swift 주석 참고)
+ */
+const IOS_RANGE_FOR: Record<BleRange, { measuredPower: number }> = {
+  near: { measuredPower: BLE_MEASURED_POWER + BLE_RANGE_OFFSET.normal },
+  normal: { measuredPower: BLE_MEASURED_POWER + BLE_RANGE_OFFSET.far },
+  far: { measuredPower: BLE_MEASURED_POWER + BLE_RANGE_OFFSET.far - 4 },
+};
+
+/** 아이폰 판정용 1m 기준 세기 — 그 센터 태블릿의 감지 거리 설정에서 한 단계 넓힌 값 */
 export async function bleMeasuredPowerFor(centerId: number): Promise<number> {
-  return bleRangeParams(await getBleRange(centerId)).measuredPower;
+  return IOS_RANGE_FOR[await getBleRange(centerId)].measuredPower;
 }
