@@ -7,6 +7,7 @@ import {
   BLE_TX_POWER,
   BLE_WINDOW_MS,
   bleCodes,
+  bleRangeParams,
   parseBleRange,
   setBleRange,
 } from "@/app/lib/ble-beacon";
@@ -61,6 +62,12 @@ export async function GET(
       major: center.centerId,
       tx_power: BLE_TX_POWER,
       measured_power: BLE_MEASURED_POWER,
+      // 감지 거리 단계별 값 — 태블릿 화면은 이 표를 그대로 쓴다(기준을 서버에서만 고치면 되게)
+      ranges: {
+        near: bleRangeParams("near"),
+        normal: bleRangeParams("normal"),
+        far: bleRangeParams("far"),
+      },
       window_ms: BLE_WINDOW_MS,
       codes,
       // 마지막 코드가 끝나기 10분 전에 다시 받는다

@@ -39,10 +39,11 @@ const RETRY_MS = 5 * 60 * 1000;
 export type BeaconRange = "near" | "normal" | "far";
 const TX_LEVELS = ["ultra_low", "low", "medium", "high"];
 function rangeParams(range: BeaconRange, baseTx: string, baseMp: number): { txPower: string; measuredPower: number } {
-  if (range === "near") return { txPower: baseTx, measuredPower: baseMp + 8 };
+  // 서버 응답에 단계별 값(ranges)이 없을 때의 대비용 — 값은 app/lib/ble-beacon.ts BLE_RANGE_OFFSET 과 같게
+  if (range === "near") return { txPower: baseTx, measuredPower: baseMp + 3 };
   if (range === "far") {
     const i = TX_LEVELS.indexOf(baseTx);
-    return { txPower: TX_LEVELS[Math.min(TX_LEVELS.length - 1, (i < 0 ? 0 : i) + 1)], measuredPower: baseMp - 4 };
+    return { txPower: TX_LEVELS[Math.min(TX_LEVELS.length - 1, (i < 0 ? 0 : i) + 1)], measuredPower: baseMp - 6 };
   }
   return { txPower: baseTx, measuredPower: baseMp };
 }
@@ -54,6 +55,8 @@ interface BeaconResponse {
   measured_power: number;
   codes: { minor: number; from: string; to: string }[];
   refresh_at: string;
+  /** 감지 거리 단계별 값(서버가 정한 기준). 예전 응답에는 없다 */
+  ranges?: Partial<Record<BeaconRange, { txPower: string; measuredPower: number }>>;
 }
 
 function getBridge(): BeaconBridge | null {
@@ -115,7 +118,7 @@ export function useKioskBeacon(kioskToken?: string) {
       JSON.stringify({
         uuid: d.uuid,
         major: d.major,
-        ...rangeParams(r, d.tx_power, d.measured_power),
+        ...(d.ranges?.[r] ?? rangeParams(r, d.tx_power, d.measured_power)),
         // APK 는 시각(epoch ms)만 보고 지금 창의 코드를 고른다. 코드가 다 끝나면 스스로 멈춘다.
         codes: d.codes.map((c) => ({ minor: c.minor, from: Date.parse(c.from), to: Date.parse(c.to) })),
       })
@@ -276,7 +279,7 @@ export function BleBeaconSettings({
             })}
           </div>
           <div className="mt-1.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
-            입구 밖에서도 출석되면 &lsquo;가깝게&rsquo;, 태블릿 앞에서도 잘 안 되면 &lsquo;멀게&rsquo;로 바꿔 보세요. 바로 적용돼요.
+            가깝게는 약 2m 이내, 보통은 약 5m 이내, 멀게는 그보다 멀리서도 출석돼요. 주머니·가방 속에서는 조금 더 가까이 와야 해요. 바로 적용돼요.
           </div>
         </div>
       )}

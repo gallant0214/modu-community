@@ -108,16 +108,18 @@ export function parseBleRange(v: unknown): BleRange | null {
 }
 
 /** 터치출석 화면(app/crm/touch-attendance/ble-beacon.tsx rangeParams)과 같은 계산 — 한쪽을 고치면 다른 쪽도 */
+/**
+ * 단계별 기준 세기 보정(dB). 사장님 기준(2026-11-25): 가깝게 = 2m 이내, 보통 = 2~5m, 멀게 = 5m 이상.
+ * 입구 태블릿 2m 자리 실측(아이폰 평균 -64, Android 중간 -63)에서 '가깝게'가 바로 출석되도록 +3
+ * (예전 +8 은 1m 안쪽까지 와야 해서 태블릿 앞에서 한참 기다렸다). '멀게'는 -6.
+ */
+export const BLE_RANGE_OFFSET: Record<BleRange, number> = { near: 3, normal: 0, far: -6 };
+
+/** 터치출석 화면은 이 값을 서버 응답(ranges)으로 받아 쓴다 — 화면 쪽 계산(rangeParams)은 응답에 없을 때의 대비용 */
 export function bleRangeParams(range: BleRange): { txPower: string; measuredPower: number } {
-  if (range === "near") return { txPower: BLE_TX_POWER, measuredPower: BLE_MEASURED_POWER + 8 };
-  if (range === "far") {
-    const i = TX_LEVELS.indexOf(BLE_TX_POWER);
-    return {
-      txPower: TX_LEVELS[Math.min(TX_LEVELS.length - 1, (i < 0 ? 0 : i) + 1)],
-      measuredPower: BLE_MEASURED_POWER - 4,
-    };
-  }
-  return { txPower: BLE_TX_POWER, measuredPower: BLE_MEASURED_POWER };
+  const i = TX_LEVELS.indexOf(BLE_TX_POWER);
+  const txPower = range === "far" ? TX_LEVELS[Math.min(TX_LEVELS.length - 1, (i < 0 ? 0 : i) + 1)] : BLE_TX_POWER;
+  return { txPower, measuredPower: BLE_MEASURED_POWER + BLE_RANGE_OFFSET[range] };
 }
 
 const rangeKey = (centerId: number) => `ble:range:${centerId}`;
