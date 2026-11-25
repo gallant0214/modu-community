@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "인증 정보가 없어요", code: "no_device" }, { status: 401 });
   }
 
-  let body: { major?: number; minor?: number };
+  let body: { major?: number; minor?: number; dbg?: string };
   try {
     body = await request.json();
   } catch {
@@ -51,6 +51,10 @@ export async function POST(request: Request) {
   }
   const major = Number(body.major);
   const minor = Number(body.minor);
+  // 현장 점검용 — 폰이 보내는 감지 타이밍 요약(걸어오는 시험은 폰 기록을 직접 볼 수 없어서 서버 로그로 확인)
+  if (typeof body.dbg === "string" && body.dbg) {
+    console.log("[ble-check-in dbg]", body.dbg.slice(0, 400));
+  }
   if (!Number.isInteger(major) || !Number.isInteger(minor)) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
