@@ -7,6 +7,8 @@ import {
   BLE_TX_POWER,
   BLE_WINDOW_MS,
   bleCodes,
+  parseBleRange,
+  setBleRange,
 } from "@/app/lib/ble-beacon";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +41,9 @@ export async function GET(
       })
     );
   }
+  // 태블릿이 고른 감지 거리 — 아이폰이 같은 기준으로 판정하도록 서버에 기억해 둔다
+  const range = parseBleRange(url.searchParams.get("range"));
+  if (range) await setBleRange(center.centerId, range);
   if (url.searchParams.get("report") === "1") {
     return new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   }

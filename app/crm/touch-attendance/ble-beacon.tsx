@@ -140,7 +140,10 @@ export function useKioskBeacon(kioskToken?: string) {
     const load = async () => {
       try {
         // 태블릿의 송출 상태를 같이 보낸다 — 태블릿을 직접 볼 수 없을 때 서버 기록으로 점검하기 위함
-        const res = await fetch(`/api/touch/${kioskToken}/beacon?st=${statusParam()}`, { cache: "no-store" });
+        // range = 이 태블릿의 감지 거리 설정 — 아이폰이 같은 기준으로 판정하도록 서버에 알려 둔다
+        const res = await fetch(`/api/touch/${kioskToken}/beacon?range=${rangeRef.current}&st=${statusParam()}`, {
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error(String(res.status));
         const d = (await res.json()) as BeaconResponse;
         if (stopped) return;
@@ -183,6 +186,10 @@ export function useKioskBeacon(kioskToken?: string) {
       /* noop */
     }
     if (enabled && lastData.current) send(lastData.current, r);
+    // 바뀐 감지 거리를 서버에도 바로 알린다(아이폰 판정 기준)
+    if (kioskToken) {
+      fetch(`/api/touch/${kioskToken}/beacon?report=1&range=${r}&st=${statusParam()}`, { cache: "no-store" }).catch(() => {});
+    }
   };
 
   return { available, enabled, setEnabled, range, setRange };

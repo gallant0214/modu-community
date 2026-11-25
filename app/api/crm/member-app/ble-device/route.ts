@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { checkRateLimit, getClientIp } from "@/app/lib/security";
-import { BLE_BEACON_UUID, hashBleDeviceToken, makeBleDeviceToken } from "@/app/lib/ble-beacon";
+import { BLE_BEACON_UUID, bleMeasuredPowerFor, hashBleDeviceToken, makeBleDeviceToken } from "@/app/lib/ble-beacon";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: "등록 실패" }, { status: 500 });
 
   return NextResponse.json(
-    { ok: true, token, uuid: BLE_BEACON_UUID, major: ctx.centerId },
+    { ok: true, token, uuid: BLE_BEACON_UUID, major: ctx.centerId, measured_power: await bleMeasuredPowerFor(ctx.centerId) },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

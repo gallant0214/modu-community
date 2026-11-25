@@ -90,3 +90,58 @@ export function makeBleDeviceToken(): string {
 export function hashBleDeviceToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
+
+
+/* ───────────── 감지 거리(태블릿 톱니바퀴) ─────────────
+ * 태블릿이 고른 '가깝게·보통·멀게'는 신호에 실리는 1m 기준 세기를 바꾼다. Android 는 신호에서 그 값을 직접 읽지만
+ * 🚨 아이폰은 OS 가 그 값을 앱에 주지 않는다(CLBeacon 에 없음). 그리고 아이폰이 주는 '가까움' 판정은 Android 와
+ *    기준이 전혀 달라서(2026-11-25 실측: 2m·세기 -65 가 Android 식으로는 1.6m, 아이폰은 7.5m '멀다') 그대로 쓰면
+ *    태블릿 바로 앞에 5초쯤 서 있어야 출석됐다.
+ * 그래서 태블릿이 고른 단계를 서버에 알려 두고, 아이폰은 서버에서 기준 세기를 받아 Android 와 같은 식으로 판정한다.
+ * 저장은 Redis(태블릿이 코드 받을 때마다 다시 알려 주므로 사라져도 곧 복구). 없으면 '보통'.
+ */
+export type BleRange = "near" | "normal" | "far";
+const TX_LEVELS = ["ultra_low", "low", "medium", "high"];
+
+export function parseBleRange(v: unknown): BleRange | null {
+  return v === "near" || v === "normal" || v === "far" ? v : null;
+}
+
+/** 터치출석 화면(app/crm/touch-attendance/ble-beacon.tsx rangeParams)과 같은 계산 — 한쪽을 고치면 다른 쪽도 */
+export function bleRangeParams(range: BleRange): { txPower: string; measuredPower: number } {
+  if (range === "near") return { txPower: BLE_TX_POWER, measuredPower: BLE_MEASURED_POWER + 8 };
+  if (range === "far") {
+    const i = TX_LEVELS.indexOf(BLE_TX_POWER);
+    return {
+      txPower: TX_LEVELS[Math.min(TX_LEVELS.length - 1, (i < 0 ? 0 : i) + 1)],
+      measuredPower: BLE_MEASURED_POWER - 4,
+    };
+  }
+  return { txPower: BLE_TX_POWER, measuredPower: BLE_MEASURED_POWER };
+}
+
+const rangeKey = (centerId: number) => `ble:range:${centerId}`;
+
+export async function setBleRange(centerId: number, range: BleRange): Promise<void> {
+  try {
+    const { getRedis } = await import("./cache");
+    await getRedis()?.set(rangeKey(centerId), range, { ex: 30 * 24 * 60 * 60 });
+  } catch {
+    /* 저장 실패해도 태블릿 송출에는 영향 없다 */
+  }
+}
+
+export async function getBleRange(centerId: number): Promise<BleRange> {
+  try {
+    const { getRedis } = await import("./cache");
+    const v = await getRedis()?.get<string>(rangeKey(centerId));
+    return parseBleRange(v) ?? "normal";
+  } catch {
+    return "normal";
+  }
+}
+
+/** 지금 그 센터 태블릿이 내보내는 1m 기준 세기 — 아이폰 판정용 */
+export async function bleMeasuredPowerFor(centerId: number): Promise<number> {
+  return bleRangeParams(await getBleRange(centerId)).measuredPower;
+}
