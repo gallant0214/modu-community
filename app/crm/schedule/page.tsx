@@ -530,15 +530,7 @@ export default function CrmSchedulePage() {
       {panelMode === "calendar" && (
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          {/* 일간 보기에서 그 날이 공휴일이면 날짜를 빨간색 + 공휴일명으로 */}
-          {viewMode === "day" && holidays[anchor] ? (
-            <span className="font-semibold text-red-600">
-              {rangeLabel} · {holidays[anchor]}
-            </span>
-          ) : (
-            rangeLabel
-          )}{" "}
-          · 예약 {reservations.length}건 · 일정 {events.length}건
+          예약 {reservations.length}건 · 일정 {events.length}건
           {unprocessedCount > 0 && (
             <>
               {" · "}
@@ -557,8 +549,18 @@ export default function CrmSchedulePage() {
             </span>
           ))}
         </div>
-        {/* 이전·오늘·다음 — 이 줄 맨 오른쪽(주간 보기에서 '토' 칸 위) */}
+        {/* 기간 표시 + 이전·오늘·다음 — 이 줄 맨 오른쪽(주간 보기에서 '토' 칸 위) */}
         <div className="ml-auto flex items-center gap-1">
+          <span className="mr-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+            {/* 일간 보기에서 그 날이 공휴일이면 날짜를 빨간색 + 공휴일명으로 */}
+            {viewMode === "day" && holidays[anchor] ? (
+              <span className="font-semibold text-red-600">
+                {rangeLabel} · {holidays[anchor]}
+              </span>
+            ) : (
+              rangeLabel
+            )}
+          </span>
           <button
             onClick={() => navigate(-1)}
             className="px-3 py-1.5 rounded-lg text-[14px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
