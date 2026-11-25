@@ -143,6 +143,16 @@ export default function CrmSchedulePage() {
   const [anchor, setAnchor] = useState(() => new Date().toISOString().slice(0, 10));
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  // 예약을 불러온 시각 — '수업이 끝났는데 출석 처리 안 된 예약' 판정 기준(렌더 중 Date.now() 금지)
+  const [loadedAtMs, setLoadedAtMs] = useState(0);
+  // 보이는 기간·강사 안에서 수업이 끝났는데 아직 '예약완료'(출석·노쇼 처리 안 됨)인 예약 수
+  const unprocessedCount = useMemo(
+    () =>
+      loadedAtMs
+        ? reservations.filter((r) => r.status === "booked" && new Date(r.ends_at).getTime() < loadedAtMs).length
+        : 0,
+    [reservations, loadedAtMs]
+  );
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [classSessions, setClassSessions] = useState<ClassSession[]>([]);
   const [perms, setPerms] = useState<Record<string, boolean>>({});
@@ -235,6 +245,7 @@ export default function CrmSchedulePage() {
       const dataR = await resR.json();
       if (!resR.ok) throw new Error(dataR?.error || "예약 조회 실패");
       setReservations(dataR.reservations ?? []);
+      setLoadedAtMs(Date.now());
       if (resE.ok) {
         const dataE = await resE.json();
         setEvents(dataE.events ?? []);
@@ -528,6 +539,14 @@ export default function CrmSchedulePage() {
             rangeLabel
           )}{" "}
           · 예약 {reservations.length}건 · 일정 {events.length}건
+          {unprocessedCount > 0 && (
+            <>
+              {" · "}
+              <span className="font-semibold text-red-600 dark:text-red-400">
+                출석 미처리 {unprocessedCount}건
+              </span>
+            </>
+          )}
         </span>
         {/* 상태 색상 범례 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
