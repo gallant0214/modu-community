@@ -145,6 +145,8 @@ export default function CrmSchedulePage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   // 예약을 불러온 시각 — '수업이 끝났는데 출석 처리 안 된 예약' 판정 기준(렌더 중 Date.now() 금지)
   const [loadedAtMs, setLoadedAtMs] = useState(0);
+  // 기간 제한 없는 전체 출석 미처리 건수(같은 강사 필터) — null = 아직 모름/조회 실패
+  const [totalUnprocessed, setTotalUnprocessed] = useState<number | null>(null);
   // 보이는 기간·강사 안에서 수업이 끝났는데 아직 '예약완료'(출석·노쇼 처리 안 됨)인 예약 수
   const unprocessedCount = useMemo(
     () =>
@@ -242,6 +244,14 @@ export default function CrmSchedulePage() {
           cache: "no-store",
         }),
       ]);
+      // 기간과 무관한 '총 출석 미처리' — 개수만 받는 가벼운 조회라 그리드 로딩을 막지 않게 따로
+      fetch(`/api/crm/reservations/unprocessed-count?all=1${trainerQs}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setTotalUnprocessed(typeof d?.count === "number" ? d.count : null))
+        .catch(() => setTotalUnprocessed(null));
       const dataR = await resR.json();
       if (!resR.ok) throw new Error(dataR?.error || "예약 조회 실패");
       setReservations(dataR.reservations ?? []);
@@ -525,6 +535,18 @@ export default function CrmSchedulePage() {
             </button>
           ))}
         </div>
+        {/* 기간과 상관없이 수업이 끝났는데 출석·노쇼 처리 안 된 예약 전체(위 강사 선택 기준) */}
+        {panelMode === "calendar" && totalUnprocessed !== null && (
+          <span
+            className={`ml-1 text-[12.5px] ${
+              totalUnprocessed > 0
+                ? "font-semibold text-red-600 dark:text-red-400"
+                : "text-[#6B5D47] dark:text-zinc-400"
+            }`}
+          >
+            총 출석 미처리 {totalUnprocessed.toLocaleString()}건
+          </span>
+        )}
       </div>
 
       {panelMode === "calendar" && (
