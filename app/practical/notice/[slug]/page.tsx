@@ -3,8 +3,40 @@ import { supabase } from "@/app/lib/supabase";
 import DisclaimerBanner from "@/app/components/disclaimer-banner";
 import { notFound } from "next/navigation";
 import { sanitizeRichContent } from "@/app/lib/sanitize";
+import { cache } from "react";
+import { pageMeta, toPlainExcerpt } from "@/app/lib/seo";
 
 export const dynamic = "force-dynamic";
+
+// generateMetadata 와 본문이 같은 요청에서 DB 를 두 번 읽지 않도록 묶는다.
+const loadNotice = cache(async (audience: "main" | "disabled", slug: string) => {
+  const { data } = await supabase
+    .from("practical_oral_notices")
+    .select("*")
+    .eq("audience", audience)
+    .eq("slug", slug)
+    .eq("is_active", true)
+    .maybeSingle();
+  return data;
+});
+
+export async function generateMetadata(props: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ audience?: string }>;
+}) {
+  const { slug } = await props.params;
+  const { audience: audParam } = await props.searchParams;
+  const audience: "main" | "disabled" = audParam === "disabled" ? "disabled" : "main";
+  const notice = await loadNotice(audience, slug);
+  if (!notice) return { title: "공지를 찾을 수 없습니다", robots: { index: false } };
+  const prefix = audience === "disabled" ? "장애인스포츠지도사" : "체육지도사";
+  return pageMeta({
+    title: `${notice.title} — ${prefix} 실기·구술 공지`,
+    description: toPlainExcerpt(notice.summary || notice.content) || `${prefix} 실기·구술 시험 공지 「${notice.title}」`,
+    path: `/practical/notice/${encodeURIComponent(slug)}${audience === "disabled" ? "?audience=disabled" : ""}`,
+    type: "article",
+  });
+}
 
 export default async function NoticeDetailPage(props: {
   params: Promise<{ slug: string }>;
@@ -14,13 +46,7 @@ export default async function NoticeDetailPage(props: {
   const { audience: audParam } = await props.searchParams;
   const audience: "main" | "disabled" = audParam === "disabled" ? "disabled" : "main";
 
-  const { data: notice } = await supabase
-    .from("practical_oral_notices")
-    .select("*")
-    .eq("audience", audience)
-    .eq("slug", slug)
-    .eq("is_active", true)
-    .maybeSingle();
+  const notice = await loadNotice(audience, slug);
 
   if (!notice) notFound();
 

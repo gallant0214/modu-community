@@ -71,8 +71,12 @@ export async function GET(
     isBookmarked = (bmRes.count ?? 0) > 0;
   }
 
+  // 🚨 작성자 IP 는 공개 응답에 싣지 않는다(화면에서도 안 씀).
+  const publicJob: Record<string, unknown> = { ...job };
+  delete publicJob.ip_address;
+
   return NextResponse.json({
-    ...job,
+    ...publicJob,
     bookmark_count: bookmarkCount ?? 0,
     is_liked: isLiked,
     is_bookmarked: isBookmarked,

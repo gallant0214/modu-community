@@ -1,5 +1,5 @@
 export const metadata = {
-  title: '아동 안전 표준 - 모두의 지도사',
+  title: '아동 안전 표준',
   description: '모두의 지도사 앱 아동 안전 표준 정책',
 }
 

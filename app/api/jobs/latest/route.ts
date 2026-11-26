@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       if (error) throw error;
       return { posts: data as JobRow[], page, totalPages, total };
     });
-    const filtered = applyBlockedFilter(result.posts, blockedSet).slice(0, limit);
+    const filtered = applyBlockedFilter(result.posts, blockedSet).slice(0, limit).map(stripIp);
     return NextResponse.json({ ...result, posts: filtered });
   }
 
@@ -51,5 +51,12 @@ export async function GET(request: Request) {
     if (error) throw error;
     return data as JobRow[];
   });
-  return NextResponse.json(applyBlockedFilter(rows, blockedSet).slice(0, limit));
+  return NextResponse.json(applyBlockedFilter(rows, blockedSet).slice(0, limit).map(stripIp));
+}
+
+// 🚨 작성자 IP 는 공개 응답에 싣지 않는다.
+function stripIp<T extends object>(row: T): T {
+  const copy = { ...row } as Record<string, unknown>;
+  delete copy.ip_address;
+  return copy as T;
 }

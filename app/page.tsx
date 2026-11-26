@@ -4,6 +4,15 @@ import Link from "next/link";
 import { AppStoreButton } from "@/app/components/app-store-button";
 import { GooglePlayButton } from "@/app/components/google-play-button";
 import { communityVisible, jobsVisible, tradeVisible } from "@/app/lib/community-visibility";
+import { pageMeta } from "@/app/lib/seo";
+
+export const metadata = pageMeta({
+  title: "모두의 지도사 — 체육지도사 종목 후기·실기구술·스포츠 구인·거래",
+  absoluteTitle: true,
+  description:
+    "체육지도사를 준비하고 현장에서 일하는 사람들의 허브. 종목별 후기와 실기·구술 정보, 스포츠 업계 구인·거래, 자격시험 공부 자료를 한곳에서 확인하세요.",
+  path: "/",
+});
 
 export default async function Home() {
 

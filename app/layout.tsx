@@ -20,8 +20,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// 🚨 여기에 alternates.canonical 을 넣지 말 것 — canonical 을 지정하지 않은 모든 하위 페이지가
+//    상속받아 전부 홈("/")을 가리키게 된다. 페이지별 canonical 은 app/lib/seo.ts pageMeta() 로.
 export const metadata: Metadata = {
-  title: "모두의 지도사 — 체육지도사 종목 후기·실기구술·스포츠 구인·거래",
+  title: {
+    default: "모두의 지도사 — 체육지도사 종목 후기·실기구술·스포츠 구인·거래",
+    template: "%s | 모두의 지도사",
+  },
   description: "종목별 경험과 정보를 나누는 종목 후기. 실기·구술 후기, 스포츠 구인 공고를 한곳에서 확인하세요.",
   metadataBase: new URL("https://moducm.com"),
   openGraph: {

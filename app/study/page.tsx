@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/app/lib/seo";
 import Link from "next/link";
 import { AppStoreButton } from "@/app/components/app-store-button";
 import { GooglePlayButton } from "@/app/components/google-play-button";
 
-export const metadata: Metadata = {
-  title: "체육지도사 자격시험 공부 자료 — 모두의 지도사",
+export const metadata: Metadata = pageMeta({
+  title: "체육지도사 자격시험 공부 자료",
   description:
     "연간 시험 일정 흐름, 공식 자료 안내, 종목별 실기·구술, 시험 커뮤니티까지 체육지도사 자격시험 준비 통합 가이드.",
-};
+  path: "/study",
+});
 
 export const revalidate = 3600;
 

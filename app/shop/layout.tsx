@@ -1,3 +1,10 @@
+import type { Metadata } from "next";
+
+// 판매 페이지는 센터 자체 브랜드로 보여야 하므로(PG 심사) 루트의 "| 모두의 지도사" 꼬리표를 떼어 둔다.
+export const metadata: Metadata = {
+  title: { template: "%s", default: "판매 페이지" },
+};
+
 /**
  * 판매 페이지 전용 레이아웃.
  * 루트 레이아웃이 NavBar 자리만큼 준 상단 여백을 되돌린다(/pay 와 같은 이유).

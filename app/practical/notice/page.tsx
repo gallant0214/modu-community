@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 import DisclaimerBanner from "@/app/components/disclaimer-banner";
+import { pageMeta } from "@/app/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,18 @@ async function getNotices(audience: "main" | "disabled"): Promise<NoticeCard[]> 
     .eq("is_active", true)
     .order("display_order", { ascending: true });
   return (data || []) as NoticeCard[];
+}
+
+export async function generateMetadata(props: { searchParams: Promise<{ audience?: string }> }) {
+  const { audience } = await props.searchParams;
+  const disabled = audience === "disabled";
+  return pageMeta({
+    title: disabled ? "장애인스포츠지도사 실기·구술 공지" : "체육지도사 실기·구술 시험 공지",
+    description: disabled
+      ? "장애인스포츠지도사 실기·구술 시험 응시 요건, 일정, 응시수수료·환불 규정 등 시험 공지를 정리했어요."
+      : "생활스포츠지도사 등 체육지도사 실기·구술 시험의 자격등급별 응시요건, 주요 일정, 올해 달라지는 정책을 정리했어요.",
+    path: disabled ? "/practical/notice?audience=disabled" : "/practical/notice",
+  });
 }
 
 export default async function PracticalOralNoticePage(props: {

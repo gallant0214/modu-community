@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/app/lib/seo";
 
-export const metadata: Metadata = {
-  title: "스포츠마켓 — 모두의 지도사 커뮤니티",
+export const metadata: Metadata = pageMeta({
+  title: "스포츠마켓 — 운동인 추천 브랜드",
   description: "운동인이 즐겨 찾는 스포츠웨어·닭가슴살·보충제 브랜드 추천 리스트.",
-};
+  path: "/market",
+});
 
 type Item = { name: string; url: string; desc?: string };
 

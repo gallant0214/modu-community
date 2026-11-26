@@ -1,5 +1,5 @@
 export const metadata = {
-  title: '개인정보처리방침 - 모두의지도사(회원용)',
+  title: { absolute: '개인정보처리방침 - 모두의지도사(회원용)' },
   description: '모두의지도사 회원용 앱 개인정보처리방침',
 }
 

@@ -8,11 +8,34 @@ import { CategoryTabs } from "@/app/components/category-tabs";
 import { SearchBar } from "@/app/components/search-bar";
 import { BackButton } from "@/app/components/back-button";
 import type { Post } from "@/app/lib/types";
+import { pageMeta } from "@/app/lib/seo";
 
 
 interface Props {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ sort?: string; page?: string; searchType?: string; q?: string }>;
+}
+
+export async function generateMetadata({ params, searchParams }: Props) {
+  const { id } = await params;
+  const { page, q } = await searchParams;
+  const categoryId = Number(id);
+  const { data: category } = await supabase
+    .from("categories")
+    .select("name")
+    .eq("id", categoryId)
+    .maybeSingle();
+  const name = (category as { name?: string } | null)?.name;
+  if (!name) return { title: "게시판을 찾을 수 없습니다", robots: { index: false } };
+  const pageNo = Math.max(1, Number(page) || 1);
+  // 정렬만 다른 주소는 같은 목록이므로 canonical 은 page 만 남긴다. 검색 결과는 색인 제외.
+  const path = pageNo > 1 ? `/category/${categoryId}?page=${pageNo}` : `/category/${categoryId}`;
+  return pageMeta({
+    title: `${name} 종목 후기${pageNo > 1 ? ` (${pageNo}페이지)` : ""}`,
+    description: `${name} 체육지도사 자격 후기, 실기·구술 경험, 현장 정보와 질문을 ${name} 게시판에서 확인하세요.`,
+    path,
+    noindex: Boolean(q?.trim()),
+  });
 }
 
 export default async function CategoryPage({ params, searchParams }: Props) {

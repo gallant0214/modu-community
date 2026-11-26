@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { pageMeta } from "@/app/lib/seo";
 
-export const metadata = {
+export const metadata = pageMeta({
   title: "거래 안전 안내 — 사기 피해 예방",
   description: "거래 게시판 사기 피해 예방 가이드 및 면책 조항.",
-};
+  path: "/trade/safety",
+});
 
 export default function TradeSafetyPage() {
   return (

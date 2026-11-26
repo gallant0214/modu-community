@@ -3,6 +3,14 @@ export const revalidate = 60;
 import { supabase } from "@/app/lib/supabase";
 import type { Category } from "@/app/lib/types";
 import { CategorySearch } from "@/app/components/category-search";
+import { pageMeta } from "@/app/lib/seo";
+
+export const metadata = pageMeta({
+  title: "종목별 커뮤니티 — 체육지도사 종목 후기",
+  description:
+    "헬스·필라테스·수영·태권도 등 종목별 게시판에서 체육지도사 자격 후기, 실기·구술 경험, 현장 정보를 나누고 찾아보세요.",
+  path: "/community",
+});
 
 export default async function CommunityPage() {
   const { data: catRows } = await supabase.from("categories").select("*");

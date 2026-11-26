@@ -1,5 +1,5 @@
 export const metadata = {
-  title: '계정 삭제 요청 - 모두의 지도사',
+  title: '계정 삭제 요청',
   description: '모두의 지도사 앱 계정 삭제 요청 페이지',
 }
 
