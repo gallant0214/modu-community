@@ -58,6 +58,29 @@ export async function POST(request: Request) {
   );
 }
 
+/**
+ * PUT { centerId, diag } — 원격 점검용. 회원 폰이 설정 화면을 열 때 감지 상태 요약(블루투스·위치 켜짐, 권한,
+ * 절전 예외, 마지막 신호 수신·출석 요청)을 보내면 서버 로그로만 남긴다. DB 에 저장하지 않는다.
+ * (2026-11-26: 기능은 켰는데 출석 요청이 한 번도 오지 않은 회원 폰의 원인을 알 방법이 없었다)
+ */
+export async function PUT(request: Request) {
+  const limited = await checkRateLimit(getClientIp(request), "write");
+  if (limited) return limited;
+
+  let body: { centerId?: number; diag?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+  const ctx = await requireMemberForCenter(request, Number(body.centerId));
+  if (isMemberError(ctx)) return ctx;
+  if (typeof body.diag === "string" && body.diag) {
+    console.log("[ble-diag]", JSON.stringify({ center: ctx.centerId, member: ctx.memberId, diag: body.diag.slice(0, 400) }));
+  }
+  return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+}
+
 /** DELETE { centerId } — 기능 끄기·로그아웃 시 이 회원의 기기 토큰 전부 폐기 */
 export async function DELETE(request: Request) {
   let body: { centerId?: number };
