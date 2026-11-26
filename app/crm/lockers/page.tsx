@@ -2722,13 +2722,14 @@ function LockerActionModal({
               </div>
             )}
 
-            {/* 비밀번호·메모 — 비밀번호는 입력칸 옆에서 바로 저장 (아래 저장 버튼까지 안 내려가도 됨) */}
+            {/* 비밀번호 — 저장 버튼을 입력칸 '안' 오른쪽에 넣어 비밀번호 전용 저장임을 분명히 한다.
+                (입력칸 옆에 따로 두면 아래 '정보 저장'과 헷갈렸음) */}
             <CrmField label="비밀번호">
-              <div className="flex gap-2">
+              <div className="relative">
                 <input
                   type="text"
                   inputMode="numeric"
-                  className={`${crmInputClass} flex-1`}
+                  className={`${crmInputClass} pr-[112px]`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => {
@@ -2743,9 +2744,13 @@ function LockerActionModal({
                   type="button"
                   onClick={() => callAction("update", { password: password || null })}
                   disabled={submitting}
-                  className="shrink-0 px-4 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60 transition-colors"
                 >
-                  {submitting ? "저장 중…" : "저장"}
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                    <rect x="5" y="11" width="14" height="9.5" rx="2" />
+                    <path strokeLinecap="round" d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" />
+                  </svg>
+                  {submitting ? "저장 중…" : "비밀번호 저장"}
                 </button>
               </div>
             </CrmField>
