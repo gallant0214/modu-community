@@ -25,6 +25,7 @@ import { PaymentEditDialog, type PaymentEditValue } from "@/app/crm/_components/
 import { LockerPickerModal } from "../../_components/locker-picker-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
 import { unitToDays, formatDuration, computeExpiryYmd } from "@/app/lib/duration-convert";
+import { findBundleDupWarnings } from "@/app/lib/crm-bundle-dup";
 import { computeFaceDescriptor } from "../../_lib/faceapi";
 
 interface Member {
@@ -7643,6 +7644,8 @@ function UsageIssueModal({
     Math.max(0, c.priceWon - c.discountWon) +
     (c.components ?? []).reduce((s, k) => s + Math.max(0, Math.floor(k.price_won ?? 0)), 0);
   const cartTotalPrice = cart.reduce((s, c) => s + lineTotal(c), 0);
+  // 묶음에 이미 든 락커·운동복을 같은 기간에 따로 또 담았는지 (경고만, 막지 않음)
+  const cartDupWarnings = findBundleDupWarnings(cart);
   const cartTotalMileageEarn = cart.reduce((s, c) => s + c.mileageEarn, 0);
 
   // 결제 단위 "보유 마일리지 사용": 체크 시 회원 보유 마일리지를 총액 한도 내에서 적용해 결제액 차감.
@@ -8138,6 +8141,15 @@ function UsageIssueModal({
           components: pickedComponents.length ? pickedComponents : undefined,
         },
       ];
+    }
+
+    // 묶음 구성품과 같은 락커·운동복을 같은 기간에 또 담았으면 결제 전에 한 번 더 확인
+    const dupWarnings = findBundleDupWarnings(toProcess);
+    if (
+      dupWarnings.length > 0 &&
+      !window.confirm(`${dupWarnings.join("\n\n")}\n\n그래도 이대로 결제할까요?`)
+    ) {
+      return;
     }
 
     // 보유 마일리지 사용: 결제 단위 사용액(appliedOwnedMileage)이 유일한 기준.
@@ -8717,6 +8729,11 @@ function UsageIssueModal({
                           <div className="mt-0.5 text-[11px] text-[#8C8270]">
                             {c.startDate} · {c.durationDays}일
                           </div>
+                          {c.components && c.components.length > 0 && (
+                            <div className="mt-0.5 text-[11px] text-[#B47B2A]">
+                              🎁 포함: {c.components.map((k) => k.name || "구성 상품").join(", ")}
+                            </div>
+                          )}
                         </div>
                         <button
                           type="button"
@@ -8745,6 +8762,21 @@ function UsageIssueModal({
                   );
                 })}
               </ul>
+            )}
+            {cartDupWarnings.length > 0 && (
+              <div className="rounded-lg border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-2 space-y-1">
+                <div className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">
+                  ⚠️ 이미 포함된 구성품이에요
+                </div>
+                {cartDupWarnings.map((w, i) => (
+                  <p key={i} className="text-[11.5px] leading-snug text-amber-800 dark:text-amber-300">
+                    {w}
+                  </p>
+                ))}
+                <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
+                  실수로 담았다면 따로 담은 상품을 [제거]해 주세요.
+                </p>
+              </div>
             )}
           </div>
 
