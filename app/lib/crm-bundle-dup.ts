@@ -23,6 +23,8 @@ export interface DupCheckLine {
 }
 
 const TYPE_LABEL: Record<string, string> = { locker: "락커", apparel: "운동복" };
+// 주격 조사 — 락커"가" / 운동복"이"
+const SUBJ: Record<string, string> = { locker: "가", apparel: "이" };
 const WATCHED = new Set(Object.keys(TYPE_LABEL));
 
 function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
@@ -41,9 +43,10 @@ export function findBundleDupWarnings(lines: DupCheckLine[]): string[] {
         if (oi === bi || other.type !== comp.type || !other.startDate) return;
         const oEnd = computeExpiryYmd(other.startDate, other.durationValue, other.durationUnit);
         if (!overlaps(cStart, cEnd, other.startDate, oEnd)) return;
+        const label = TYPE_LABEL[comp.type];
         out.push(
-          `'${bundle.name}' 에 ${TYPE_LABEL[comp.type]}(${comp.name || "구성 상품"})가 이미 들어 있어요. ` +
-            `따로 담은 '${other.name}' 과 기간이 겹쳐 ${TYPE_LABEL[comp.type]}가 두 장 발급돼요.`
+          `'${bundle.name}' 에 ${label} 구성품(${comp.name || "구성 상품"})이 이미 들어 있어요. ` +
+            `따로 담은 '${other.name}' 도 기간이 겹쳐 ${label}${SUBJ[comp.type]} 두 장 발급돼요.`
         );
       });
     }

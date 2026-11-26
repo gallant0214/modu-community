@@ -27,6 +27,8 @@ describe("findBundleDupWarnings", () => {
     expect(w).toHaveLength(2);
     expect(w[0]).toContain("락커 1개월(재등록)");
     expect(w[1]).toContain("운동복 1개월");
+    expect(w[0]).toContain("락커가 두 장");
+    expect(w[1]).toContain("운동복이 두 장");
   });
 
   it("묶음만 있으면 경고 없음", () => {
