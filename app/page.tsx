@@ -423,6 +423,9 @@ export default async function Home() {
               <a href="/privacy.html">개인정보처리방침</a>
             </nav>
           </div>
+          <p className="lp-footer-biz">
+            사업자등록번호 499-41-00784 <span aria-hidden="true">·</span> 직업정보제공사업 신고번호 J1401020260003
+          </p>
         </div>
       </footer>
 

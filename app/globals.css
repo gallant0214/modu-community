@@ -288,6 +288,7 @@ html.crm-kiosk-lock body {
 .lp-footer-dark{background:#2F2A24;padding:24px 0}
 .lp-footer-inner{display:flex;align-items:center;justify-content:space-between}
 .lp-footer-dark .lp-footer-copy{font-size:12px;color:rgba(255,255,255,.4)}
+.lp-footer-biz{margin-top:12px;font-size:11px;line-height:1.6;color:rgba(255,255,255,.35);word-break:keep-all}
 .lp-footer-nav-right{display:flex;gap:20px}
 .lp-footer-nav-right a{font-size:12px;color:rgba(255,255,255,.5);transition:color .2s}
 .lp-footer-nav-right a:hover{color:rgba(255,255,255,.8)}
