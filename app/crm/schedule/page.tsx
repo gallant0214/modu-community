@@ -572,35 +572,48 @@ export default function CrmSchedulePage() {
           ))}
         </div>
         {/* 기간 표시 + 이전·오늘·다음 — 이 줄 맨 오른쪽(주간 보기에서 '토' 칸 위) */}
-        <div className="ml-auto flex items-center gap-1">
-          <span className="mr-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            {/* 일간 보기에서 그 날이 공휴일이면 날짜를 빨간색 + 공휴일명으로 */}
-            {viewMode === "day" && holidays[anchor] ? (
-              <span className="font-semibold text-red-600">
-                {rangeLabel} · {holidays[anchor]}
-              </span>
-            ) : (
-              rangeLabel
-            )}
+        <div className="ml-auto flex items-center gap-2.5">
+          {/* 기간: 달력 아이콘 + 굵은 글씨 (일간 보기 공휴일이면 빨간색 + 공휴일명) */}
+          <span
+            className={`inline-flex items-center gap-1.5 text-[14.5px] font-semibold tracking-tight tabular-nums ${
+              viewMode === "day" && holidays[anchor] ? "text-red-600 dark:text-red-400" : "text-[#2A251D] dark:text-zinc-100"
+            }`}
+          >
+            <svg className="w-4 h-4 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden>
+              <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+              <path strokeLinecap="round" d="M3.5 9.5h17M8 3v4M16 3v4" />
+            </svg>
+            {viewMode === "day" && holidays[anchor] ? `${rangeLabel} · ${holidays[anchor]}` : rangeLabel}
           </span>
-          <button
-            onClick={() => navigate(-1)}
-            className="px-3 py-1.5 rounded-lg text-[14px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-          >
-            ‹ 이전
-          </button>
-          <button
-            onClick={() => setAnchor(new Date().toISOString().slice(0, 10))}
-            className="px-3 py-1.5 rounded-lg text-[14px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-          >
-            오늘
-          </button>
-          <button
-            onClick={() => navigate(1)}
-            className="px-3 py-1.5 rounded-lg text-[14px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-          >
-            다음 ›
-          </button>
+          {/* 이전 · 오늘 · 다음 — 하나로 묶인 버튼 그룹 */}
+          <div className="inline-flex items-stretch rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-white/70 dark:bg-zinc-900 shadow-[0_1px_2px_rgba(42,37,29,0.06)] overflow-hidden">
+            <button
+              onClick={() => navigate(-1)}
+              aria-label="이전"
+              className="inline-flex items-center gap-1 pl-2.5 pr-3 py-1.5 text-[13px] font-medium text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] hover:text-[#2A251D] dark:hover:bg-zinc-800 dark:hover:text-zinc-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+              </svg>
+              이전
+            </button>
+            <button
+              onClick={() => setAnchor(new Date().toISOString().slice(0, 10))}
+              className="px-3.5 py-1.5 border-x border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] bg-[#6B7B3A]/[0.07] dark:bg-[#A8B87A]/10 hover:bg-[#6B7B3A]/15 dark:hover:bg-[#A8B87A]/20 transition-colors"
+            >
+              오늘
+            </button>
+            <button
+              onClick={() => navigate(1)}
+              aria-label="다음"
+              className="inline-flex items-center gap-1 pl-3 pr-2.5 py-1.5 text-[13px] font-medium text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] hover:text-[#2A251D] dark:hover:bg-zinc-800 dark:hover:text-zinc-100 transition-colors"
+            >
+              다음
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
       )}
