@@ -58,9 +58,12 @@ function isAdvertisement(text: string): boolean {
   return /(?:광고|마케팅|홍보)대행(?:사입니다|업체입니다|서비스|을?제안|해드|해드리)|(?:광고|제휴|협찬|협업|입점|협력|납품|홍보)제안(?:서|드|을?드|합니다|드립니다|차)|(?:상위노출|리뷰관리|블로그체험단|회원모객|회원모집대행).{0,18}(?:보장|해드립|도와드립|제안드|모집해드)/.test(compact);
 }
 
-export function classify(text: string): Topic {
+export function classify(text: string): Topic | "availability" | "reminder" {
   if (isAdvertisement(text)) return "advertisement";
   const s = text.toLowerCase().replace(/\s+/g, "");
+  const brief = s.replace(/[.,!?~。？！·]/g, "");
+  if (/^(?:답장|답변|회신)(?:을)?(?:부탁드립니다|부탁드려요|부탁해요|주세요|부탁합니다)$/.test(brief)) return "reminder";
+  if (/^(?:오늘|내일|모레|이번주|다음주|주말|[월화수목금토일]요일)[은는도에]?(?:오전|오후|저녁)?(?:\d{1,2}시(?:반|\d{1,2}분)?)?[에도]?(?:방문|상담|예약)?이?(?:가능(?:한가요|할까요|할까|해요|하세요|하실까요|한지요)?|되나요|되죠|될까요|돼요)$/.test(brief)) return "availability";
   if (/^(?:안녕(?:하세요|하세용)?|문의드립니다|안녕하세요문의드립니다)[.!?~😊]*$/.test(s)) return "greeting";
   if (!s || /환불|정지|홀딩|양도|분실|불만|변경|취소|아프|질환|부상|수술|통증|학생|수험|할인|쿠폰|이벤트|체험|무료피티|무료pt|시니어|예약했|결제했|재등록가격|재등록금액/.test(s)) return "staff";
   const visit = /방문(?:전.*예약|예약|상담|하고싶|을?원|하려|해도|가능|할수|할게|하고자)|(?:헬스|pt|피티)상담|상담(?:을)?(?:예약|받|원|하고싶|가능|신청|가고싶)|예약상담|찾아가|찾아뵙|구경하고싶|둘러보고싶/.test(s)
@@ -92,8 +95,20 @@ export function classify(text: string): Topic {
 }
 
 export type Ticket = { status: "waiting" | "closed"; topic: Topic; due: number; recipient?: string };
-export function receive(ticket: Ticket | null, topic: Topic, now: number, recipient: string, wait = WAIT): Ticket {
-  if (topic === "advertisement") return { status: "closed", topic, due: now };
+export function receive(ticket: Ticket | null, inquiry: ReturnType<typeof classify>, now: number, recipient: string, wait = WAIT): Ticket {
+  if (inquiry === "advertisement") return { status: "closed", topic: inquiry, due: now };
+  if (inquiry === "reminder" && ticket) return ticket;
+  let topic: Topic;
+  if (inquiry === "availability") {
+    const previous = ticket && now <= ticket.due + 24 * 60 * 60_000 ? ticket.topic : null;
+    if (previous === "pt" || previous === "ptVisit") topic = "ptVisit";
+    else if (previous === "gym" || previous === "gymVisit") topic = "gymVisit";
+    else if (previous === "visit") topic = "visit";
+    else topic = "staff";
+    if (topic !== "staff" && ticket?.status === "waiting") return { ...ticket, topic };
+  } else {
+    topic = inquiry === "reminder" ? "staff" : inquiry;
+  }
   if (!ticket || ticket.status === "closed") return { status: "waiting", topic, due: now + wait, recipient };
   if (topic === "greeting" || topic === ticket.topic) return ticket;
   return { ...ticket, topic: ticket.topic === "greeting" ? topic : "staff" };
