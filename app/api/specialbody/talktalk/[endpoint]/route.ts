@@ -12,11 +12,15 @@ const fail = (status: number) => new Response(null, { status });
 const DAY = 86_400;
 
 // https://github.com/navertalk/chatbot-api documents the four webhook source networks.
-function fromNaver(request: Request) {
-  const ip = request.headers.get("x-vercel-forwarded-for")?.trim() ?? "";
-  if (process.env.VERCEL !== "1" || isIP(ip) !== 4) return false;
+function naverSource(request: Request) {
+  if (process.env.VERCEL !== "1") return "platform";
+  // Vercel also supplies x-real-ip as the client address on direct deployments.
+  const forwarded = request.headers.get("x-vercel-forwarded-for") ?? request.headers.get("x-real-ip");
+  if (!forwarded) return "missing-address";
+  const ip = forwarded.trim().replace(/^::ffff:/i, "");
+  if (isIP(ip) !== 4) return "unsupported-address";
   const bytes = ip.split(".").map(Number);
-  return bytes[3] < 32 && ["211.249.40", "211.249.68", "220.230.168", "103.6.173"].includes(bytes.slice(0, 3).join("."));
+  return bytes[3] < 32 && ["211.249.40", "211.249.68", "220.230.168", "103.6.173"].includes(bytes.slice(0, 3).join(".")) ? "verified" : "outside-published-networks";
 }
 function config() {
   const mode = process.env.TALKTALK_MODE;
@@ -60,10 +64,18 @@ async function swap(redis: Redis, c: Config, id: string, old: Entry | null, entr
 export async function POST(request: Request, context: Context) {
   if ((await context.params).endpoint === "dispatch") return sheetTick(request);
   const c = config();
-  if (!c || !fromNaver(request)) return fail(404);
+  if (!c) return fail(404);
   const path = Buffer.from((await context.params).endpoint);
   const secret = Buffer.from(c.secret);
-  if (path.length !== secret.length || !timingSafeEqual(path, secret)) return fail(404);
+  const source = naverSource(request);
+  if (path.length !== secret.length || !timingSafeEqual(path, secret)) {
+    if (source === "verified") console.warn("TalkTalk webhook: callback URL differs from configuration");
+    return fail(404);
+  }
+  if (source !== "verified") {
+    console.warn("TalkTalk webhook: provider source check", source);
+    return fail(404);
+  }
   const raw = await request.text();
   if (raw.length > 100_000) return fail(413);
   let event;
