@@ -1,7 +1,14 @@
 export const WAIT = 20 * 60_000;
 export const GRACE = 5 * 60_000;
+const visitGuide = `방문 상담은 사전 예약제로 운영하고 있습니다.
+아래에서 원하시는 날짜와 시간을 선택한 후 예약해 주시기 바랍니다.`;
+const gymConsultation = { title: "헬스 상담 예약", url: "https://booking.naver.com/booking/13/bizes/445175/items/3697432" };
+const ptConsultation = { title: "PT 상담 예약", url: "https://booking.naver.com/booking/13/bizes/445175/items/3697107" };
 export const replies = {
-    semi: `기본형 세미 PT는 회당 30분 수업입니다.
+  visit: visitGuide,
+  gymVisit: visitGuide,
+  ptVisit: visitGuide,
+  semi: `기본형 세미 PT는 회당 30분 수업입니다.
 
 10회 440,000원
 20회 880,000원
@@ -22,7 +29,7 @@ export const replies = {
 
 모두 부가세 포함 금액입니다. 해당 기간에는 헬스 이용권과 개인 락커가 포함됩니다.
 
-방문 상담을 원하시면 편하신 요일과 시간대를 말씀해 주시겠어요?`,
+${visitGuide}`,
   hours: `스페셜바디 범어점은 24시간 운영합니다.
 매월 마지막 주 일요일은 정기휴무입니다.`,
   parking: `범어역 3번 출구 근처 애플2타워 3층입니다.
@@ -46,6 +53,13 @@ export function classify(text: string): Topic {
   const s = text.toLowerCase().replace(/\s+/g, "");
   if (/^(?:안녕(?:하세요|하세용)?|문의드립니다|안녕하세요문의드립니다)[.!?~😊]*$/.test(s)) return "greeting";
   if (!s || /환불|정지|홀딩|양도|분실|불만|변경|취소|아프|질환|부상|수술|통증|학생|수험|할인|쿠폰|이벤트|체험|무료피티|무료pt|시니어|예약했|결제했|재등록가격|재등록금액/.test(s)) return "staff";
+  const visit = /방문상담|헬스상담|(?:pt|피티)상담(?:문의|하고싶|가능|받|예약|$)|상담예약|예약상담|상담(?:을)?받|방문하고싶|방문(?:을)?원|방문하려|방문해도|방문가능|방문할수|방문할게|방문하고자|찾아가|찾아뵙|구경하고싶|둘러보고싶|상담가고싶/.test(s);
+  if (visit && !/일일|재방문|수업예약|예약내역|예약확인|예약완료|예약했|예약해뒀|예약해놨/.test(s)) {
+    if (/가격|금액|얼마|비용|운동복|락커|주차|운영시간/.test(s)) return "staff";
+    const pt = /pt|피티|퍼스널/.test(s);
+    const gym = /헬스|회원권/.test(s);
+    return pt === gym ? "visit" : pt ? "ptVisit" : "gymVisit";
+  }
   if (/세미(?:pt|피티|퍼스널)/.test(s)) {
     if (/일일권|일반(?:pt|피티)|50분|주차|운영시간|예약|가능시간|유효기간|이용기간|운동복|트레이너/.test(s)) return "staff";
     return /가격|금액|얼마|비용|요금|몇회|\d+회|헬스|회원권|락커|라커|사물함|포함|별도|문의/.test(s) ? "semi" : "staff";
@@ -76,4 +90,13 @@ export function dueReply(ticket: Ticket, now: number) {
   if (ticket.status !== "waiting" || now < ticket.due || now > ticket.due + GRACE ||
       ticket.topic === "staff" || ticket.topic === "greeting") return null;
   return replies[ticket.topic];
+}
+
+export function replyContent(topic: Topic, text: string) {
+  const products = topic === "visit" ? [gymConsultation, ptConsultation]
+    : topic === "gymVisit" ? [gymConsultation]
+    : topic === "ptVisit" || topic === "pt" ? [ptConsultation] : [];
+  if (!products.length) return { text };
+  const buttonList = products.map(({ title, url }) => ({ type: "LINK", data: { title, url, mobileUrl: url } }));
+  return { text, quickReply: { buttonList } };
 }
