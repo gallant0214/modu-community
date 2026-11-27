@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { POST, GET } from "@/app/api/specialbody/talktalk/[endpoint]/route";
+import { POST } from "@/app/api/specialbody/talktalk/[endpoint]/route";
 import { WAIT, replies } from "@/app/lib/specialbody-talktalk";
 
 const records = new Map<string, string>();
@@ -12,6 +12,12 @@ vi.mock("@/app/lib/cache", () => ({
       return [...deadlines.entries()].filter(([, t]) => t <= now).map(([id]) => id);
     },
     async eval(_script: string, [key]: string[], [version, json, due, id]: string[]) {
+      if (key.endsWith(":settings")) {
+        const old = JSON.parse(records.get(key) ?? "null");
+        if (old && old.observed >= Number(version)) return 0;
+        records.set(key, json);
+        return 1;
+      }
       if ((JSON.parse(records.get(key) ?? "null")?.version ?? "") !== version) return 0;
       records.set(key, json);
       if (due) deadlines.set(id, Number(due)); else deadlines.delete(id);
@@ -27,17 +33,20 @@ const send = (text: string, echo = false, to = user, ip = "211.249.40.3") =>
     headers: { "x-vercel-forwarded-for": ip },
     body: JSON.stringify({ user: to, event: echo ? "echo" : "send", echoedEvent: echo ? "send" : undefined, textContent: { text } }),
   }), { params: Promise.resolve({ endpoint }) });
-const tick = () => GET(new Request("https://example.invalid/", { headers: { authorization: "Bearer test-cron" } }),
-  { params: Promise.resolve({ endpoint: "dispatch" }) });
+const controlKey = "local-test-control-key-not-used-in-production";
+const tick = (enabled = true, minutes = 20, epoch = "session-one") =>
+  POST(new Request("https://example.invalid/", { method: "POST", headers: { authorization: "Bearer " + controlKey },
+    body: JSON.stringify({ enabled, minutes, epoch, observed: Date.now() }) }), { params: Promise.resolve({ endpoint: "dispatch" }) });
 
-beforeEach(() => {
+beforeEach(async () => {
   records.clear(); deadlines.clear(); vi.useFakeTimers(); vi.setSystemTime(10_000);
   for (const [k, v] of Object.entries({
-    VERCEL: "1", CRON_SECRET: "test-cron", TALKTALK_MODE: "test", TALKTALK_TEST_USER: user,
+    VERCEL: "1", TALKTALK_CONTROL_TOKEN: controlKey, TALKTALK_MODE: "test", TALKTALK_TEST_USER: user,
     TALKTALK_STATE_KEY: Buffer.alloc(32, 7).toString("base64"), TALKTALK_WEBHOOK_SECRET: endpoint,
     TALKTALK_SEND_TOKEN: "test-only", TALKTALK_WELCOME_TEXT: "어서오세요",
   })) vi.stubEnv(k, v);
   vi.stubGlobal("fetch", vi.fn(async () => Response.json({ success: true })));
+  await tick();
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
@@ -75,4 +84,20 @@ it("pairs just one employee account without collecting a customer identifier in 
   vi.setSystemTime(10_000 + WAIT); await tick();
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).user).toBe(user);
+});
+
+it("uses a minute value entered by staff and preserves the first deadline", async () => {
+  vi.setSystemTime(11_000); await tick(true, 7); await send("일일권");
+  vi.setSystemTime(12_000); await tick(true, 30); await send("일일권 가격");
+  vi.setSystemTime(11_000 + 7 * 60_000 - 1); await tick(true, 30); expect(fetch).not.toHaveBeenCalled();
+  vi.setSystemTime(11_000 + 7 * 60_000); await tick(true, 30); expect(fetch).toHaveBeenCalledTimes(1);
+});
+it("does not backfill requests from before or during an OFF interval", async () => {
+  await send("일일권"); vi.setSystemTime(11_000); await tick(false, 1, "disabled");
+  await send("일일권 가격"); vi.setSystemTime(12_000); await tick(true, 1, "enabled-again");
+  vi.setSystemTime(10_000 + WAIT); await tick(true, 1, "enabled-again"); expect(fetch).not.toHaveBeenCalled();
+});
+it("rejects invalid delays", async () => {
+  expect((await tick(true, 0)).status).toBe(400);
+  expect((await tick(true, 1.5)).status).toBe(400);
 });
