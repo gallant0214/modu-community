@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { isIP } from "node:net";
 import { getRedis } from "@/app/lib/cache";
-import { classify, dueReply, receive, replies, type Ticket } from "@/app/lib/specialbody-talktalk";
+import { classify, dueReply, receive, replies, replyContent, type Ticket } from "@/app/lib/specialbody-talktalk";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ endpoint: string }> };
@@ -171,7 +171,7 @@ return 1`, [settingsKey], [s.observed, JSON.stringify(s)]);
       const response = await fetch("https://gw.talk.naver.com/chatbot/v1/event", {
         method: "POST", redirect: "error", signal: AbortSignal.timeout(4500),
         headers: { "Content-Type": "application/json;charset=UTF-8", Authorization: token },
-        body: JSON.stringify({ event: "send", user, textContent: { text: answer } }),
+        body: JSON.stringify({ event: "send", user, textContent: replyContent(ticket.topic, answer) }),
       });
       if (!response.ok || (await response.json()).success !== true) uncertain++;
     } catch { uncertain++; } // Do not retry an uncertain delivery and risk a second customer message.
