@@ -1,0 +1,103 @@
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { POST } from "@/app/api/specialbody/talktalk/[endpoint]/route";
+import { WAIT, replies } from "@/app/lib/specialbody-talktalk";
+
+const records = new Map<string, string>();
+const deadlines = new Map<string, number>();
+vi.mock("@/app/lib/cache", () => ({
+  getRedis: () => ({
+    async get(key: string) { return JSON.parse(records.get(key) ?? "null"); },
+    async set(key: string, value: string) { if (!records.has(key)) records.set(key, JSON.stringify(value)); },
+    async zrange(_key: string, _min: string, now: number) {
+      return [...deadlines.entries()].filter(([, t]) => t <= now).map(([id]) => id);
+    },
+    async eval(_script: string, [key]: string[], [version, json, due, id]: string[]) {
+      if (key.endsWith(":settings")) {
+        const old = JSON.parse(records.get(key) ?? "null");
+        if (old && old.observed >= Number(version)) return 0;
+        records.set(key, json);
+        return 1;
+      }
+      if ((JSON.parse(records.get(key) ?? "null")?.version ?? "") !== version) return 0;
+      records.set(key, json);
+      if (due) deadlines.set(id, Number(due)); else deadlines.delete(id);
+      return 1;
+    },
+  }),
+}));
+const endpoint = "a-test-only-path-of-at-least-32-characters";
+const user = "synthetic-tester";
+const send = (text: string, echo = false, to = user, ip = "211.249.40.3") =>
+  POST(new Request("https://example.invalid/", {
+    method: "POST",
+    headers: { "x-vercel-forwarded-for": ip },
+    body: JSON.stringify({ user: to, event: echo ? "echo" : "send", echoedEvent: echo ? "send" : undefined, textContent: { text } }),
+  }), { params: Promise.resolve({ endpoint }) });
+const controlKey = "local-test-control-key-not-used-in-production";
+const tick = (enabled = true, minutes = 20, epoch = "session-one") =>
+  POST(new Request("https://example.invalid/", { method: "POST", headers: { authorization: "Bearer " + controlKey },
+    body: JSON.stringify({ enabled, minutes, epoch, observed: Date.now() }) }), { params: Promise.resolve({ endpoint: "dispatch" }) });
+
+beforeEach(async () => {
+  records.clear(); deadlines.clear(); vi.useFakeTimers(); vi.setSystemTime(10_000);
+  for (const [k, v] of Object.entries({
+    VERCEL: "1", TALKTALK_CONTROL_TOKEN: controlKey, TALKTALK_MODE: "test", TALKTALK_TEST_USER: user,
+    TALKTALK_STATE_KEY: Buffer.alloc(32, 7).toString("base64"), TALKTALK_WEBHOOK_SECRET: endpoint,
+    TALKTALK_SEND_TOKEN: "test-only", TALKTALK_WELCOME_TEXT: "어서오세요",
+  })) vi.stubEnv(k, v);
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ success: true })));
+  await tick();
+});
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+it("waits from the first inquiry, ignores welcome and dispatches once across concurrent workers", async () => {
+  await send("일일권 가격"); await send("어서오세요", true);
+  vi.setSystemTime(10_000 + WAIT - 1); await send("주말 일일권 가격");
+  await tick(); expect(fetch).not.toHaveBeenCalled();
+  vi.setSystemTime(10_000 + WAIT); await Promise.all([tick(), tick()]);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  const message = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+  expect(message.user).toBe(user); expect(message.textContent.text).toBe(replies.day);
+  await send(replies.day, true); await tick(); expect(fetch).toHaveBeenCalledTimes(1);
+});
+it("cancels for a staff reply even if the employee uses the same wording as a template", async () => {
+  await send("일일권 얼마예요?"); await send(replies.day, true); await send("일일권 얼마예요?");
+  vi.setSystemTime(10_000 + WAIT); await tick(); expect(fetch).not.toHaveBeenCalled();
+});
+it("leaves unconfirmed answers to staff and discards ineligible testers and non-Naver traffic", async () => {
+  await send("30분 PT 가격"); await send("일일권", false, "someone-else");
+  expect((await send("일일권", false, user, "192.0.2.5")).status).toBe(404);
+  vi.setSystemTime(10_000 + WAIT); await tick(); expect(fetch).not.toHaveBeenCalled();
+});
+it("does not retry an uncertain delivery", async () => {
+  vi.mocked(fetch).mockRejectedValueOnce(new Error("timed out"));
+  await send("일일권"); vi.setSystemTime(10_000 + WAIT);
+  expect((await tick()).status).toBe(502); await tick(); expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("pairs just one employee account without collecting a customer identifier in chat", async () => {
+  vi.stubEnv("TALKTALK_TEST_USER", "");
+  const invite = "testing-only-one-time-invitation";
+  vi.stubEnv("TALKTALK_TEST_INVITE", invite);
+  await send("일일권", false, "other"); await send(invite); await send(invite, false, "other");
+  await send("일일권", false, "other"); await send("일일권");
+  vi.setSystemTime(10_000 + WAIT); await tick();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).user).toBe(user);
+});
+
+it("uses a minute value entered by staff and preserves the first deadline", async () => {
+  vi.setSystemTime(11_000); await tick(true, 7); await send("일일권");
+  vi.setSystemTime(12_000); await tick(true, 30); await send("일일권 가격");
+  vi.setSystemTime(11_000 + 7 * 60_000 - 1); await tick(true, 30); expect(fetch).not.toHaveBeenCalled();
+  vi.setSystemTime(11_000 + 7 * 60_000); await tick(true, 30); expect(fetch).toHaveBeenCalledTimes(1);
+});
+it("does not backfill requests from before or during an OFF interval", async () => {
+  await send("일일권"); vi.setSystemTime(11_000); await tick(false, 1, "disabled");
+  await send("일일권 가격"); vi.setSystemTime(12_000); await tick(true, 1, "enabled-again");
+  vi.setSystemTime(10_000 + WAIT); await tick(true, 1, "enabled-again"); expect(fetch).not.toHaveBeenCalled();
+});
+it("rejects invalid delays", async () => {
+  expect((await tick(true, 0)).status).toBe(400);
+  expect((await tick(true, 1.5)).status).toBe(400);
+});
