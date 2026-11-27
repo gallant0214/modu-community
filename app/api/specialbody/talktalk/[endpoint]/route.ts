@@ -1,12 +1,12 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { isIP } from "node:net";
 import { getRedis } from "@/app/lib/cache";
-import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { classify, dueReply, receive, replies, type Ticket } from "@/app/lib/specialbody-talktalk";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ endpoint: string }> };
-type Entry = { version: string; ticket: Ticket | null; digest: string; seen: number };
+type Entry = { version: string; ticket: Ticket | null; digest: string; seen: number; epoch: string };
+type Settings = { enabled: boolean; minutes: number; epoch: string; observed: number };
 const success = () => new Response(null, { status: 200 });
 const fail = (status: number) => new Response(null, { status });
 const DAY = 86_400;
@@ -53,11 +53,12 @@ async function swap(redis: Redis, c: Config, id: string, old: Entry | null, entr
   const ticket = entry.ticket;
   const deadline = ticket?.status === "waiting" ? String(ticket.due) : "";
   return Number(await redis.eval(swapScript, [c.base + id, c.queue], [
-    old?.version ?? "", JSON.stringify(entry), deadline, id, DAY,
+    old?.version ?? "", JSON.stringify(entry), deadline, id, 2 * DAY,
   ])) === 1;
 }
 
 export async function POST(request: Request, context: Context) {
+  if ((await context.params).endpoint === "dispatch") return sheetTick(request);
   const c = config();
   if (!c || !fromNaver(request)) return fail(404);
   const path = Buffer.from((await context.params).endpoint);
@@ -93,28 +94,46 @@ export async function POST(request: Request, context: Context) {
   }
   const digest = mac("event/" + raw);
   const now = Date.now();
+  const settings = await redis.get<Settings>(c.base + "settings");
+  if (incoming && (!settings?.enabled || now - settings.observed > 120_000)) return success();
   for (let attempt = 0; attempt < 5; attempt++) {
     const old = await redis.get<Entry>(c.base + id);
     if (old?.digest === digest && now - old.seen < 120_000) return success();
     if (echo && old?.ticket?.status === "closed" && old.ticket.topic in replies &&
         text === replies[old.ticket.topic as keyof typeof replies]) return success();
     // Cashier and partner-center replies cancel a waiting ticket; the next new inquiry can start again.
-    const ticket = incoming ? receive(old?.ticket ?? null, classify(text), now,
-      old?.ticket?.recipient ?? encrypt(user, c.cipher)) : null;
+    const epoch = settings?.epoch ?? "";
+    const previous = old?.epoch === epoch ? old.ticket : null;
+    const ticket = incoming && settings ? receive(previous, classify(text), now,
+      previous?.recipient ?? encrypt(user, c.cipher), settings.minutes * 60_000) : null;
     // Keep the inbound fingerprint after staff replies so a webhook redelivery cannot reopen the ticket.
-    const updated = { version: randomUUID(), ticket, digest: incoming ? digest : old?.digest ?? "", seen: incoming ? now : old?.seen ?? 0 };
+    const updated = { version: randomUUID(), ticket, epoch, digest: incoming ? digest : old?.digest ?? "", seen: incoming ? now : old?.seen ?? 0 };
     if (await swap(redis, c, id, old, updated)) return success();
   }
   return fail(503);
 }
 
-export async function GET(request: Request, context: Context) {
-  if ((await context.params).endpoint !== "dispatch" || !isCronAuthorized(request)) return fail(403);
+async function sheetTick(request: Request) {
+  const key = process.env.TALKTALK_CONTROL_TOKEN;
+  const provided = Buffer.from(request.headers.get("authorization") ?? "");
+  const expected = Buffer.from("Bearer " + key);
+  if (!key || key.length < 32 || provided.length !== expected.length || !timingSafeEqual(provided, expected)) return fail(403);
   const c = config();
-  if (!c) return success();
+  if (!c) return fail(503);
   const redis = getRedis();
   const token = process.env.TALKTALK_SEND_TOKEN;
   if (!redis || !token) return fail(503);
+  const s: Settings | null = await request.json().catch(() => null);
+  if (!s || typeof s.enabled !== "boolean" || !Number.isInteger(s.minutes) || s.minutes < 1 || s.minutes > 1440 ||
+      typeof s.epoch !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(s.epoch) ||
+      !Number.isSafeInteger(s.observed) || Math.abs(Date.now() - s.observed) > 90_000) return fail(400);
+  const settingsKey = c.base + "settings";
+  const accepted = await redis.eval(`
+local prev = redis.call('GET',KEYS[1])
+if prev and cjson.decode(prev).observed >= tonumber(ARGV[1]) then return 0 end
+redis.call('SET',KEYS[1],ARGV[2],'EX',150)
+return 1`, [settingsKey], [s.observed, JSON.stringify(s)]);
+  if (!Number(accepted) || !s.enabled) return Response.json({ mode: c.mode, enabled: s.enabled });
   const ids = await redis.zrange<string[]>(c.queue, "-inf", Date.now(), { byScore: true, offset: 0, count: 50 });
   let uncertain = 0;
   for (const id of ids) {
@@ -125,7 +144,7 @@ export async function GET(request: Request, context: Context) {
     }
     const ticket = old.ticket;
     if (!ticket || ticket.status !== "waiting" || Date.now() < ticket.due) continue;
-    const answer = dueReply(ticket, Date.now());
+    const answer = old.epoch === s.epoch ? dueReply(ticket, Date.now()) : null;
     const closed: Entry = { ...old, version: randomUUID(), ticket: { status: "closed", topic: ticket.topic, due: ticket.due } };
     if (!await swap(redis, c, id, old, closed) || !answer || !ticket.recipient) continue;
     const user = decrypt(ticket.recipient, c.cipher);
@@ -134,6 +153,8 @@ export async function GET(request: Request, context: Context) {
       if (tester ? user !== tester : await redis.get<string>(c.base + "tester") !== id) continue;
     }
     if ((await redis.get<Entry>(c.base + id))?.version !== closed.version) continue;
+    const latest = await redis.get<Settings>(settingsKey);
+    if (!latest?.enabled || latest.epoch !== old.epoch || Date.now() - latest.observed > 90_000) continue;
     try {
       const response = await fetch("https://gw.talk.naver.com/chatbot/v1/event", {
         method: "POST", redirect: "error", signal: AbortSignal.timeout(4500),
@@ -143,5 +164,5 @@ export async function GET(request: Request, context: Context) {
       if (!response.ok || (await response.json()).success !== true) uncertain++;
     } catch { uncertain++; } // Do not retry an uncertain delivery and risk a second customer message.
   }
-  return Response.json({ checked: ids.length, uncertain }, { status: uncertain ? 502 : 200 });
+  return Response.json({ mode: c.mode, enabled: true, checked: ids.length, uncertain }, { status: uncertain ? 502 : 200 });
 }
