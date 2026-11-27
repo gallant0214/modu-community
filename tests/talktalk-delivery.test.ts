@@ -7,6 +7,7 @@ const deadlines = new Map<string, number>();
 vi.mock("@/app/lib/cache", () => ({
   getRedis: () => ({
     async get(key: string) { return JSON.parse(records.get(key) ?? "null"); },
+    async set(key: string, value: string) { if (!records.has(key)) records.set(key, JSON.stringify(value)); },
     async zrange(_key: string, _min: string, now: number) {
       return [...deadlines.entries()].filter(([, t]) => t <= now).map(([id]) => id);
     },
@@ -63,4 +64,15 @@ it("does not retry an uncertain delivery", async () => {
   vi.mocked(fetch).mockRejectedValueOnce(new Error("timed out"));
   await send("일일권"); vi.setSystemTime(10_000 + WAIT);
   expect((await tick()).status).toBe(502); await tick(); expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("pairs just one employee account without collecting a customer identifier in chat", async () => {
+  vi.stubEnv("TALKTALK_TEST_USER", "");
+  const invite = "testing-only-one-time-invitation";
+  vi.stubEnv("TALKTALK_TEST_INVITE", invite);
+  await send("일일권", false, "other"); await send(invite); await send(invite, false, "other");
+  await send("일일권", false, "other"); await send("일일권");
+  vi.setSystemTime(10_000 + WAIT); await tick();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).user).toBe(user);
 });
