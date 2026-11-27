@@ -30,8 +30,8 @@ export function classify(text: string): Topic {
 }
 
 export type Ticket = { status: "waiting" | "closed"; topic: Topic; due: number; recipient?: string };
-export function receive(ticket: Ticket | null, topic: Topic, now: number, recipient: string): Ticket {
-  if (!ticket) return { status: "waiting", topic, due: now + WAIT, recipient };
+export function receive(ticket: Ticket | null, topic: Topic, now: number, recipient: string, wait = WAIT): Ticket {
+  if (!ticket) return { status: "waiting", topic, due: now + wait, recipient };
   if (ticket.status === "closed" || topic === "greeting" || topic === ticket.topic) return ticket;
   return { ...ticket, topic: ticket.topic === "greeting" ? topic : "staff" };
 }
