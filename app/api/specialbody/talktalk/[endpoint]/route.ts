@@ -23,7 +23,7 @@ function config() {
   const secret = process.env.TALKTALK_WEBHOOK_SECRET ?? "";
   const cipher = Buffer.from(process.env.TALKTALK_STATE_KEY ?? "", "base64");
   if ((mode !== "test" && mode !== "live") || cipher.length !== 32 || secret.length < 32) return null;
-  if (mode === "test" && !process.env.TALKTALK_TEST_USER) return null;
+  if (mode === "test" && !process.env.TALKTALK_TEST_USER && (process.env.TALKTALK_TEST_INVITE?.length ?? 0) < 24) return null;
   const base = "sb:talk:" + mode + ":";
   return { mode, secret, cipher, base, queue: base + "due" };
 }
@@ -70,7 +70,6 @@ export async function POST(request: Request, context: Context) {
   if (!event || typeof event !== "object") return fail(400);
   const { user } = event;
   if (typeof user !== "string" || !user || user.length > 256) return success();
-  if (c.mode === "test" && user !== process.env.TALKTALK_TEST_USER) return success();
   const incoming = event.event === "send";
   const echo = event.event === "echo" && event.echoedEvent === "send";
   if (!incoming && !echo) return success();
@@ -80,6 +79,18 @@ export async function POST(request: Request, context: Context) {
   if (!redis) return fail(503);
   const mac = (value: string) => createHmac("sha256", c.cipher).update(value).digest("hex");
   const id = mac("user/" + user);
+  if (c.mode === "test") {
+    const tester = process.env.TALKTALK_TEST_USER;
+    if (tester && user !== tester) return success();
+    if (!tester) {
+      const invite = process.env.TALKTALK_TEST_INVITE;
+      if (incoming && invite && text === invite) {
+        await redis.set(c.base + "tester", id, { nx: true, ex: DAY });
+        return success();
+      }
+      if (await redis.get<string>(c.base + "tester") !== id) return success();
+    }
+  }
   const digest = mac("event/" + raw);
   const now = Date.now();
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -118,7 +129,10 @@ export async function GET(request: Request, context: Context) {
     const closed: Entry = { ...old, version: randomUUID(), ticket: { status: "closed", topic: ticket.topic, due: ticket.due } };
     if (!await swap(redis, c, id, old, closed) || !answer || !ticket.recipient) continue;
     const user = decrypt(ticket.recipient, c.cipher);
-    if (c.mode === "test" && user !== process.env.TALKTALK_TEST_USER) continue;
+    if (c.mode === "test") {
+      const tester = process.env.TALKTALK_TEST_USER;
+      if (tester ? user !== tester : await redis.get<string>(c.base + "tester") !== id) continue;
+    }
     if ((await redis.get<Entry>(c.base + id))?.version !== closed.version) continue;
     try {
       const response = await fetch("https://gw.talk.naver.com/chatbot/v1/event", {
