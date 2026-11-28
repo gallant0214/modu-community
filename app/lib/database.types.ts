@@ -4760,6 +4760,7 @@ export type Database = {
           success_cnt: number | null
           error_cnt: number | null
           aligo_msg_id: string | null
+          auto_trigger_key: string | null
           sent_by_uid: string | null
           created_at: string
         }
@@ -4778,6 +4779,7 @@ export type Database = {
           success_cnt?: number | null
           error_cnt?: number | null
           aligo_msg_id?: string | null
+          auto_trigger_key?: string | null
           sent_by_uid?: string | null
           created_at?: string
         }
@@ -4796,6 +4798,7 @@ export type Database = {
           success_cnt?: number | null
           error_cnt?: number | null
           aligo_msg_id?: string | null
+          auto_trigger_key?: string | null
           sent_by_uid?: string | null
           created_at?: string
         }

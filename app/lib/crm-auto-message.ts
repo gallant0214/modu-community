@@ -118,7 +118,11 @@ export async function dispatchQueued(opts: {
   ]);
 
   // 행마다 실제로 나갈 채널을 확정 — smart 는 앱 설치 여부로 갈린다.
-  const smsGroups = new Map<string, { ids: number[]; receivers: string[] }>();
+  // 같은 트리거·같은 문구끼리 묶는다 — 트리거가 다르면 로그도 따로 남아야 어떤 자동 메세지인지 구분된다
+  const smsGroups = new Map<
+    string,
+    { ids: number[]; receivers: string[]; message: string; triggerKey: string | null }
+  >();
   const pushJobs: { id: number; memberId: number; message: string; triggerKey?: string | null }[] = [];
   const delivered = new Set<number>();
 
@@ -143,10 +147,16 @@ export async function dispatchQueued(opts: {
       if (!phone) {
         result.sms.failed += 1;
       } else {
-        const g = smsGroups.get(t.message) ?? { ids: [], receivers: [] };
+        const gk = `${t.trigger_key ?? ""}\u0001${t.message}`;
+        const g = smsGroups.get(gk) ?? {
+          ids: [],
+          receivers: [],
+          message: t.message,
+          triggerKey: t.trigger_key ?? null,
+        };
         g.ids.push(t.id);
         g.receivers.push(phone);
-        smsGroups.set(t.message, g);
+        smsGroups.set(gk, g);
       }
     }
   }
@@ -179,14 +189,15 @@ export async function dispatchQueued(opts: {
         ? "문자 발송 권한이 없어 큐에만 적재했어요"
         : `${SMS_NOT_READY_MESSAGE} (큐에만 적재)`;
     } else {
-      for (const [message, g] of smsGroups) {
+      for (const g of smsGroups.values()) {
         const r = await sendCrmSms({
           centerId: opts.centerId,
           uid: opts.uid,
           receivers: g.receivers,
-          msg: message,
+          msg: g.message,
           title: opts.centerName,
           tag: "자동메세지",
+          autoTriggerKey: g.triggerKey,
         });
         if (r.ok) {
           result.sms.sent += r.sent;

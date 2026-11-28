@@ -100,6 +100,8 @@ export async function sendCrmSms(opts: {
   title?: string;
   /** 로그 구분용 (예: "자동메세지", "테스트발송") */
   tag?: string;
+  /** 자동 메세지 발송이면 트리거 키 — 로그 화면이 '어떤 자동 메세지'인지 표시·필터한다 */
+  autoTriggerKey?: string | null;
 }): Promise<CrmSmsResult> {
   const receivers = Array.from(
     new Set(opts.receivers.map((r) => normalizePhone(String(r))).filter(Boolean))
@@ -135,6 +137,7 @@ export async function sendCrmSms(opts: {
       error_cnt: result.failed,
       aligo_msg_id: result.groupId ?? null,
       sent_by_uid: opts.uid,
+      auto_trigger_key: opts.autoTriggerKey ?? null,
     } as never);
   } catch {
     /* 로그 실패해도 발송 결과는 그대로 반환 */
