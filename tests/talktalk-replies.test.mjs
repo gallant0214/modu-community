@@ -29,3 +29,31 @@ test("product qualifications and prices", () => {
   assert.match(replies.day, /직전 일일권 이용 리뷰를 작성하셨다면 네이버예약에서 7,900원 상품을 선택/);
   for (const item of ["주말", "운동복", "수건", "샴푸", "린스", "바디워시", "바디로션", "폼클렌징"]) assert.ok(replies.day.includes(item));
 });
+
+test("PT prices and visit answers do not volunteer contract details", () => {
+  for (const text of ["일반 PT 가격이 얼마인가요?", "세미 PT 10회 가격", "PT 방문 상담 원합니다"]) {
+    const ticket = receive(null, classify(text), 0, "test");
+    const reply = dueReply(ticket, WAIT);
+    assert.ok(reply);
+    assert.doesNotMatch(reply, /50분|30분|별도|환불|양도|취소|위약|차감/);
+  }
+});
+
+test("direct questions and follow-ups get only the requested PT detail", () => {
+  for (const [text, previous, expected] of [
+    ["일반 PT 한 번에 몇 분인가요?", undefined, "ptTime"],
+    ["세미 PT는 몇 분인가요?", undefined, "semiTime"],
+    ["그럼 락커도 포함인가요?", "semi", "semiLocker"],
+    ["헬스도 포함되나요?", "semiLocker", "semiGym"],
+    ["개인 락커 포함인가요?", "pt", "ptLocker"],
+    ["세미 PT 헬스와 락커 포함인가요?", undefined, "semiIncludes"],
+  ]) {
+    assert.equal(classify(text, previous), expected);
+  }
+  assert.doesNotMatch(replies.semiLocker, /헬스/);
+  assert.doesNotMatch(replies.semiGym, /락커/);
+  for (const text of ["PT 환불 가능한가요?", "양도 비용은요?", "수업 예약 취소하고 싶어요"]) {
+    const ticket = receive(null, classify(text, "semi"), 0, "test");
+    assert.equal(dueReply(ticket, WAIT), null);
+  }
+});
