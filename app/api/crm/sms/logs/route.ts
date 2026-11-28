@@ -4,6 +4,7 @@ import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-av
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { TRIGGER_BY_KEY } from "@/app/lib/auto-message-triggers";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,8 @@ function hyphenate(d: string): string {
 }
 
 /**
- * GET /api/crm/sms/logs?before=ISO — 메세지 전송 로그 (문자 + 앱푸시 통합, 최신순, 누적).
+ * GET /api/crm/sms/logs?before=ISO&filter= — 메세지 전송 로그 (문자 + 앱푸시 통합, 최신순, 누적).
+ *   - filter: (없음)=전체 · manual=직접 발송 · auto=자동 메세지 전부 · auto:<트리거키>=그 자동 메세지만
  *   - 수신자(recipient_label)·발송 직원(sent_by_name) 포함.
  *   - before(created_at) 커서 기반 페이지네이션(40건씩). next_cursor 로 '더 보기'.
  * 권한: messages.send.
@@ -49,11 +51,16 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const before = url.searchParams.get("before"); // ISO timestamp (이 시각 이전 것)
+  const filter = (url.searchParams.get("filter") ?? "").trim();
+  const filterTrigger = filter.startsWith("auto:") ? filter.slice(5) : null;
+  if (filterTrigger !== null && !TRIGGER_BY_KEY[filterTrigger]) {
+    return NextResponse.json({ error: "알 수 없는 자동 메세지예요" }, { status: 400 });
+  }
 
   let smsQ = supabase
     .from("crm_sms_logs")
     .select(
-      "id, receivers, receiver_cnt, msg, msg_type, title, testmode, result_code, result_msg, success_cnt, error_cnt, sent_by_uid, created_at"
+      "id, receivers, receiver_cnt, msg, msg_type, title, testmode, result_code, result_msg, success_cnt, error_cnt, sent_by_uid, auto_trigger_key, created_at"
     )
     .eq("center_id", ctx.centerId)
     .order("created_at", { ascending: false })
@@ -67,6 +74,17 @@ export async function GET(request: Request) {
   if (before) {
     smsQ = smsQ.lt("created_at", before);
     pushQ = pushQ.lt("created_at", before);
+  }
+  // 종류별 필터 — 문자는 auto_trigger_key, 앱푸시는 audience_kind='auto' + audience_filter.trigger_key
+  if (filter === "manual") {
+    smsQ = smsQ.is("auto_trigger_key", null);
+    pushQ = pushQ.neq("audience_kind", "auto");
+  } else if (filter === "auto") {
+    smsQ = smsQ.not("auto_trigger_key", "is", null);
+    pushQ = pushQ.eq("audience_kind", "auto");
+  } else if (filterTrigger) {
+    smsQ = smsQ.eq("auto_trigger_key", filterTrigger);
+    pushQ = pushQ.eq("audience_kind", "auto").eq("audience_filter->>trigger_key", filterTrigger);
   }
 
   const [{ data: smsRows, error: smsErr }, { data: pushRows }] = await Promise.all([smsQ, pushQ]);
@@ -189,8 +207,13 @@ export async function GET(request: Request) {
     error_cnt: number | null;
     read_count: number | null;
     sent_by_name: string | null;
+    /** 자동 메세지면 트리거 키·이름 (직접 발송은 null) */
+    auto_trigger_key: string | null;
+    auto_label: string | null;
     created_at: string;
   };
+  const autoLabel = (key: string | null | undefined) =>
+    key ? TRIGGER_BY_KEY[key]?.label ?? key : null;
 
   const smsItems: LogItem[] = (smsRows ?? []).map((r) => {
     const cnt = r.receiver_cnt ?? 0;
@@ -214,7 +237,13 @@ export async function GET(request: Request) {
       success_cnt: r.success_cnt ?? null,
       error_cnt: r.error_cnt ?? null,
       read_count: null,
-      sent_by_name: r.sent_by_uid ? nameMap.get(r.sent_by_uid) ?? null : null,
+      sent_by_name: r.auto_trigger_key
+        ? "자동 메세지"
+        : r.sent_by_uid
+          ? nameMap.get(r.sent_by_uid) ?? null
+          : null,
+      auto_trigger_key: r.auto_trigger_key ?? null,
+      auto_label: autoLabel(r.auto_trigger_key),
       created_at: r.created_at,
     };
   });
@@ -222,7 +251,9 @@ export async function GET(request: Request) {
   const pushItems: LogItem[] = (pushRows ?? []).map((b) => {
     const kind = (b as { audience_kind?: string }).audience_kind ?? "all";
     const cnt = b.recipient_count ?? 0;
-    const f = (b as { audience_filter?: { member_name?: string | null } | null }).audience_filter;
+    const f = (b as { audience_filter?: { member_name?: string | null; trigger_key?: string | null } | null })
+      .audience_filter;
+    const pushTrigger = kind === "auto" ? f?.trigger_key ?? null : null;
     const recipients: Recipient[] = (pushIdsByRow.get(b.id) ?? []).map((id) => ({
       member_id: id,
       name: memberById.get(id) ?? (cnt === 1 ? f?.member_name ?? null : null),
@@ -251,6 +282,8 @@ export async function GET(request: Request) {
       error_cnt: null,
       read_count: null,
       sent_by_name: b.sent_by_name ?? null,
+      auto_trigger_key: pushTrigger,
+      auto_label: autoLabel(pushTrigger),
       created_at: b.created_at,
     };
   });

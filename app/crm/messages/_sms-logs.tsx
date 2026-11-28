@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
+import { AUTO_MESSAGE_CATEGORIES } from "@/app/lib/auto-message-triggers";
 
 interface MsgLog {
   key: string;
@@ -22,6 +23,9 @@ interface MsgLog {
   error_cnt: number | null;
   read_count: number | null;
   sent_by_name: string | null;
+  /** 자동 메세지면 트리거 키·이름 (직접 발송은 null) */
+  auto_trigger_key?: string | null;
+  auto_label?: string | null;
   created_at: string;
 }
 
@@ -53,22 +57,31 @@ export function SmsLogsTab() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // 종류별 필터: "" 전체 · manual 직접 발송 · auto 자동 전체 · auto:<트리거키>
+  const [filter, setFilter] = useState("");
+  // 필터를 빨리 바꿀 때 늦게 도착한 이전 응답이 목록을 덮어쓰지 않게
+  const reqSeq = useRef(0);
 
   // reset=true: 처음부터 새로 조회 / false: nextCursor 이전 것 이어붙이기(더 보기)
   const load = useCallback(
     async (reset: boolean) => {
       if (reset) setLoading(true);
       else setLoadingMore(true);
+      const seq = ++reqSeq.current;
       try {
         const token = await getIdToken();
         if (!token) return;
         const cursor = reset ? null : nextCursor;
-        const qs = cursor ? `?before=${encodeURIComponent(cursor)}` : "";
+        const params = new URLSearchParams();
+        if (cursor) params.set("before", cursor);
+        if (filter) params.set("filter", filter);
+        const qs = params.toString() ? `?${params.toString()}` : "";
         const res = await fetch(`/api/crm/sms/logs${qs}`, {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         });
         const data = await res.json().catch(() => null);
+        if (seq !== reqSeq.current) return;
         if (res.ok) {
           const newLogs: MsgLog[] = data?.logs ?? [];
           setLogs((prev) => (reset ? newLogs : [...prev, ...newLogs]));
@@ -81,25 +94,50 @@ export function SmsLogsTab() {
           setLoadError(data?.error || "발송 기록을 볼 권한이 없어요");
         }
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (seq === reqSeq.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
-    [getIdToken, nextCursor]
+    [getIdToken, nextCursor, filter]
   );
 
   useEffect(() => {
     load(true);
-    // 최초 1회만
+    // 최초 1회 + 필터를 바꿀 때마다 처음부터 다시
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getIdToken]);
+  }, [getIdToken, filter]);
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
         <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
           문자·앱푸시 등 모든 메세지 전송 기록을 확인해요. (누적 · 받는 사람·발송 직원 표시)
         </p>
+        <div className="flex items-center gap-2 shrink-0">
+        <select
+          value={filter}
+          onChange={(e) => {
+            setExpanded(null);
+            setFilter(e.target.value);
+          }}
+          aria-label="종류별 보기"
+          className="max-w-[180px] px-2 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[12px] text-[#3A342A] dark:text-zinc-200"
+        >
+          <option value="">전체</option>
+          <option value="manual">직접 발송</option>
+          <option value="auto">자동 메세지 전체</option>
+          {AUTO_MESSAGE_CATEGORIES.map((c) => (
+            <optgroup key={c.key} label={c.label}>
+              {c.triggers.map((t) => (
+                <option key={t.key} value={`auto:${t.key}`}>
+                  {t.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
         <button
           type="button"
           onClick={() => load(true)}
@@ -107,6 +145,7 @@ export function SmsLogsTab() {
         >
           새로고침
         </button>
+        </div>
       </div>
 
       {loading ? (
@@ -117,7 +156,7 @@ export function SmsLogsTab() {
         </div>
       ) : logs.length === 0 ? (
         <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          아직 메세지 전송 기록이 없어요.
+          {filter ? "이 종류로 보낸 기록이 없어요." : "아직 메세지 전송 기록이 없어요."}
         </div>
       ) : (
         <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
@@ -156,6 +195,11 @@ export function SmsLogsTab() {
                           }`}
                         >
                           {l.testmode ? "테스트" : failed ? "실패 포함" : "발송 완료"}
+                        </span>
+                      )}
+                      {l.auto_label && (
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-[#6B7B3A]/10 text-[#6B7B3A] border-[#6B7B3A]/30 dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]">
+                          자동 · {l.auto_label}
                         </span>
                       )}
                       {l.msg_type && (
