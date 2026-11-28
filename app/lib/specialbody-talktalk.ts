@@ -8,13 +8,22 @@ export const replies = {
   visit: visitGuide,
   gymVisit: visitGuide,
   ptVisit: visitGuide,
-  semi: `기본형 세미 PT는 회당 30분 수업입니다.
+  semi: `기본형 세미 PT 가격을 안내드립니다.
 
 10회 440,000원
 20회 880,000원
 30회 1,210,000원
 
-모두 부가세 포함 금액입니다. 헬스 이용권과 개인 락커는 별도입니다.`,
+모두 부가세 포함 금액입니다.`,
+  semiTime: "기본형 세미 PT는 회당 30분 수업입니다.",
+  ptTime: "일반 1:1 PT는 회당 50분 수업입니다.",
+  ptPeriod: "신규 일반 PT의 이용 기간은 10회 40일, 20회 80일입니다.",
+  semiGym: "세미 PT의 헬스 이용권은 별도입니다.",
+  semiLocker: "세미 PT의 개인 락커는 별도입니다.",
+  semiIncludes: "세미 PT의 헬스 이용권과 개인 락커는 별도입니다.",
+  ptGym: "신규 일반 PT 10회·20회에는 해당 기간의 헬스 이용권이 포함됩니다.",
+  ptLocker: "신규 일반 PT 10회·20회에는 해당 기간의 개인 락커가 포함됩니다.",
+  ptIncludes: "신규 일반 PT 10회·20회에는 해당 기간의 헬스 이용권과 개인 락커가 포함됩니다.",
   day: `일일권은 현장 결제 15,000원, 네이버예약 일반 결제 13,500원입니다.
 
 재방문 시 직전 일일권 이용 리뷰를 작성하셨다면 네이버예약에서 7,900원 상품을 선택하실 수 있습니다. 재방문 후에도 리뷰를 남기시면 다음 방문에 같은 가격이 적용됩니다. 리뷰가 없으면 네이버예약 일반가인 13,500원입니다.
@@ -22,12 +31,12 @@ export const replies = {
 주말에도 운동복과 수건이 포함됩니다. 샤워실에는 샴푸, 린스, 바디워시, 바디로션, 폼클렌징이 준비되어 있습니다.
 
 매월 마지막 주 일요일은 정기휴무입니다.`,
-  pt: `신규 일반 1:1 PT는 회당 50분 수업입니다.
+  pt: `신규 일반 1:1 PT 가격을 안내드립니다.
 
-10회 660,000원 (이용 기간 40일)
-20회 1,298,000원 (이용 기간 80일)
+10회 660,000원
+20회 1,298,000원
 
-모두 부가세 포함 금액입니다. 해당 기간에는 헬스 이용권과 개인 락커가 포함됩니다.
+모두 부가세 포함 금액입니다.
 
 ${visitGuide}`,
   hours: `스페셜바디 범어점은 24시간 운영합니다.
@@ -58,14 +67,20 @@ function isAdvertisement(text: string): boolean {
   return /(?:광고|마케팅|홍보)대행(?:사입니다|업체입니다|서비스|을?제안|해드|해드리)|(?:광고|제휴|협찬|협업|입점|협력|납품|홍보)제안(?:서|드|을?드|합니다|드립니다|차)|(?:상위노출|리뷰관리|블로그체험단|회원모객|회원모집대행).{0,18}(?:보장|해드립|도와드립|제안드|모집해드)/.test(compact);
 }
 
-export function classify(text: string): Topic | "availability" | "reminder" {
+function ptProduct(topic?: Topic) {
+  if (topic === "pt" || topic === "ptVisit" || topic === "ptTime" || topic === "ptPeriod" || topic === "ptIncludes" || topic === "ptGym" || topic === "ptLocker") return "pt";
+  if (topic === "semi" || topic === "semiTime" || topic === "semiIncludes" || topic === "semiGym" || topic === "semiLocker") return "semi";
+  return null;
+}
+
+export function classify(text: string, previous?: Topic): Topic | "availability" | "reminder" {
   if (isAdvertisement(text)) return "advertisement";
   const s = text.toLowerCase().replace(/\s+/g, "");
   const brief = s.replace(/[.,!?~。？！·]/g, "");
   if (/^(?:답장|답변|회신)(?:을)?(?:부탁드립니다|부탁드려요|부탁해요|주세요|부탁합니다)$/.test(brief)) return "reminder";
   if (/^(?:오늘|내일|모레|이번주|다음주|주말|[월화수목금토일]요일)[은는도에]?(?:오전|오후|저녁)?(?:\d{1,2}시(?:반|\d{1,2}분)?)?[에도]?(?:방문|상담|예약)?이?(?:가능(?:한가요|할까요|할까|해요|하세요|하실까요|한지요)?|되나요|되죠|될까요|돼요)$/.test(brief)) return "availability";
   if (/^(?:안녕(?:하세요|하세용)?|문의드립니다|안녕하세요문의드립니다)[.!?~😊]*$/.test(s)) return "greeting";
-  if (!s || /환불|정지|홀딩|양도|분실|불만|변경|취소|아프|질환|부상|수술|통증|학생|수험|할인|쿠폰|이벤트|체험|무료피티|무료pt|시니어|예약했|결제했|재등록가격|재등록금액/.test(s)) return "staff";
+  if (!s || /환불|정지|홀딩|양도|해지|위약금|차감|노쇼|소멸|분실|불만|변경|취소|아프|질환|부상|수술|통증|학생|수험|할인|쿠폰|이벤트|체험|무료피티|무료pt|시니어|예약했|결제했|재등록가격|재등록금액/.test(s)) return "staff";
   const visit = /방문(?:전.*예약|예약|상담|하고싶|을?원|하려|해도|가능|할수|할게|하고자)|(?:헬스|pt|피티)상담|상담(?:을)?(?:예약|받|원|하고싶|가능|신청|가고싶)|예약상담|찾아가|찾아뵙|구경하고싶|둘러보고싶/.test(s)
     || /^(?:예약방법|예약링크|예약하고싶|예약은어떻게|상담링크)/.test(s);
   if (visit && !/가격|금액|얼마|비용|일일|재방문|수업예약|예약내역|예약확인|예약완료|예약했|예약해뒀|예약해놨/.test(s)) {
@@ -73,6 +88,27 @@ export function classify(text: string): Topic | "availability" | "reminder" {
     const pt = /pt|피티|퍼스널/.test(s);
     const gym = /헬스|회원권/.test(s);
     return pt === gym ? "visit" : pt ? "ptVisit" : "gymVisit";
+  }
+  const semi = /세미(?:pt|피티|퍼스널)?/.test(s);
+  const explicitPt = /pt|피티|퍼스널/.test(s);
+  const previousProduct = /헬스(?:만|단독|회원권가격)|일일권/.test(s) ? null : ptProduct(previous);
+  const product = semi ? "semi" : explicitPt ? "pt" : previousProduct;
+  if (product && /이용기간|유효기간/.test(s)) {
+    const counts = s.match(/\d+(?=회)/g) ?? [];
+    const standard = counts.every(count => count === "10" || count === "20");
+    return product === "pt" && standard && !/세미|30분|가격|금액|헬스|락커|예약|연장/.test(s) ? "ptPeriod" : "staff";
+  }
+  const duration = /몇분|수업시간[?!.~]*$|수업시간(?:은|이)(?:몇분|얼마나|어떻게)|회당시간|한회.{0,6}얼마나|회당.{0,6}얼마나/.test(s);
+  const locker = /락커|라커|로커|사물함/.test(s);
+  const gym = /헬스|회원권|개인운동|자유운동/.test(s);
+  const inclusion = /포함|별도|딸려|같이쓸|함께쓸|같이이용|함께이용/.test(s) || locker && /(?:는요|은요|도요)[?!.~]*$/.test(s);
+  if (product && (duration || inclusion) && !/일일|운동복|수건|샤워|주차|운영시간|예약|트레이너|비교|차이|기간|유효|시간대|시간표/.test(s)) {
+    if ((semi && /일반|50분/.test(s)) || (!semi && /30분/.test(s)) || /가격|금액|비용|요금/.test(s) || (duration && inclusion)) return "staff";
+    if (duration) return product === "semi" ? "semiTime" : "ptTime";
+    if (locker && !gym) return product === "semi" ? "semiLocker" : "ptLocker";
+    if (gym && !locker) return product === "semi" ? "semiGym" : "ptGym";
+    if ((gym && locker) || /뭐가|무엇이|어떤것|포함사항|포함항목/.test(s)) return product === "semi" ? "semiIncludes" : "ptIncludes";
+    return "staff";
   }
   if (/세미(?:pt|피티|퍼스널)/.test(s)) {
     if (/일일권|일반(?:pt|피티)|50분|주차|운영시간|예약|가능시간|유효기간|이용기간|운동복|트레이너/.test(s)) return "staff";
@@ -101,7 +137,7 @@ export function receive(ticket: Ticket | null, inquiry: ReturnType<typeof classi
   let topic: Topic;
   if (inquiry === "availability") {
     const previous = ticket && now <= ticket.due + 24 * 60 * 60_000 ? ticket.topic : null;
-    if (previous === "pt" || previous === "ptVisit") topic = "ptVisit";
+    if (ptProduct(previous ?? undefined)) topic = "ptVisit";
     else if (previous === "gym" || previous === "gymVisit") topic = "gymVisit";
     else if (previous === "visit") topic = "visit";
     else topic = "staff";
