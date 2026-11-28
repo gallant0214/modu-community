@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass, CrmModal } from "../_components/crm-modal";
@@ -653,11 +653,7 @@ export default function CrmMessagesPage() {
                     <span>{formatDateTime(b.created_at)}</span>
                   </div>
                 </div>
-                {b.body && (
-                  <div className="mt-1.5 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap line-clamp-3">
-                    {b.body}
-                  </div>
-                )}
+                {b.body && <ExpandableBody text={b.body} />}
                 <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
                   {b.sent_by_name ? (
                     <span className="text-[11px] text-[#A89B80]">발송자: {b.sent_by_name}</span>
@@ -734,6 +730,46 @@ export default function CrmMessagesPage() {
         )}
       </CrmModal>
       </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 지난 발송 이력 본문 — 기본 3줄까지 보여주고, 잘렸을 때만 [더보기]로 전체를 펼친다.
+ * 잘렸는지는 실제 높이로 판단(줄 수·글자 수 추정은 화면 폭마다 틀린다).
+ */
+function ExpandableBody({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || open) return;
+    const check = () => setClamped(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, open]);
+  return (
+    <div className="mt-1.5">
+      <div
+        ref={ref}
+        className={`text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap break-words ${
+          open ? "" : "line-clamp-3"
+        }`}
+      >
+        {text}
+      </div>
+      {(clamped || open) && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="mt-1 text-[11.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+        >
+          {open ? "접기 ▲" : "더보기 ▼"}
+        </button>
       )}
     </div>
   );
