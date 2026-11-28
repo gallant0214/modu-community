@@ -40,9 +40,12 @@ const AUDIENCE_OPTIONS: { key: AudienceKind; label: string; desc: string }[] = [
   { key: "individual", label: "개별 선택", desc: "회원을 직접 검색·선택" },
 ];
 
-const AUDIENCE_LABEL = Object.fromEntries(
-  AUDIENCE_OPTIONS.map((o) => [o.key, o.label])
-) as Record<AudienceKind, string>;
+const AUDIENCE_LABEL = {
+  ...Object.fromEntries(AUDIENCE_OPTIONS.map((o) => [o.key, o.label])),
+  // 발송 이력에만 나오는 종류 — 자동 메세지 푸시 기록, 회원 상세에서 1명에게 보낸 메세지
+  auto: "자동 메세지",
+  individual: "개별",
+} as Record<string, string>;
 
 export default function CrmMessagesPage() {
   const { getIdToken } = useAuth();
