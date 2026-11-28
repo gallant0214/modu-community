@@ -116,7 +116,8 @@ export async function POST(request: Request, context: Context) {
     // Cashier and partner-center replies cancel a waiting ticket; the next new inquiry can start again.
     const epoch = settings?.epoch ?? "";
     const previous = old?.epoch === epoch ? old.ticket : null;
-    const ticket = incoming && settings ? receive(previous, classify(text), now,
+    const previousTopic = previous && now <= previous.due + DAY * 1000 ? previous.topic : undefined;
+    const ticket = incoming && settings ? receive(previous, classify(text, previousTopic), now,
       previous?.recipient ?? encrypt(user, c.cipher), settings.minutes * 60_000) : null;
     // Keep the inbound fingerprint after staff replies so a webhook redelivery cannot reopen the ticket.
     const updated = { version: randomUUID(), ticket, epoch, digest: incoming ? digest : old?.digest ?? "", seen: incoming ? now : old?.seen ?? 0 };
